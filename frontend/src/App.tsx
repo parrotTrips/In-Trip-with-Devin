@@ -9,6 +9,7 @@ import MissionsScreen from './pages/MissionsScreen';
 import DocumentsScreen from './pages/DocumentsScreen';
 import EmergencyContacts from './pages/EmergencyContacts';
 import ProfileScreen from './pages/ProfileScreen';
+import RecommendationsScreen from './pages/RecommendationsScreen';
 import { AuthProvider, useAuth } from './services/AuthContext';
 
 function AppContent() {
@@ -29,6 +30,7 @@ function AppContent() {
           <Route path="/documents" element={<DocumentsScreen />} />
           <Route path="/emergency" element={<EmergencyContacts />} />
           <Route path="/profile" element={<ProfileScreen />} />
+          <Route path="/recommendations" element={<RecommendationsScreen />} />
         </Routes>
         <BottomNav />
       </div>
