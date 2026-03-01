@@ -1,7 +1,8 @@
 import { Menu, Bell } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
+import { getUnreadCount } from '../services/api';
 
 interface TopBarProps {
   title?: string;
@@ -11,8 +12,20 @@ interface TopBarProps {
 
 export default function TopBar({ title }: TopBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+
+  useEffect(() => {
+    if (!user?.userId) return;
+    const uid = user.userId;
+    const fetchCount = () => {
+      getUnreadCount(uid).then(d => setUnreadCount(d.unread_count)).catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, [user?.userId]);
 
   return (
     <>
@@ -32,9 +45,16 @@ export default function TopBar({ title }: TopBarProps) {
             </h1>
           </div>
 
-          <button className="p-2 -mr-2 rounded-full hover:bg-gray-100 transition-colors relative">
+          <button
+            onClick={() => navigate('/notifications')}
+            className="p-2 -mr-2 rounded-full hover:bg-gray-100 transition-colors relative"
+          >
             <Bell size={20} className="text-gray-700" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+            {unreadCount > 0 && (
+              <span className="absolute top-0.5 right-0.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center">
+                <span className="text-[10px] font-bold text-white leading-none">{unreadCount > 99 ? '99+' : unreadCount}</span>
+              </span>
+            )}
           </button>
         </div>
       </header>

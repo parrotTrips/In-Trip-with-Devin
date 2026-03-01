@@ -83,6 +83,20 @@ async def init_db():
             )
         """)
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                trip_id TEXT NOT NULL DEFAULT 'ross26',
+                title TEXT NOT NULL,
+                body TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'info',
+                link TEXT,
+                read BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS user_profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL UNIQUE,
@@ -178,6 +192,14 @@ class CommentCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
+
+class NotificationCreate(BaseModel):
+    user_id: int
+    trip_id: str = 'ross26'
+    title: str
+    body: str
+    type: str = 'info'  # info, reminder, alert, update
+    link: Optional[str] = None
 
 class ProfileUpdate(BaseModel):
     preferred_name: Optional[str] = None
@@ -476,6 +498,95 @@ async def get_trip_travelers(trip_id: str):
                 for row in rows
             ]
         }
+
+
+# ── Notification Endpoints ───────────────────────────────────────
+
+@app.get("/notifications/{user_id}")
+async def get_notifications(user_id: int, unread_only: bool = False):
+    """Get notifications for a user."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM notifications WHERE user_id = ?"
+        if unread_only:
+            query += " AND read = FALSE"
+        query += " ORDER BY created_at DESC LIMIT 50"
+        cursor = await db.execute(query, (user_id,))
+        rows = await cursor.fetchall()
+        return {
+            "notifications": [
+                {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "body": row["body"],
+                    "type": row["type"],
+                    "link": row["link"],
+                    "read": bool(row["read"]),
+                    "created_at": row["created_at"],
+                }
+                for row in rows
+            ],
+            "unread_count": sum(1 for row in rows if not row["read"]),
+        }
+
+
+@app.get("/notifications/{user_id}/count")
+async def get_unread_count(user_id: int):
+    """Get unread notification count."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM notifications WHERE user_id = ? AND read = FALSE",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        return {"unread_count": row[0] if row else 0}
+
+
+@app.post("/notifications")
+async def create_notification(notif: NotificationCreate):
+    """Create a notification for a user."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """INSERT INTO notifications (user_id, trip_id, title, body, type, link)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (notif.user_id, notif.trip_id, notif.title, notif.body, notif.type, notif.link)
+        )
+        await db.commit()
+    return {"message": "Notification created"}
+
+
+@app.post("/notifications/broadcast")
+async def broadcast_notification(title: str, body: str, trip_id: str = 'ross26', type: str = 'info', link: Optional[str] = None):
+    """Send a notification to all users in a trip."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT id FROM users")
+        users = await cursor.fetchall()
+        for user_row in users:
+            await db.execute(
+                """INSERT INTO notifications (user_id, trip_id, title, body, type, link)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (user_row[0], trip_id, title, body, type, link)
+            )
+        await db.commit()
+    return {"message": f"Notification sent to {len(users)} users"}
+
+
+@app.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: int):
+    """Mark a notification as read."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE notifications SET read = TRUE WHERE id = ?", (notification_id,))
+        await db.commit()
+    return {"message": "Notification marked as read"}
+
+
+@app.put("/notifications/{user_id}/read-all")
+async def mark_all_read(user_id: int):
+    """Mark all notifications as read for a user."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE notifications SET read = TRUE WHERE user_id = ?", (user_id,))
+        await db.commit()
+    return {"message": "All notifications marked as read"}
 
 
 # ── Checklist Endpoints ─────────────────────────────────────────
