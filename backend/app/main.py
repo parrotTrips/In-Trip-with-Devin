@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import aiosqlite
 import httpx
 import os
@@ -82,6 +82,51 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                trip_id TEXT NOT NULL DEFAULT 'ross26',
+                preferred_name TEXT,
+                email TEXT,
+                dob TEXT,
+                gender TEXT,
+                transfer_platform TEXT,
+                package_option TEXT,
+                num_people INTEGER,
+                usd_amount REAL,
+                proof_of_transfer TEXT,
+                dietary_restrictions_yn TEXT,
+                dietary_restrictions_desc TEXT,
+                seasickness_yn TEXT,
+                first_name_passport TEXT,
+                last_name_passport TEXT,
+                passport_country TEXT,
+                passport_number TEXT,
+                passport_issue_date TEXT,
+                passport_expiration_date TEXT,
+                plus_one_yn TEXT,
+                plus_one_name TEXT,
+                plus_one_email TEXT,
+                intl_flights_help_yn TEXT,
+                intl_flights_help_details TEXT,
+                travel_insurance_help_yn TEXT,
+                unforgettable_trip_details TEXT,
+                receive_addon_updates TEXT,
+                esim_qr_image TEXT,
+                roommate_user_id INTEGER,
+                arrival_date TEXT,
+                arrival_time TEXT,
+                arrival_flight TEXT,
+                departure_date TEXT,
+                departure_time TEXT,
+                departure_flight TEXT,
+                service_agreement_url TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (roommate_user_id) REFERENCES users(id)
+            )
+        """)
         await db.commit()
 
 
@@ -133,6 +178,43 @@ class CommentCreate(BaseModel):
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
+
+class ProfileUpdate(BaseModel):
+    preferred_name: Optional[str] = None
+    email: Optional[str] = None
+    dob: Optional[str] = None
+    gender: Optional[str] = None
+    transfer_platform: Optional[str] = None
+    package_option: Optional[str] = None
+    num_people: Optional[int] = None
+    usd_amount: Optional[float] = None
+    proof_of_transfer: Optional[str] = None
+    dietary_restrictions_yn: Optional[str] = None
+    dietary_restrictions_desc: Optional[str] = None
+    seasickness_yn: Optional[str] = None
+    first_name_passport: Optional[str] = None
+    last_name_passport: Optional[str] = None
+    passport_country: Optional[str] = None
+    passport_number: Optional[str] = None
+    passport_issue_date: Optional[str] = None
+    passport_expiration_date: Optional[str] = None
+    plus_one_yn: Optional[str] = None
+    plus_one_name: Optional[str] = None
+    plus_one_email: Optional[str] = None
+    intl_flights_help_yn: Optional[str] = None
+    intl_flights_help_details: Optional[str] = None
+    travel_insurance_help_yn: Optional[str] = None
+    unforgettable_trip_details: Optional[str] = None
+    receive_addon_updates: Optional[str] = None
+    esim_qr_image: Optional[str] = None
+    roommate_user_id: Optional[int] = None
+    arrival_date: Optional[str] = None
+    arrival_time: Optional[str] = None
+    arrival_flight: Optional[str] = None
+    departure_date: Optional[str] = None
+    departure_time: Optional[str] = None
+    departure_flight: Optional[str] = None
+    service_agreement_url: Optional[str] = None
 
 
 # ── Health Check ─────────────────────────────────────────────────
@@ -293,6 +375,106 @@ async def get_user(user_id: int):
             "id": user["id"],
             "phone": user["phone"],
             "name": user["name"],
+        }
+
+
+# ── Profile Endpoints ────────────────────────────────────────────
+
+@app.get("/profile/{user_id}")
+async def get_profile(user_id: int):
+    """Get user profile with all registration and trip details."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,))
+        profile = await cursor.fetchone()
+
+        # Also get user basic info
+        cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        user = await cursor.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get roommate info if set
+        roommate_info = None
+        if profile and profile["roommate_user_id"]:
+            cursor = await db.execute("SELECT id, name, phone FROM users WHERE id = ?", (profile["roommate_user_id"],))
+            roommate = await cursor.fetchone()
+            if roommate:
+                roommate_info = {"id": roommate["id"], "name": roommate["name"], "phone": roommate["phone"]}
+
+        if not profile:
+            return {
+                "user_id": user_id,
+                "phone": user["phone"],
+                "name": user["name"],
+                "profile": None,
+                "roommate": roommate_info,
+            }
+
+        profile_dict = {key: profile[key] for key in profile.keys() if key not in ("id", "user_id", "trip_id", "updated_at")}
+        return {
+            "user_id": user_id,
+            "phone": user["phone"],
+            "name": user["name"],
+            "profile": profile_dict,
+            "roommate": roommate_info,
+        }
+
+
+@app.put("/profile/{user_id}")
+async def update_profile(user_id: int, update: ProfileUpdate):
+    """Update user profile. Creates profile if it doesn't exist."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Check user exists
+        cursor = await db.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Check if profile exists
+        cursor = await db.execute("SELECT id FROM user_profiles WHERE user_id = ?", (user_id,))
+        existing = await cursor.fetchone()
+
+        update_data = update.model_dump(exclude_none=True)
+        if not update_data:
+            return {"message": "No fields to update"}
+
+        if existing:
+            set_clauses = ", ".join(f"{k} = ?" for k in update_data)
+            values = list(update_data.values()) + [user_id]
+            await db.execute(
+                f"UPDATE user_profiles SET {set_clauses}, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?",
+                values
+            )
+        else:
+            update_data["user_id"] = user_id
+            columns = ", ".join(update_data.keys())
+            placeholders = ", ".join("?" for _ in update_data)
+            await db.execute(
+                f"INSERT INTO user_profiles ({columns}) VALUES ({placeholders})",
+                list(update_data.values())
+            )
+
+        # Also update user name if preferred_name is set
+        if update.preferred_name:
+            await db.execute("UPDATE users SET name = ? WHERE id = ?", (update.preferred_name, user_id))
+
+        await db.commit()
+    return {"message": "Profile updated"}
+
+
+@app.get("/trip/{trip_id}/travelers")
+async def get_trip_travelers(trip_id: str):
+    """Get all travelers for a trip (for roommate selection)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id, name, phone FROM users ORDER BY id")
+        rows = await cursor.fetchall()
+        return {
+            "trip_id": trip_id,
+            "travelers": [
+                {"id": row["id"], "name": row["name"], "phone": row["phone"]}
+                for row in rows
+            ]
         }
 
 

@@ -8,6 +8,7 @@ import LoginScreen from './pages/LoginScreen';
 import MissionsScreen from './pages/MissionsScreen';
 import DocumentsScreen from './pages/DocumentsScreen';
 import EmergencyContacts from './pages/EmergencyContacts';
+import ProfileScreen from './pages/ProfileScreen';
 import { AuthProvider, useAuth } from './services/AuthContext';
 
 function AppContent() {
@@ -27,6 +28,7 @@ function AppContent() {
           <Route path="/missions" element={<MissionsScreen />} />
           <Route path="/documents" element={<DocumentsScreen />} />
           <Route path="/emergency" element={<EmergencyContacts />} />
+          <Route path="/profile" element={<ProfileScreen />} />
         </Routes>
         <BottomNav />
       </div>
