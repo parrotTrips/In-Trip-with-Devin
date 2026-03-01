@@ -141,6 +141,53 @@ async def init_db():
                 FOREIGN KEY (roommate_user_id) REFERENCES users(id)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS missions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trip_id TEXT NOT NULL DEFAULT 'ross26',
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                points INTEGER NOT NULL DEFAULT 50,
+                icon TEXT DEFAULT '🎯',
+                category TEXT DEFAULT 'general',
+                sort_order INTEGER DEFAULT 0,
+                active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS mission_completions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                mission_id INTEGER NOT NULL,
+                completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (mission_id) REFERENCES missions(id),
+                UNIQUE(user_id, mission_id)
+            )
+        """)
+        # Seed default missions if empty
+        cursor = await db.execute("SELECT COUNT(*) FROM missions")
+        count = (await cursor.fetchone())[0]
+        if count == 0:
+            default_missions = [
+                ('ross26', 'First Photo!', 'Upload your first photo to the group album', 50, '📸', 'social', 1),
+                ('ross26', 'Social Butterfly', 'Comment on 3 different activities', 100, '🦋', 'social', 2),
+                ('ross26', 'Early Bird', 'Complete all your registration details before the trip', 200, '🐦', 'preparation', 3),
+                ('ross26', 'Adventure Seeker', 'Join at least 2 optional activities', 150, '🏄', 'adventure', 4),
+                ('ross26', 'Memory Maker', 'Share 10 photos across the trip', 300, '🌟', 'social', 5),
+                ('ross26', 'Group Leader', 'Help 3 travelers with their preparation', 250, '👑', 'social', 6),
+                ('ross26', 'Beach Explorer', 'Visit 3 different beaches during the trip', 150, '🏖️', 'adventure', 7),
+                ('ross26', 'Foodie Tour', 'Try food at 5 different local restaurants', 200, '🍽️', 'adventure', 8),
+                ('ross26', 'Culture Vulture', 'Visit Cristo Redentor and Pão de Açúcar', 175, '🏛️', 'adventure', 9),
+                ('ross26', 'Night Owl', 'Attend 3 evening events or nightlife activities', 200, '🦉', 'adventure', 10),
+                ('ross26', 'Island Life', 'Complete all Ilha Grande activities', 250, '🏝️', 'adventure', 11),
+                ('ross26', 'Samba Spirit', 'Dance samba at a local venue', 100, '💃', 'culture', 12),
+            ]
+            await db.executemany(
+                "INSERT INTO missions (trip_id, title, description, points, icon, category, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                default_missions
+            )
         await db.commit()
 
 
@@ -200,6 +247,18 @@ class NotificationCreate(BaseModel):
     body: str
     type: str = 'info'  # info, reminder, alert, update
     link: Optional[str] = None
+
+class MissionCreate(BaseModel):
+    trip_id: str = 'ross26'
+    title: str
+    description: str
+    points: int = 50
+    icon: str = '🎯'
+    category: str = 'general'
+    sort_order: int = 0
+
+class MissionComplete(BaseModel):
+    mission_id: int
 
 class ProfileUpdate(BaseModel):
     preferred_name: Optional[str] = None
@@ -587,6 +646,148 @@ async def mark_all_read(user_id: int):
         await db.execute("UPDATE notifications SET read = TRUE WHERE user_id = ?", (user_id,))
         await db.commit()
     return {"message": "All notifications marked as read"}
+
+
+# ── Secret Missions Endpoints ───────────────────────────────────
+
+@app.get("/missions/{trip_id}")
+async def get_missions(trip_id: str, user_id: Optional[int] = None):
+    """Get all missions for a trip, optionally with user completion status."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM missions WHERE trip_id = ? AND active = TRUE ORDER BY sort_order",
+            (trip_id,)
+        )
+        missions = await cursor.fetchall()
+
+        completed_ids: set[int] = set()
+        if user_id:
+            cursor = await db.execute(
+                "SELECT mission_id FROM mission_completions WHERE user_id = ?",
+                (user_id,)
+            )
+            completed_ids = {row["mission_id"] for row in await cursor.fetchall()}
+
+        return {
+            "trip_id": trip_id,
+            "missions": [
+                {
+                    "id": m["id"],
+                    "title": m["title"],
+                    "description": m["description"],
+                    "points": m["points"],
+                    "icon": m["icon"],
+                    "category": m["category"],
+                    "completed": m["id"] in completed_ids,
+                }
+                for m in missions
+            ],
+        }
+
+
+@app.post("/missions/{trip_id}/complete")
+async def complete_mission(trip_id: str, user_id: int, body: MissionComplete):
+    """Mark a mission as completed for a user."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Verify mission exists and belongs to trip
+        cursor = await db.execute(
+            "SELECT id, points, title FROM missions WHERE id = ? AND trip_id = ?",
+            (body.mission_id, trip_id)
+        )
+        mission = await cursor.fetchone()
+        if not mission:
+            raise HTTPException(status_code=404, detail="Mission not found")
+
+        # Check if already completed
+        cursor = await db.execute(
+            "SELECT id FROM mission_completions WHERE user_id = ? AND mission_id = ?",
+            (user_id, body.mission_id)
+        )
+        if await cursor.fetchone():
+            return {"message": "Mission already completed", "already_completed": True}
+
+        await db.execute(
+            "INSERT INTO mission_completions (user_id, mission_id) VALUES (?, ?)",
+            (user_id, body.mission_id)
+        )
+        await db.commit()
+    return {"message": "Mission completed!", "points_earned": mission[1], "already_completed": False}
+
+
+@app.delete("/missions/{trip_id}/uncomplete")
+async def uncomplete_mission(trip_id: str, user_id: int, body: MissionComplete):
+    """Unmark a mission completion for a user."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "DELETE FROM mission_completions WHERE user_id = ? AND mission_id = ?",
+            (user_id, body.mission_id)
+        )
+        await db.commit()
+    return {"message": "Mission uncompleted"}
+
+
+@app.get("/missions/{trip_id}/leaderboard")
+async def get_leaderboard(trip_id: str):
+    """Get points leaderboard for a trip."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT u.id, u.name, u.phone,
+                   COALESCE(SUM(m.points), 0) as total_points,
+                   COUNT(mc.id) as missions_completed
+            FROM users u
+            LEFT JOIN mission_completions mc ON u.id = mc.user_id
+            LEFT JOIN missions m ON mc.mission_id = m.id AND m.trip_id = ?
+            GROUP BY u.id
+            ORDER BY total_points DESC
+        """, (trip_id,))
+        rows = await cursor.fetchall()
+
+        return {
+            "trip_id": trip_id,
+            "leaderboard": [
+                {
+                    "user_id": row["id"],
+                    "name": row["name"] or row["phone"],
+                    "total_points": row["total_points"],
+                    "missions_completed": row["missions_completed"],
+                }
+                for row in rows
+            ],
+        }
+
+
+@app.get("/missions/{trip_id}/user/{user_id}/points")
+async def get_user_points(trip_id: str, user_id: int):
+    """Get total points for a specific user."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT COALESCE(SUM(m.points), 0) as total_points,
+                   COUNT(mc.id) as missions_completed
+            FROM mission_completions mc
+            JOIN missions m ON mc.mission_id = m.id
+            WHERE mc.user_id = ? AND m.trip_id = ?
+        """, (user_id, trip_id))
+        row = await cursor.fetchone()
+        return {
+            "user_id": user_id,
+            "total_points": row[0] if row else 0,
+            "missions_completed": row[1] if row else 0,
+        }
+
+
+@app.post("/missions")
+async def create_mission(mission: MissionCreate):
+    """Create a new mission (admin endpoint)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """INSERT INTO missions (trip_id, title, description, points, icon, category, sort_order)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (mission.trip_id, mission.title, mission.description, mission.points, mission.icon, mission.category, mission.sort_order)
+        )
+        await db.commit()
+    return {"message": "Mission created"}
 
 
 # ── Checklist Endpoints ─────────────────────────────────────────
