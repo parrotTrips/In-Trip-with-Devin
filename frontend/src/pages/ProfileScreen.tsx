@@ -1,4 +1,4 @@
-import { ArrowLeft, Plane, User, FileText, Smartphone, Users, ChevronDown, ChevronUp, Save, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plane, User, FileText, Smartphone, Users, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../services/AuthContext';
 import { useState, useEffect } from 'react';
@@ -56,6 +56,21 @@ function InputField({ label, value, onChange, type = 'text', placeholder, disabl
         disabled={disabled}
         className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400"
       />
+    </div>
+  );
+}
+
+function ReadOnlyField({ label, value, placeholder }: {
+  label: string;
+  value: string;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <div className="w-full px-3 py-2 text-sm border border-gray-100 rounded-xl bg-gray-50 text-gray-600">
+        {value || <span className="text-gray-300">{placeholder || 'Not set'}</span>}
+      </div>
     </div>
   );
 }
@@ -257,118 +272,8 @@ export default function ProfileScreen() {
 
       <div className="px-4 py-5 space-y-3">
 
-        {/* ── Section 1: Products & Payment ── */}
-        <CollapsibleSection title="Products & Payment" icon={<FileText size={18} />} emoji="🛒" defaultOpen={false}>
-          <div className="pt-3 space-y-3">
-            <InputField label="Package Option" value={form.package_option} onChange={v => setField('package_option', v)} placeholder="e.g. Full Package" />
-            <div className="grid grid-cols-2 gap-3">
-              <InputField label="# People" value={form.num_people} onChange={v => setField('num_people', v)} type="number" placeholder="1" />
-              <InputField label="USD Amount" value={form.usd_amount} onChange={v => setField('usd_amount', v)} type="number" placeholder="0.00" />
-            </div>
-            <InputField label="Transfer Platform" value={form.transfer_platform} onChange={v => setField('transfer_platform', v)} placeholder="e.g. Wise, PayPal" />
-            <InputField label="Proof of Transfer (URL)" value={form.proof_of_transfer} onChange={v => setField('proof_of_transfer', v)} placeholder="Link to receipt/screenshot" />
-          </div>
-        </CollapsibleSection>
-
-        {/* ── Section 2: Service Agreement ── */}
-        <CollapsibleSection title="Service Agreement" icon={<FileText size={18} />} emoji="📄" defaultOpen={false}>
-          <div className="pt-3 space-y-3">
-            <InputField label="Service Agreement URL" value={form.service_agreement_url} onChange={v => setField('service_agreement_url', v)} placeholder="Link to signed agreement" />
-            {form.service_agreement_url && (
-              <a
-                href={form.service_agreement_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
-              >
-                <FileText size={16} />
-                View Service Agreement
-              </a>
-            )}
-            {!form.service_agreement_url && (
-              <p className="text-xs text-gray-400">No service agreement uploaded yet. The Parrot Trips team will share the link with you.</p>
-            )}
-          </div>
-        </CollapsibleSection>
-
-        {/* ── Section 3: eSIM QR Code ── */}
-        <CollapsibleSection title="eSIM" icon={<Smartphone size={18} />} emoji="📱" defaultOpen={false}>
-          <div className="pt-3 space-y-3">
-            <InputField label="eSIM QR Code Image URL" value={form.esim_qr_image} onChange={v => setField('esim_qr_image', v)} placeholder="Paste image URL here" />
-            {form.esim_qr_image && (
-              <div className="bg-gray-50 rounded-xl p-4 flex justify-center">
-                <img
-                  src={form.esim_qr_image}
-                  alt="eSIM QR Code"
-                  className="max-w-[200px] max-h-[200px] rounded-lg"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-            )}
-            {!form.esim_qr_image && (
-              <div className="bg-gray-50 rounded-xl p-6 text-center">
-                <Smartphone className="mx-auto text-gray-300 mb-2" size={32} />
-                <p className="text-xs text-gray-400">Your eSIM QR code will appear here once provided by the Parrot Trips team.</p>
-              </div>
-            )}
-          </div>
-        </CollapsibleSection>
-
-        {/* ── Section 4: Roommates ── */}
-        <CollapsibleSection title="Roommate" icon={<Users size={18} />} emoji="🛏️" defaultOpen={false}>
-          <div className="pt-3 space-y-3">
-            <SelectField
-              label="Select your roommate"
-              value={form.roommate_user_id}
-              onChange={v => setField('roommate_user_id', v)}
-              options={travelers
-                .filter(t => t.id !== user?.userId)
-                .map(t => ({ value: String(t.id), label: t.name || t.phone }))}
-            />
-            {form.roommate_user_id && (
-              <div className="bg-emerald-50 rounded-xl p-3 flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <Users size={18} className="text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-800">
-                    {travelers.find(t => String(t.id) === form.roommate_user_id)?.name || 'Selected'}
-                  </p>
-                  <p className="text-xs text-gray-500">Your roommate for this trip</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </CollapsibleSection>
-
-        {/* ── Section 5: Flights ── */}
-        <CollapsibleSection title="Flight Information" icon={<Plane size={18} />} emoji="✈️" defaultOpen={false}>
-          <div className="pt-3 space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Arrival</p>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <InputField label="Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} type="date" />
-                  <InputField label="Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} type="time" />
-                </div>
-                <InputField label="Flight Number" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. AA 900" />
-              </div>
-            </div>
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">Departure</p>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <InputField label="Date" value={form.departure_date} onChange={v => setField('departure_date', v)} type="date" />
-                  <InputField label="Time" value={form.departure_time} onChange={v => setField('departure_time', v)} type="time" />
-                </div>
-                <InputField label="Flight Number" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. AA 901" />
-              </div>
-            </div>
-          </div>
-        </CollapsibleSection>
-
-        {/* ── Section 6: Registration Info ── */}
-        <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" defaultOpen={false}>
+        {/* ── Section 1: Registration Details (moved to top) ── */}
+        <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" defaultOpen={true}>
           <div className="pt-3 space-y-3">
             <InputField label="Preferred Name" value={form.preferred_name} onChange={v => setField('preferred_name', v)} placeholder="How you'd like to be called" />
             <InputField label="Email" value={form.email} onChange={v => setField('email', v)} type="email" placeholder="your@email.com" />
@@ -450,6 +355,158 @@ export default function ProfileScreen() {
                   { value: 'yes', label: 'Yes' },
                   { value: 'no', label: 'No' },
                 ]} />
+              </div>
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Section 2: Products & Payment (non-editable basic package + Add-ons) ── */}
+        <CollapsibleSection title="Products & Payment" icon={<ShoppingCart size={18} />} emoji="🛒" defaultOpen={false}>
+          <div className="pt-3 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Your Package</p>
+              <div className="bg-emerald-50 rounded-xl p-4 space-y-2">
+                <ReadOnlyField label="Package Name" value={form.package_option} placeholder="Will be set by Parrot Trips team" />
+                <ReadOnlyField label="Amount Paid" value={form.usd_amount ? `$${form.usd_amount}` : ''} placeholder="Will be set by Parrot Trips team" />
+                <ReadOnlyField label="Room Type" value={form.transfer_platform} placeholder="Will be set by Parrot Trips team" />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Additional Activities Purchased</p>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <ReadOnlyField label="Add-on Activities" value={form.proof_of_transfer} placeholder="No additional activities purchased yet" />
+              </div>
+            </div>
+            <a
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-semibold text-sm shadow-lg transition-all"
+            >
+              <ShoppingCart size={18} />
+              Add-ons
+              <ExternalLink size={14} />
+            </a>
+            <p className="text-xs text-center text-gray-400">Browse and purchase optional activities and upgrades</p>
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Section 3: Service Agreement (non-editable) ── */}
+        <CollapsibleSection title="Service Agreement" icon={<FileText size={18} />} emoji="📄" defaultOpen={false}>
+          <div className="pt-3 space-y-3">
+            {form.service_agreement_url ? (
+              <div className="space-y-3">
+                <div className="bg-emerald-50 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <FileText size={18} className="text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">Service Agreement</p>
+                    <p className="text-xs text-gray-500">Document provided by Parrot Trips</p>
+                  </div>
+                </div>
+                <a
+                  href={form.service_agreement_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-colors"
+                >
+                  <FileText size={16} />
+                  View Service Agreement
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-6 text-center">
+                <FileText className="mx-auto text-gray-300 mb-2" size={32} />
+                <p className="text-sm font-medium text-gray-500">Not available yet</p>
+                <p className="text-xs text-gray-400 mt-1">Your Service Agreement will be shared by the Parrot Trips team.</p>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Section 4: eSIM (non-editable) ── */}
+        <CollapsibleSection title="eSIM" icon={<Smartphone size={18} />} emoji="📱" defaultOpen={false}>
+          <div className="pt-3 space-y-3">
+            {form.esim_qr_image ? (
+              <div className="space-y-3">
+                <div className="bg-blue-50 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Smartphone size={18} className="text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">eSIM QR Code</p>
+                    <p className="text-xs text-gray-500">Scan this code to activate your eSIM</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-6 flex justify-center">
+                  <img
+                    src={form.esim_qr_image}
+                    alt="eSIM QR Code"
+                    className="max-w-[220px] max-h-[220px] rounded-lg"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-6 text-center">
+                <Smartphone className="mx-auto text-gray-300 mb-2" size={32} />
+                <p className="text-sm font-medium text-gray-500">Not available yet</p>
+                <p className="text-xs text-gray-400 mt-1">Your eSIM QR code will be provided by the Parrot Trips team before your trip.</p>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Section 5: Roommates ── */}
+        <CollapsibleSection title="Roommate" icon={<Users size={18} />} emoji="🛏️" defaultOpen={false}>
+          <div className="pt-3 space-y-3">
+            <SelectField
+              label="Select your roommate"
+              value={form.roommate_user_id}
+              onChange={v => setField('roommate_user_id', v)}
+              options={travelers
+                .filter(t => t.id !== user?.userId)
+                .map(t => ({ value: String(t.id), label: t.name || t.phone }))}
+            />
+            {form.roommate_user_id && (
+              <div className="bg-emerald-50 rounded-xl p-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <Users size={18} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    {travelers.find(t => String(t.id) === form.roommate_user_id)?.name || 'Selected'}
+                  </p>
+                  <p className="text-xs text-gray-500">Your roommate for this trip</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Section 6: Flight Information ── */}
+        <CollapsibleSection title="Flight Information" icon={<Plane size={18} />} emoji="✈️" defaultOpen={false}>
+          <div className="pt-3 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Arrival</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <InputField label="Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} type="date" />
+                  <InputField label="Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} type="time" />
+                </div>
+                <InputField label="Flight Number" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. AA 900" />
+              </div>
+            </div>
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">Departure</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <InputField label="Date" value={form.departure_date} onChange={v => setField('departure_date', v)} type="date" />
+                  <InputField label="Time" value={form.departure_time} onChange={v => setField('departure_time', v)} type="time" />
+                </div>
+                <InputField label="Flight Number" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. AA 901" />
               </div>
             </div>
           </div>
