@@ -134,15 +134,15 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
                 </span>
               </div>
 
-              <p className="text-sm text-gray-600 mt-2 leading-relaxed">
+              <div className="text-sm text-gray-600 mt-2 leading-relaxed whitespace-pre-line">
                 {activity.description}
-              </p>
+              </div>
 
               {expanded && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-start gap-2 text-sm text-gray-600">
                     <MapPin size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-                    <p>{activity.practicalInfo}</p>
+                    <div className="whitespace-pre-line">{activity.practicalInfo}</div>
                   </div>
                   {activity.price && activity.type === 'optional' && (
                     <button className="mt-3 w-full py-2.5 bg-amber-500 text-white rounded-xl font-semibold text-sm hover:bg-amber-600 transition-colors">

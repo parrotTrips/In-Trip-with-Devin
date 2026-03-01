@@ -273,7 +273,7 @@ export default function ProfileScreen() {
       <div className="px-4 py-5 space-y-3">
 
         {/* ── Section 1: Registration Details (moved to top) ── */}
-        <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" defaultOpen={true}>
+        <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" defaultOpen={false}>
           <div className="pt-3 space-y-3">
             <InputField label="Preferred Name" value={form.preferred_name} onChange={v => setField('preferred_name', v)} placeholder="How you'd like to be called" />
             <InputField label="Email" value={form.email} onChange={v => setField('email', v)} type="email" placeholder="your@email.com" />

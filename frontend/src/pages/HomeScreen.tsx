@@ -26,7 +26,6 @@ import {
   Bus,
   Plane,
   Sailboat,
-  Lock,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -55,7 +54,6 @@ export default function HomeScreen() {
   const handlePhaseClick = (phaseId: string) => {
     const phase = allPhases.find(p => p.id === phaseId);
     if (!phase) return;
-    if (phase.locked) return;
     if (isTripDay(phase)) {
       navigate(`/day/${phaseId}`);
     } else {
@@ -140,9 +138,9 @@ export default function HomeScreen() {
                 >
                   <button
                     onClick={() => handlePhaseClick(phase.id)}
-                    className={`w-full rounded-2xl border-2 p-3 transition-all duration-300 ${phase.locked ? 'opacity-60 cursor-default' : 'hover:scale-105 active:scale-95'} ${
-                      phase.locked
-                        ? 'bg-gray-100 border-gray-300'
+                    className={`w-full rounded-2xl border-2 p-3 transition-all duration-300 hover:scale-105 active:scale-95 ${
+                      isPreTrip && phase.completed
+                        ? 'bg-blue-50/60 border-blue-200/60 opacity-65'
                         : isPast
                           ? isPreTrip
                             ? 'bg-blue-50 border-blue-200'
@@ -207,15 +205,8 @@ export default function HomeScreen() {
                       </p>
                     )}
 
-                    {/* Locked badge */}
-                    {phase.locked && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-gray-400 rounded-full flex items-center justify-center">
-                        <Lock size={10} className="text-white" />
-                      </div>
-                    )}
-
                     {/* Completed badge */}
-                    {!phase.locked && isPast && (
+                    {(isPast || (isPreTrip && phase.completed)) && (
                       <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
                         <span className="text-white text-xs">✓</span>
                       </div>

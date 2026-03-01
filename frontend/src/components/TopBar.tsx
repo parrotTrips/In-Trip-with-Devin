@@ -82,8 +82,9 @@ export default function TopBar({ title }: TopBarProps) {
               {[
                 { label: 'My Profile', emoji: '👤', action: () => { setMenuOpen(false); navigate('/profile'); } },
                 { label: 'Local Recommendations', emoji: '📍', action: () => { setMenuOpen(false); navigate('/recommendations'); } },
-                { label: 'Emergency Contacts', emoji: '🆘', action: () => { setMenuOpen(false); navigate('/emergency'); } },
-                { label: 'Group Chat', emoji: '💬', action: () => { window.open('https://chat.whatsapp.com/KymXF54kl2jGX9fEntj5hB?mode=gi_t', '_blank'); setMenuOpen(false); } },
+                  { label: 'Emergency Contacts', emoji: '🆘', action: () => { setMenuOpen(false); navigate('/emergency'); } },
+                  { label: 'Documents', emoji: '📄', action: () => { setMenuOpen(false); navigate('/documents'); } },
+                  { label: 'Group Chat', emoji: '💬', action: () => { window.open('https://chat.whatsapp.com/KymXF54kl2jGX9fEntj5hB?mode=gi_t', '_blank'); setMenuOpen(false); } },
               ].map(item => (
                 <button
                   key={item.label}

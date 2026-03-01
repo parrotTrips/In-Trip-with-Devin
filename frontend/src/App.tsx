@@ -7,6 +7,7 @@ import DayDetails from './pages/DayDetails';
 import LoginScreen from './pages/LoginScreen';
 import MissionsScreen from './pages/MissionsScreen';
 import DocumentsScreen from './pages/DocumentsScreen';
+import SharingXPScreen from './pages/SharingXPScreen';
 import EmergencyContacts from './pages/EmergencyContacts';
 import ProfileScreen from './pages/ProfileScreen';
 import RecommendationsScreen from './pages/RecommendationsScreen';
@@ -29,6 +30,7 @@ function AppContent() {
           <Route path="/day/:dayId" element={<DayDetails />} />
           <Route path="/missions" element={<MissionsScreen />} />
           <Route path="/documents" element={<DocumentsScreen />} />
+          <Route path="/sharing-xp" element={<SharingXPScreen />} />
           <Route path="/emergency" element={<EmergencyContacts />} />
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/recommendations" element={<RecommendationsScreen />} />

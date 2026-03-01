@@ -173,33 +173,26 @@ export default function PhaseDetails() {
 
         {/* Status button */}
         <div className="px-4 pb-5">
-          {phase.locked ? (
-            <div className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-gray-400 text-white">
-              <CheckCircle2 size={18} />
-              Completed (Locked)
-            </div>
-          ) : (
-            <button
-              onClick={handleToggleCompleted}
-              className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-                isCompleted
-                  ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                  : 'bg-white/15 text-white border border-white/30 hover:bg-white/25'
-              }`}
-            >
-              {isCompleted ? (
-                <>
-                  <CheckCircle2 size={18} />
-                  Completed!
-                </>
-              ) : (
-                <>
-                  <Circle size={18} />
-                  Mark as Completed
-                </>
-              )}
-            </button>
-          )}
+          <button
+            onClick={handleToggleCompleted}
+            className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              isCompleted
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                : 'bg-white/15 text-white border border-white/30 hover:bg-white/25'
+            }`}
+          >
+            {isCompleted ? (
+              <>
+                <CheckCircle2 size={18} />
+                Completed!
+              </>
+            ) : (
+              <>
+                <Circle size={18} />
+                Mark as Completed
+              </>
+            )}
+          </button>
         </div>
       </div>
 

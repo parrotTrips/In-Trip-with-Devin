@@ -1,10 +1,10 @@
-import { Map, Sparkles, FileText } from 'lucide-react';
+import { Map, Sparkles, Share2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const navItems = [
   { path: '/', icon: Map, label: 'Map' },
   { path: '/missions', icon: Sparkles, label: 'Secret Missions' },
-  { path: '/documents', icon: FileText, label: 'Documents' },
+  { path: '/sharing-xp', icon: Share2, label: 'Sharing XP' },
 ];
 
 export default function BottomNav() {
@@ -12,7 +12,7 @@ export default function BottomNav() {
   const navigate = useNavigate();
 
   // Only show on main pages
-  const showNav = ['/', '/missions', '/documents'].includes(location.pathname);
+  const showNav = ['/', '/missions', '/sharing-xp'].includes(location.pathname);
   if (!showNav) return null;
 
   return (
