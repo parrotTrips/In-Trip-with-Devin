@@ -7,6 +7,7 @@ import DayDetails from './pages/DayDetails';
 import LoginScreen from './pages/LoginScreen';
 import MissionsScreen from './pages/MissionsScreen';
 import DocumentsScreen from './pages/DocumentsScreen';
+import EmergencyContacts from './pages/EmergencyContacts';
 import { AuthProvider, useAuth } from './services/AuthContext';
 
 function AppContent() {
@@ -25,6 +26,7 @@ function AppContent() {
           <Route path="/day/:dayId" element={<DayDetails />} />
           <Route path="/missions" element={<MissionsScreen />} />
           <Route path="/documents" element={<DocumentsScreen />} />
+          <Route path="/emergency" element={<EmergencyContacts />} />
         </Routes>
         <BottomNav />
       </div>

@@ -1,5 +1,7 @@
 import { Menu, Bell } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../services/AuthContext';
 
 interface TopBarProps {
   title?: string;
@@ -9,6 +11,8 @@ interface TopBarProps {
 
 export default function TopBar({ title }: TopBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const { logout } = useAuth();
 
   return (
     <>
@@ -56,15 +60,14 @@ export default function TopBar({ title }: TopBarProps) {
             </div>
             <nav className="p-4 space-y-1">
               {[
-                { label: 'My Profile', emoji: '👤' },
-                { label: 'Trip Details', emoji: '✈️' },
-                { label: 'Emergency Contacts', emoji: '🆘' },
-                { label: 'Travel Insurance', emoji: '🛡️' },
-                { label: 'Group Chat', emoji: '💬' },
-                { label: 'Settings', emoji: '⚙️' },
+                { label: 'My Profile', emoji: '👤', action: () => { setMenuOpen(false); navigate('/profile'); } },
+                { label: 'Local Recommendations', emoji: '📍', action: () => { setMenuOpen(false); navigate('/recommendations'); } },
+                { label: 'Emergency Contacts', emoji: '🆘', action: () => { setMenuOpen(false); navigate('/emergency'); } },
+                { label: 'Group Chat', emoji: '💬', action: () => { window.open('https://chat.whatsapp.com/KymXF54kl2jGX9fEntj5hB?mode=gi_t', '_blank'); setMenuOpen(false); } },
               ].map(item => (
                 <button
                   key={item.label}
+                  onClick={item.action}
                   className="flex items-center gap-3 w-full px-3 py-3 rounded-xl hover:bg-gray-50 transition-colors text-gray-700"
                 >
                   <span className="text-lg">{item.emoji}</span>
@@ -73,7 +76,10 @@ export default function TopBar({ title }: TopBarProps) {
               ))}
             </nav>
             <div className="absolute bottom-8 left-0 right-0 px-6">
-              <button className="w-full py-3 text-sm text-gray-400 hover:text-red-500 transition-colors">
+              <button
+                onClick={() => { logout(); setMenuOpen(false); }}
+                className="w-full py-3 text-sm text-gray-400 hover:text-red-500 transition-colors"
+              >
                 Sign Out
               </button>
             </div>
