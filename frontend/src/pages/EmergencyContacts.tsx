@@ -109,7 +109,7 @@ export default function EmergencyContacts() {
   };
 
   const handleWhatsApp = (phone: string) => {
-    const cleaned = phone.replace(/[\s()+\-]/g, '');
+    const cleaned = phone.replace(/[\s()+-]/g, '');
     window.open(`https://wa.me/${cleaned}`, '_blank');
   };
 

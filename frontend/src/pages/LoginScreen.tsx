@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import ParrotMascot from '../components/ParrotMascot';
+import ParrotMascot from '../shared/components/ParrotMascot';
+import { requestOTP, verifyOTP } from '../features/auth/services/auth-api';
 import { useAuth } from '../services/AuthContext';
-import { requestOTP, verifyOTP } from '../services/api';
 
 export default function LoginScreen() {
   const { login } = useAuth();

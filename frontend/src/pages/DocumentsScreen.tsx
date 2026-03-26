@@ -1,4 +1,4 @@
-import TopBar from '../components/TopBar';
+import TopBar from '../shared/components/TopBar';
 import { Download, Eye, Folder } from 'lucide-react';
 
 const documents = [

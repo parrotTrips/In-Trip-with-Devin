@@ -1,8 +1,8 @@
 import { ArrowLeft, Plane, User, FileText, Smartphone, Users, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getProfile, getTripTravelers, updateProfile, type ProfileData, type TravelerInfo } from '../features/profile/services/profile-api';
 import { useAuth } from '../services/AuthContext';
-import { useState, useEffect } from 'react';
-import { getProfile, updateProfile, getTripTravelers, type ProfileData, type TravelerInfo } from '../services/api';
+import { useEffect, useId, useState } from 'react';
 
 const TRIP_ID = 'ross26';
 
@@ -45,10 +45,13 @@ function InputField({ label, value, onChange, type = 'text', placeholder, disabl
   placeholder?: string;
   disabled?: boolean;
 }) {
+  const fieldId = useId();
+
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <label htmlFor={fieldId} className="text-xs font-medium text-gray-500">{label}</label>
       <input
+        id={fieldId}
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -81,10 +84,13 @@ function SelectField({ label, value, onChange, options }: {
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
 }) {
+  const fieldId = useId();
+
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <label htmlFor={fieldId} className="text-xs font-medium text-gray-500">{label}</label>
       <select
+        id={fieldId}
         value={value}
         onChange={e => onChange(e.target.value)}
         className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-white"
@@ -102,10 +108,13 @@ function TextAreaField({ label, value, onChange, placeholder }: {
   onChange: (v: string) => void;
   placeholder?: string;
 }) {
+  const fieldId = useId();
+
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <label htmlFor={fieldId} className="text-xs font-medium text-gray-500">{label}</label>
       <textarea
+        id={fieldId}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}

@@ -4,7 +4,7 @@ import {
   getPhaseById,
   isTripDay,
   type Activity,
-} from '../data/tripData';
+} from '../features/trip/data/tripData';
 import {
   ArrowLeft,
   Clock,

@@ -7,10 +7,10 @@ import {
   tripName,
   tripDates,
   isTripDay,
-} from '../data/tripData';
-import TopBar from '../components/TopBar';
-import ProgressBar from '../components/ProgressBar';
-import ParrotMascot from '../components/ParrotMascot';
+} from '../features/trip/data/tripData';
+import ParrotMascot from '../shared/components/ParrotMascot';
+import ProgressBar from '../shared/components/ProgressBar';
+import TopBar from '../shared/components/TopBar';
 import {
   FileText,
   Syringe,

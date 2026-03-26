@@ -1,4 +1,4 @@
-import TopBar from '../components/TopBar';
+import TopBar from '../shared/components/TopBar';
 import { Camera, Music, FolderOpen, MessageCircle, Share2, ExternalLink, Heart, Users } from 'lucide-react';
 
 const sharingItems = [

@@ -1,8 +1,8 @@
-import TopBar from '../components/TopBar';
+import TopBar from '../shared/components/TopBar';
 import { Sparkles, Trophy, Star, Loader2, CheckCircle2, Circle, Crown, Medal } from 'lucide-react';
+import { completeMission, getLeaderboard, getMissions, uncompleteMission, type LeaderboardEntry, type Mission } from '../features/missions/services/missions-api';
 import { useAuth } from '../services/AuthContext';
 import { useState, useEffect } from 'react';
-import { getMissions, completeMission, uncompleteMission, getLeaderboard, type Mission, type LeaderboardEntry } from '../services/api';
 
 const TRIP_ID = 'ross26';
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   getPhaseById,
   getTravelersAtPhase,
-} from '../data/tripData';
+} from '../features/trip/data/tripData';
 import {
   ArrowLeft,
   CheckCircle2,

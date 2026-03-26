@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bell, BellOff, CheckCheck, Info, AlertTriangle, Clock, Megaphone } from 'lucide-react';
+import { getNotifications, markAllNotificationsRead, markNotificationRead, type Notification } from '../features/notifications/services/notifications-api';
 import { useAuth } from '../services/AuthContext';
-import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../services/api';
-import type { Notification } from '../services/api';
 
 const typeConfig: Record<string, { icon: typeof Bell; color: string; bg: string }> = {
   info: { icon: Info, color: 'text-blue-600', bg: 'bg-blue-50' },
