@@ -2,13 +2,11 @@ import { Bell, Menu } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useAuth } from '../../app/providers/AuthProvider';
-import { getUnreadCount } from '../../services/api';
+import { useAuth } from '../../app/providers/auth-context';
+import { getUnreadCount } from '../../features/notifications/services/notifications-api';
 
 interface TopBarProps {
   title?: string;
-  showBack?: boolean;
-  onBack?: () => void;
 }
 
 export default function TopBar({ title }: TopBarProps) {

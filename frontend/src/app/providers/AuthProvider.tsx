@@ -1,24 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
-interface AuthUser {
-  userId: number;
-  phone: string;
-  name: string | null;
-}
-
-interface AuthContextType {
-  user: AuthUser | null;
-  login: (userId: number, phone: string, name: string | null) => void;
-  logout: () => void;
-  isLoggedIn: boolean;
-}
-
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  login: () => {},
-  logout: () => {},
-  isLoggedIn: false,
-});
+import { AuthContext, type AuthUser } from './auth-context';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -48,8 +30,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
 }

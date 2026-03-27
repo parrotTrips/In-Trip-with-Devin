@@ -2,7 +2,8 @@ import '../App.css';
 
 import LoginScreen from '../features/auth/pages/LoginScreen';
 
-import { AuthProvider, useAuth } from './providers/AuthProvider';
+import { AuthProvider } from './providers/AuthProvider';
+import { useAuth } from './providers/auth-context';
 import AppRouter from './router';
 
 function AppContent() {

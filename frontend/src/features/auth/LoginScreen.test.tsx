@@ -14,7 +14,10 @@ describe('LoginScreen', () => {
       http.post('http://localhost:8000/auth/request-otp', async ({ request }) => {
         const body = await request.json();
         requestedPhone = String((body as { phone: string }).phone);
-        return HttpResponse.json({ message: 'OTP sent successfully' });
+        return HttpResponse.json({
+          message: 'OTP generated (WhatsApp delivery failed, showing code for testing)',
+          debug_code: '654321',
+        });
       })
     );
 
@@ -32,5 +35,6 @@ describe('LoginScreen', () => {
       expect(requestedPhone).toBe('+15551234567');
     });
     expect(screen.getByText('Verification Code')).toBeInTheDocument();
+    expect(screen.getByText(/test code: 654321/i)).toBeInTheDocument();
   });
 });
