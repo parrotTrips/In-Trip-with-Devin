@@ -24,15 +24,16 @@ def load_config_module(monkeypatch, **env_overrides):
 
 def test_config_uses_default_values(monkeypatch):
     config = load_config_module(monkeypatch)
+    expected_database_path = Path(config.__file__).resolve().parents[2] / "app.db"
 
     assert config.WHATSAPP_PHONE_NUMBER_ID == ""
     assert config.WHATSAPP_ACCESS_TOKEN == ""
     assert config.WHATSAPP_TEMPLATE_NAME == "intripauth"
-    assert config.DATABASE_PATH == "/data/app.db"
+    assert config.DATABASE_PATH == str(expected_database_path)
     assert config.WHATSAPP_API_URL.endswith("/messages")
 
 
-def test_init_db_creates_tables_and_seeds_default_missions(tmp_path):
+def test_init_db_creates_tables_for_the_active_scope(tmp_path):
     from app.db.database import init_db
 
     database_path = tmp_path / "test.db"
@@ -46,9 +47,6 @@ def test_init_db_creates_tables_and_seeds_default_missions(tmp_path):
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             ).fetchall()
         }
-        mission_count = connection.execute(
-            "SELECT COUNT(*) FROM missions"
-        ).fetchone()[0]
 
     expected_tables = {
         "users",
@@ -58,12 +56,9 @@ def test_init_db_creates_tables_and_seeds_default_missions(tmp_path):
         "otp_codes",
         "notifications",
         "user_profiles",
-        "missions",
-        "mission_completions",
     }
 
     assert expected_tables.issubset(tables)
-    assert mission_count == 12
 
 
 def test_init_db_uses_configured_database_path(monkeypatch, tmp_path):

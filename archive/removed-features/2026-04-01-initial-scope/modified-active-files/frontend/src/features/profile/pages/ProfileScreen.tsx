@@ -1,8 +1,10 @@
-import { ArrowLeft, User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { ArrowLeft, Plane, User, FileText, Smartphone, Users, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getProfile, getTripTravelers, updateProfile, type ProfileData, type TravelerInfo } from '../services/profile-api';
 import { useAuth } from '../../../app/providers/auth-context';
-import { getProfile, updateProfile, type ProfileData } from '../services/profile-api';
+import { useEffect, useId, useState } from 'react';
+
+const TRIP_ID = 'ross26';
 
 interface SectionProps {
   title: string;
@@ -129,8 +131,9 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [travelers, setTravelers] = useState<TravelerInfo[]>([]);
 
-  // Keep only the fields used by the simplified profile experience.
+  // Form state - all fields
   const [form, setForm] = useState<Record<string, string>>({
     preferred_name: '',
     email: '',
@@ -158,6 +161,14 @@ export default function ProfileScreen() {
     travel_insurance_help_yn: '',
     unforgettable_trip_details: '',
     receive_addon_updates: '',
+    esim_qr_image: '',
+    roommate_user_id: '',
+    arrival_date: '',
+    arrival_time: '',
+    arrival_flight: '',
+    departure_date: '',
+    departure_time: '',
+    departure_flight: '',
     service_agreement_url: '',
   });
 
@@ -171,7 +182,11 @@ export default function ProfileScreen() {
 
     const load = async () => {
       try {
-        const profileRes = await getProfile(user.userId);
+        const [profileRes, travelersRes] = await Promise.all([
+          getProfile(user.userId),
+          getTripTravelers(TRIP_ID),
+        ]);
+        setTravelers(travelersRes.travelers);
 
         if (profileRes.profile) {
           const p = profileRes.profile;
@@ -212,6 +227,8 @@ export default function ProfileScreen() {
             (data as Record<string, unknown>)[key] = parseInt(val) || null;
           } else if (key === 'usd_amount') {
             (data as Record<string, unknown>)[key] = parseFloat(val) || null;
+          } else if (key === 'roommate_user_id') {
+            (data as Record<string, unknown>)[key] = parseInt(val) || null;
           } else {
             (data as Record<string, unknown>)[key] = val;
           }
@@ -271,8 +288,6 @@ export default function ProfileScreen() {
       </div>
 
       <div className="px-4 py-5 space-y-3">
-
-        {/* ── Section 1: Registration Details (moved to top) ── */}
         <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" defaultOpen={false}>
           <div className="pt-3 space-y-3">
             <InputField label="Preferred Name" value={form.preferred_name} onChange={v => setField('preferred_name', v)} placeholder="How you'd like to be called" />
@@ -286,7 +301,6 @@ export default function ProfileScreen() {
                 { value: 'prefer-not-to-say', label: 'Prefer not to say' },
               ]} />
             </div>
-
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Passport Information</p>
               <div className="space-y-3">
@@ -302,7 +316,6 @@ export default function ProfileScreen() {
                 </div>
               </div>
             </div>
-
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Health & Dietary</p>
               <div className="space-y-3">
@@ -319,7 +332,6 @@ export default function ProfileScreen() {
                 ]} />
               </div>
             </div>
-
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Plus One</p>
               <div className="space-y-3">
@@ -335,7 +347,6 @@ export default function ProfileScreen() {
                 )}
               </div>
             </div>
-
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Additional</p>
               <div className="space-y-3">
@@ -360,7 +371,6 @@ export default function ProfileScreen() {
           </div>
         </CollapsibleSection>
 
-        {/* ── Section 2: Products & Payment (non-editable basic package + Add-ons) ── */}
         <CollapsibleSection title="Products & Payment" icon={<ShoppingCart size={18} />} emoji="🛒" defaultOpen={false}>
           <div className="pt-3 space-y-4">
             <div>
@@ -391,7 +401,6 @@ export default function ProfileScreen() {
           </div>
         </CollapsibleSection>
 
-        {/* ── Section 3: Service Agreement (non-editable) ── */}
         <CollapsibleSection title="Service Agreement" icon={<FileText size={18} />} emoji="📄" defaultOpen={false}>
           <div className="pt-3 space-y-3">
             {form.service_agreement_url ? (
@@ -425,9 +434,91 @@ export default function ProfileScreen() {
             )}
           </div>
         </CollapsibleSection>
+
+        <CollapsibleSection title="eSIM" icon={<Smartphone size={18} />} emoji="📱" defaultOpen={false}>
+          <div className="pt-3 space-y-3">
+            {form.esim_qr_image ? (
+              <div className="space-y-3">
+                <div className="bg-blue-50 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Smartphone size={18} className="text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-800">eSIM QR Code</p>
+                    <p className="text-xs text-gray-500">Scan this code to activate your eSIM</p>
+                  </div>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 p-6 flex justify-center">
+                  <img
+                    src={form.esim_qr_image}
+                    alt="eSIM QR Code"
+                    className="max-w-[220px] max-h-[220px] rounded-lg"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-6 text-center">
+                <Smartphone className="mx-auto text-gray-300 mb-2" size={32} />
+                <p className="text-sm font-medium text-gray-500">Not available yet</p>
+                <p className="text-xs text-gray-400 mt-1">Your eSIM QR code will be provided by the Parrot Trips team before your trip.</p>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Roommate" icon={<Users size={18} />} emoji="🛏️" defaultOpen={false}>
+          <div className="pt-3 space-y-3">
+            <SelectField
+              label="Select your roommate"
+              value={form.roommate_user_id}
+              onChange={v => setField('roommate_user_id', v)}
+              options={travelers
+                .filter(t => t.id !== user?.userId)
+                .map(t => ({ value: String(t.id), label: t.name || t.phone }))}
+            />
+            {form.roommate_user_id && (
+              <div className="bg-emerald-50 rounded-xl p-3 flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <Users size={18} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">
+                    {travelers.find(t => String(t.id) === form.roommate_user_id)?.name || 'Selected'}
+                  </p>
+                  <p className="text-xs text-gray-500">Your roommate for this trip</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Flight Information" icon={<Plane size={18} />} emoji="✈️" defaultOpen={false}>
+          <div className="pt-3 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Arrival</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <InputField label="Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} type="date" />
+                  <InputField label="Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} type="time" />
+                </div>
+                <InputField label="Flight Number" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. AA 900" />
+              </div>
+            </div>
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-2">Departure</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <InputField label="Date" value={form.departure_date} onChange={v => setField('departure_date', v)} type="date" />
+                  <InputField label="Time" value={form.departure_time} onChange={v => setField('departure_time', v)} type="time" />
+                </div>
+                <InputField label="Flight Number" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. AA 901" />
+              </div>
+            </div>
+          </div>
+        </CollapsibleSection>
       </div>
 
-      {/* Save button - fixed at bottom */}
       <div className="fixed bottom-16 left-0 right-0 px-4 pb-4 z-40">
         <div className="max-w-lg mx-auto">
           <button

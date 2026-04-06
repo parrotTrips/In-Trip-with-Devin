@@ -28,5 +28,7 @@ describe('TopBar', () => {
 
     expect(screen.getByText('Trip')).toBeInTheDocument();
     expect(await screen.findByText('5')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /menu/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Local Recommendations')).not.toBeInTheDocument();
   });
 });

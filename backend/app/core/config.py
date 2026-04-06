@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 DEFAULT_WHATSAPP_TEMPLATE_NAME = "intripauth"
-DEFAULT_DATABASE_PATH = "/data/app.db"
+DEFAULT_DATABASE_PATH = str(Path(__file__).resolve().parents[2] / "app.db")
 
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")

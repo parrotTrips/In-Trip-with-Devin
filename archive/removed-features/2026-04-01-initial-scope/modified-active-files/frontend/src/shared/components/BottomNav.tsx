@@ -1,9 +1,10 @@
-import { Map, User } from 'lucide-react';
+import { Map, Share2, Sparkles } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const navItems = [
   { path: '/', icon: Map, label: 'Map' },
-  { path: '/profile', icon: User, label: 'My Profile' },
+  { path: '/missions', icon: Sparkles, label: 'Secret Missions' },
+  { path: '/sharing-xp', icon: Share2, label: 'Sharing XP' },
 ];
 
 export default function BottomNav() {

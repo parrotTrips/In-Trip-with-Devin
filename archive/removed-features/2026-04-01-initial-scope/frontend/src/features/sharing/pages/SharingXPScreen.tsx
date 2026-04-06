@@ -11,7 +11,7 @@ const sharingItems = [
     color: 'from-pink-500 to-rose-500',
     bgColor: 'bg-pink-50',
     textColor: 'text-pink-600',
-    link: '', // placeholder - will be set by admin
+    link: '',
     linkLabel: 'Open Album',
   },
   {
@@ -23,7 +23,7 @@ const sharingItems = [
     color: 'from-green-500 to-emerald-500',
     bgColor: 'bg-green-50',
     textColor: 'text-green-600',
-    link: '', // placeholder - will be set by admin
+    link: '',
     linkLabel: 'Open on Spotify',
   },
   {
@@ -35,7 +35,7 @@ const sharingItems = [
     color: 'from-blue-500 to-indigo-500',
     bgColor: 'bg-blue-50',
     textColor: 'text-blue-600',
-    link: '', // placeholder - will be set by admin
+    link: '',
     linkLabel: 'Open Drive Folder',
   },
   {
@@ -47,7 +47,7 @@ const sharingItems = [
     color: 'from-purple-500 to-violet-500',
     bgColor: 'bg-purple-50',
     textColor: 'text-purple-600',
-    link: '', // placeholder - will be set by admin
+    link: '',
     linkLabel: 'Share a Story',
   },
   {
@@ -70,7 +70,6 @@ export default function SharingXPScreen() {
       <TopBar title="Sharing XP" />
 
       <div className="pt-14">
-        {/* Header */}
         <div className="bg-gradient-to-br from-orange-500 via-pink-500 to-rose-500 px-5 py-6 text-white">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
@@ -82,7 +81,6 @@ export default function SharingXPScreen() {
             </div>
           </div>
 
-          {/* Stats */}
           <div className="flex gap-3 mt-4">
             <div className="flex-1 bg-white/10 rounded-xl p-3 text-center">
               <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -109,7 +107,6 @@ export default function SharingXPScreen() {
         </div>
       </div>
 
-      {/* Sharing Items */}
       <div className="px-4 py-5 space-y-3">
         {sharingItems.map(item => (
           <div

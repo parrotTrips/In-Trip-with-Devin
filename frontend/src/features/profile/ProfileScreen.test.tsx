@@ -48,6 +48,11 @@ describe('ProfileScreen', () => {
 
     await screen.findByText('My Profile');
     await userEvent.click(screen.getByRole('button', { name: /registration details/i }));
+    expect(screen.getByRole('button', { name: /products & payment/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /service agreement/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /esim/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /roommate/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /flight information/i })).not.toBeInTheDocument();
     const preferredNameInput = await screen.findByLabelText('Preferred Name');
     expect(preferredNameInput).toHaveValue('Alice');
 

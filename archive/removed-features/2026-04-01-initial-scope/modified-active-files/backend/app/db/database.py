@@ -8,6 +8,117 @@ import aiosqlite
 
 from app.core.config import get_database_path
 
+DEFAULT_MISSIONS = [
+    (
+        "ross26",
+        "First Photo!",
+        "Upload your first photo to the group album",
+        50,
+        "📸",
+        "social",
+        1,
+    ),
+    (
+        "ross26",
+        "Social Butterfly",
+        "Comment on 3 different activities",
+        100,
+        "🦋",
+        "social",
+        2,
+    ),
+    (
+        "ross26",
+        "Early Bird",
+        "Complete all your registration details before the trip",
+        200,
+        "🐦",
+        "preparation",
+        3,
+    ),
+    (
+        "ross26",
+        "Adventure Seeker",
+        "Join at least 2 optional activities",
+        150,
+        "🏄",
+        "adventure",
+        4,
+    ),
+    (
+        "ross26",
+        "Memory Maker",
+        "Share 10 photos across the trip",
+        300,
+        "🌟",
+        "social",
+        5,
+    ),
+    (
+        "ross26",
+        "Group Leader",
+        "Help 3 travelers with their preparation",
+        250,
+        "👑",
+        "social",
+        6,
+    ),
+    (
+        "ross26",
+        "Beach Explorer",
+        "Visit 3 different beaches during the trip",
+        150,
+        "🏖️",
+        "adventure",
+        7,
+    ),
+    (
+        "ross26",
+        "Foodie Tour",
+        "Try food at 5 different local restaurants",
+        200,
+        "🍽️",
+        "adventure",
+        8,
+    ),
+    (
+        "ross26",
+        "Culture Vulture",
+        "Visit Cristo Redentor and Pão de Açúcar",
+        175,
+        "🏛️",
+        "adventure",
+        9,
+    ),
+    (
+        "ross26",
+        "Night Owl",
+        "Attend 3 evening events or nightlife activities",
+        200,
+        "🦉",
+        "adventure",
+        10,
+    ),
+    (
+        "ross26",
+        "Island Life",
+        "Complete all Ilha Grande activities",
+        250,
+        "🏝️",
+        "adventure",
+        11,
+    ),
+    (
+        "ross26",
+        "Samba Spirit",
+        "Dance samba at a local venue",
+        100,
+        "💃",
+        "culture",
+        12,
+    ),
+]
+
 SCHEMA_STATEMENTS = [
     """
     CREATE TABLE IF NOT EXISTS users (
@@ -123,6 +234,31 @@ SCHEMA_STATEMENTS = [
         FOREIGN KEY (roommate_user_id) REFERENCES users(id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS missions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trip_id TEXT NOT NULL DEFAULT 'ross26',
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        points INTEGER NOT NULL DEFAULT 50,
+        icon TEXT DEFAULT '🎯',
+        category TEXT DEFAULT 'general',
+        sort_order INTEGER DEFAULT 0,
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS mission_completions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        mission_id INTEGER NOT NULL,
+        completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (mission_id) REFERENCES missions(id),
+        UNIQUE(user_id, mission_id)
+    )
+    """,
 ]
 
 
@@ -133,12 +269,24 @@ def connect_to_database(database_path: str | Path | None = None) -> aiosqlite.Co
 
 
 async def init_db(database_path: str | Path | None = None) -> None:
-    """Create the tables required by the active application scope."""
+    """Create required tables and seed default missions when the database is empty."""
     resolved_path = Path(str(database_path or get_database_path()))
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with connect_to_database(resolved_path) as db:
         for statement in SCHEMA_STATEMENTS:
             await db.execute(statement)
+
+        cursor = await db.execute("SELECT COUNT(*) FROM missions")
+        mission_count = (await cursor.fetchone())[0]
+        if mission_count == 0:
+            await db.executemany(
+                """
+                INSERT INTO missions (
+                    trip_id, title, description, points, icon, category, sort_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                DEFAULT_MISSIONS,
+            )
 
         await db.commit()

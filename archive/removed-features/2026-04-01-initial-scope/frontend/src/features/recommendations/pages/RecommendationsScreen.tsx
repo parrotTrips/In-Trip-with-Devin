@@ -19,7 +19,6 @@ interface Recommendation {
 }
 
 const recommendations: Recommendation[] = [
-  // ── Restaurants ──
   {
     id: 'r1',
     name: 'Babbo Osteria',
@@ -121,8 +120,6 @@ const recommendations: Recommendation[] = [
     mapUrl: 'https://maps.google.com/?q=Aprazivel+Santa+Teresa+Rio',
     emoji: '🌿',
   },
-
-  // ── Bars ──
   {
     id: 'b1',
     name: 'La Carioca En La Playa',
@@ -187,8 +184,6 @@ const recommendations: Recommendation[] = [
     mapUrl: 'https://maps.google.com/?q=Rio+Scenarium+Lapa+Rio',
     emoji: '🎭',
   },
-
-  // ── Cafes ──
   {
     id: 'c1',
     name: 'Zona Sul Supermarket',
@@ -214,8 +209,6 @@ const recommendations: Recommendation[] = [
     mapUrl: 'https://maps.google.com/?q=Confeitaria+Colombo+Centro+Rio',
     emoji: '☕',
   },
-
-  // ── Wellness ──
   {
     id: 'w1',
     name: 'Astoria Hotel Spa',
@@ -250,8 +243,6 @@ const recommendations: Recommendation[] = [
     priceRange: 'Free',
     emoji: '🌅',
   },
-
-  // ── Shopping ──
   {
     id: 's1',
     name: 'Shopping Leblon',
@@ -289,8 +280,6 @@ const recommendations: Recommendation[] = [
     mapUrl: 'https://maps.google.com/?q=Feira+Hippie+Ipanema+Rio',
     emoji: '🎨',
   },
-
-  // ── Beaches ──
   {
     id: 'beach1',
     name: 'Ipanema Beach',

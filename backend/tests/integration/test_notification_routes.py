@@ -12,7 +12,6 @@ MODULES_TO_CLEAR = [
     "app.routers.checklist",
     "app.routers.comments",
     "app.routers.notifications",
-    "app.routers.missions",
 ]
 
 
@@ -49,7 +48,7 @@ def test_notification_routes_read_and_mark_notifications(monkeypatch, tmp_path):
                 "title": "Ping",
                 "body": "Route contract",
                 "type": "info",
-                "link": "/missions",
+                "link": "/profile",
             },
         )
         list_response = client.get(f"/notifications/{user_id}")

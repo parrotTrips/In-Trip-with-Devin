@@ -8,6 +8,7 @@ from app.routers.auth import router as auth_router
 from app.routers.checklist import router as checklist_router
 from app.routers.comments import router as comments_router
 from app.routers.health import router as health_router
+from app.routers.missions import router as missions_router
 from app.routers.notifications import router as notifications_router
 from app.routers.profile import router as profile_router
 from app.routers.users import router as users_router
@@ -37,3 +38,4 @@ app.include_router(profile_router)
 app.include_router(checklist_router)
 app.include_router(comments_router)
 app.include_router(notifications_router)
+app.include_router(missions_router)

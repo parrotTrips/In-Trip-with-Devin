@@ -46,6 +46,12 @@ export interface ProfileResponse {
   roommate: { id: number; name: string | null; phone: string } | null;
 }
 
+export interface TravelerInfo {
+  id: number;
+  name: string | null;
+  phone: string;
+}
+
 export async function getProfile(userId: number) {
   return request<ProfileResponse>(`/profile/${userId}`);
 }
@@ -55,4 +61,8 @@ export async function updateProfile(userId: number, data: Partial<ProfileData>) 
     method: 'PUT',
     body: JSON.stringify(data),
   });
+}
+
+export async function getTripTravelers(tripId: string) {
+  return request<{ trip_id: string; travelers: TravelerInfo[] }>(`/trip/${tripId}/travelers`);
 }
