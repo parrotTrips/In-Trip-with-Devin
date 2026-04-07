@@ -1,47 +1,55 @@
 import asyncio
-import sqlite3
 
-from app.db.database import init_db
+from sqlalchemy import select
+
+from app.db.models.user import User
 from app.services.user_service import get_user, update_user
 
 
-def seed_user(database_path, phone="+5511777777777", name=None):
-    with sqlite3.connect(database_path) as connection:
-        cursor = connection.execute(
-            "INSERT INTO users (phone, name) VALUES (?, ?)",
-            (phone, name),
-        )
-        connection.commit()
-        return cursor.lastrowid
+def test_get_user_returns_user_data(session_factory):
+    async def run_test():
+        async with session_factory() as session:
+            user = User(
+                phone="+5511777777777",
+                full_name="Alice",
+                status="active",
+            )
+            session.add(user)
+            await session.commit()
+
+            response = await get_user(str(user.id), session)
+
+            assert response == {
+                "id": str(user.id),
+                "phone": "+5511777777777",
+                "name": "Alice",
+            }
+
+    asyncio.run(run_test())
 
 
-def test_get_user_returns_user_data(tmp_path):
-    database_path = tmp_path / "users.db"
-    asyncio.run(init_db(database_path))
-    user_id = seed_user(database_path, name="Alice")
+def test_update_user_persists_name_changes(session_factory):
+    async def run_test():
+        async with session_factory() as session:
+            user = User(
+                phone="+5511777777777",
+                full_name=None,
+                status="active",
+            )
+            session.add(user)
+            await session.commit()
 
-    response = asyncio.run(get_user(user_id, database_path=database_path))
+            response = await update_user(str(user.id), {"name": "Bob"}, session)
+            refreshed_user = await session.scalar(select(User).where(User.id == user.id))
+            updated_user = await get_user(str(user.id), session)
 
-    assert response == {
-        "id": user_id,
-        "phone": "+5511777777777",
-        "name": "Alice",
-    }
+            assert response == {"message": "User updated"}
+            assert refreshed_user is not None
+            assert refreshed_user.full_name == "Bob"
+            assert updated_user == {
+                "id": str(user.id),
+                "phone": "+5511777777777",
+                "name": "Bob",
+            }
 
-
-def test_update_user_persists_name_changes(tmp_path):
-    database_path = tmp_path / "users.db"
-    asyncio.run(init_db(database_path))
-    user_id = seed_user(database_path)
-
-    response = asyncio.run(
-        update_user(user_id, {"name": "Bob"}, database_path=database_path)
-    )
-    updated_user = asyncio.run(get_user(user_id, database_path=database_path))
-
-    assert response == {"message": "User updated"}
-    assert updated_user == {
-        "id": user_id,
-        "phone": "+5511777777777",
-        "name": "Bob",
-    }
+    asyncio.run(run_test())

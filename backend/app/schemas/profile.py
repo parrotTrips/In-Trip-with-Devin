@@ -35,7 +35,7 @@ class ProfileUpdate(BaseModel):
     unforgettable_trip_details: Optional[str] = None
     receive_addon_updates: Optional[str] = None
     esim_qr_image: Optional[str] = None
-    roommate_user_id: Optional[int] = None
+    roommate_user_id: Optional[str] = None
     arrival_date: Optional[str] = None
     arrival_time: Optional[str] = None
     arrival_flight: Optional[str] = None

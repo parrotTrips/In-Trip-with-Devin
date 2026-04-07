@@ -1,91 +1,170 @@
 import asyncio
-import sqlite3
+from datetime import date
 
-from app.db.database import init_db
-from app.services.profile_service import get_profile, update_profile
+import pytest
+from fastapi import HTTPException
+from sqlalchemy import select
+
+from app.db.models.traveler import TravelerProduct, TravelerProfile
+from app.db.models.trip import Trip, TripTraveler
+from app.db.models.user import User
+from app.services.profile_service import get_profile, get_trip_travelers, update_profile
 
 
-def seed_user(database_path, phone="+5511222222222", name=None):
-    with sqlite3.connect(database_path) as connection:
-        cursor = connection.execute(
-            "INSERT INTO users (phone, name) VALUES (?, ?)",
-            (phone, name),
+async def seed_trip_assignment(
+    session_factory,
+    *,
+    phone="+5511222222222",
+    name=None,
+    trip_name="Ross 2026",
+    short_name="ross26",
+):
+    async with session_factory() as session:
+        user = User(phone=phone, full_name=name, status="active")
+        trip = Trip(
+            name=trip_name,
+            short_name=short_name,
+            description="Test trip",
+            start_date=date(2026, 2, 1),
+            end_date=date(2026, 2, 7),
+            status="published",
         )
-        connection.commit()
-        return cursor.lastrowid
+        session.add_all([user, trip])
+        await session.flush()
+
+        trip_traveler = TripTraveler(trip_id=trip.id, user_id=user.id)
+        session.add(trip_traveler)
+        await session.commit()
+
+        return {
+            "user_id": str(user.id),
+            "trip_id": str(trip.id),
+            "trip_traveler_id": trip_traveler.id,
+        }
 
 
-def test_get_profile_returns_empty_profile_for_existing_user(tmp_path):
-    database_path = tmp_path / "profile.db"
-    asyncio.run(init_db(database_path))
-    user_id = seed_user(database_path, name="Alice")
+def test_get_profile_returns_empty_profile_for_existing_trip_traveler(session_factory):
+    async def run_test():
+        seeded = await seed_trip_assignment(session_factory, name="Alice")
 
-    response = asyncio.run(get_profile(user_id, database_path=database_path))
+        async with session_factory() as session:
+            response = await get_profile(seeded["user_id"], seeded["trip_id"], session)
 
-    assert response == {
-        "user_id": user_id,
-        "phone": "+5511222222222",
-        "name": "Alice",
-        "profile": None,
-        "roommate": None,
-    }
+        assert response == {
+            "user_id": seeded["user_id"],
+            "trip_id": seeded["trip_id"],
+            "phone": "+5511222222222",
+            "name": "Alice",
+            "profile": None,
+            "roommate": None,
+        }
+
+    asyncio.run(run_test())
 
 
-def test_update_profile_creates_profile_and_updates_user_name(tmp_path):
-    database_path = tmp_path / "profile.db"
-    asyncio.run(init_db(database_path))
-    user_id = seed_user(database_path)
+def test_update_profile_creates_profile_and_product_through_trip_traveler(session_factory):
+    async def run_test():
+        seeded = await seed_trip_assignment(session_factory)
 
-    update_response = asyncio.run(
-        update_profile(
-            user_id,
-            {"preferred_name": "Carol", "email": "carol@example.com"},
-            database_path=database_path,
+        async with session_factory() as session:
+            update_response = await update_profile(
+                seeded["user_id"],
+                seeded["trip_id"],
+                {
+                    "preferred_name": "Carol",
+                    "email": "carol@example.com",
+                    "package_option": "Premium Cabin",
+                    "usd_amount": 2999.5,
+                },
+                session,
+            )
+            profile_response = await get_profile(
+                seeded["user_id"], seeded["trip_id"], session
+            )
+            profile_row = await session.scalar(
+                select(TravelerProfile).where(
+                    TravelerProfile.trip_traveler_id == seeded["trip_traveler_id"]
+                )
+            )
+            product_row = await session.scalar(
+                select(TravelerProduct).where(
+                    TravelerProduct.trip_traveler_id == seeded["trip_traveler_id"]
+                )
+            )
+
+        assert update_response == {"message": "Profile updated"}
+        assert profile_row is not None
+        assert product_row is not None
+        assert profile_row.preferred_name == "Carol"
+        assert product_row.package_name == "Premium Cabin"
+        assert float(product_row.amount_paid_usd) == 2999.5
+        assert profile_response["name"] == "Carol"
+        assert profile_response["profile"]["preferred_name"] == "Carol"
+        assert profile_response["profile"]["email"] == "carol@example.com"
+        assert profile_response["profile"]["package_option"] == "Premium Cabin"
+        assert profile_response["profile"]["usd_amount"] == 2999.5
+
+    asyncio.run(run_test())
+
+
+def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(session_factory):
+    async def run_test():
+        primary = await seed_trip_assignment(
+            session_factory,
+            phone="+5511333333333",
+            name="Ana",
+            trip_name="Ross 2026",
+            short_name="ross26",
         )
-    )
-    profile_response = asyncio.run(get_profile(user_id, database_path=database_path))
+        await seed_trip_assignment(
+            session_factory,
+            phone="+5511444444444",
+            name="Bia",
+            trip_name="Pantanal 2026",
+            short_name="pantanal26",
+        )
 
-    assert update_response == {"message": "Profile updated"}
-    assert profile_response == {
-        "user_id": user_id,
-        "phone": "+5511222222222",
-        "name": "Carol",
-        "profile": {
-            "preferred_name": "Carol",
-            "email": "carol@example.com",
-            "dob": None,
-            "gender": None,
-            "transfer_platform": None,
-            "package_option": None,
-            "num_people": None,
-            "usd_amount": None,
-            "proof_of_transfer": None,
-            "dietary_restrictions_yn": None,
-            "dietary_restrictions_desc": None,
-            "seasickness_yn": None,
-            "first_name_passport": None,
-            "last_name_passport": None,
-            "passport_country": None,
-            "passport_number": None,
-            "passport_issue_date": None,
-            "passport_expiration_date": None,
-            "plus_one_yn": None,
-            "plus_one_name": None,
-            "plus_one_email": None,
-            "intl_flights_help_yn": None,
-            "intl_flights_help_details": None,
-            "travel_insurance_help_yn": None,
-            "unforgettable_trip_details": None,
-            "receive_addon_updates": None,
-            "esim_qr_image": None,
-            "roommate_user_id": None,
-            "arrival_date": None,
-            "arrival_time": None,
-            "arrival_flight": None,
-            "departure_date": None,
-            "departure_time": None,
-            "departure_flight": None,
-            "service_agreement_url": None,
-        },
-        "roommate": None,
-    }
+        async with session_factory() as session:
+            response = await get_trip_travelers(primary["trip_id"], session)
+
+        assert response == {
+            "trip_id": primary["trip_id"],
+            "travelers": [
+                {
+                    "id": primary["user_id"],
+                    "name": "Ana",
+                    "phone": "+5511333333333",
+                }
+            ],
+        }
+
+    asyncio.run(run_test())
+
+
+def test_update_profile_rejects_unsupported_orphan_fields(session_factory):
+    async def run_test():
+        seeded = await seed_trip_assignment(session_factory)
+
+        async with session_factory() as session:
+            with pytest.raises(HTTPException) as exc_info:
+                await update_profile(
+                    seeded["user_id"],
+                    seeded["trip_id"],
+                    {
+                        "transfer_platform": "wise",
+                        "proof_of_transfer": "https://example.com/proof.png",
+                    },
+                    session,
+                )
+
+            profile_response = await get_profile(
+                seeded["user_id"], seeded["trip_id"], session
+            )
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == {
+            "unsupported_fields": ["proof_of_transfer", "transfer_platform"]
+        }
+        assert profile_response["profile"] is None
+
+    asyncio.run(run_test())

@@ -1,9 +1,9 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import aiosqlite
 from contextlib import asynccontextmanager
 
-from app.db.database import connect_to_database, init_db
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.db.session import dispose_engine
 from app.routers.auth import router as auth_router
 from app.routers.checklist import router as checklist_router
 from app.routers.health import router as health_router
@@ -13,9 +13,9 @@ from app.routers.users import router as users_router
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
-    """App lifespan: initialize database on startup."""
-    await init_db()
+    """App lifespan: keep shared resources tidy without bootstrapping schema."""
     yield
+    await dispose_engine()
 
 
 app = FastAPI(lifespan=lifespan)

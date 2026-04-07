@@ -2,103 +2,172 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from datetime import UTC, datetime
+from uuid import UUID
 
-import aiosqlite
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import connect_to_database
+from app.db.models.progress import TravelerChecklistProgress, TravelerPhaseProgress
+from app.db.models.trip import TripPhase, TripPhaseChecklistItem, TripTraveler
+
+
+def _parse_uuid(value: str, detail: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=detail) from exc
+
+
+async def _resolve_trip_traveler(
+    user_id: str,
+    trip_id: str,
+    session: AsyncSession,
+) -> TripTraveler:
+    trip_traveler = await session.scalar(
+        select(TripTraveler).where(
+            TripTraveler.user_id == _parse_uuid(user_id, "User not found"),
+            TripTraveler.trip_id == _parse_uuid(trip_id, "Trip not found"),
+        )
+    )
+    if not trip_traveler:
+        raise HTTPException(status_code=404, detail="Traveler not found for trip")
+    return trip_traveler
 
 
 async def update_checklist_item(
-    user_id: int,
+    user_id: str,
     update: dict,
-    database_path: str | Path | None = None,
+    session: AsyncSession,
 ) -> dict:
     """Persist one checklist item completion state for a user."""
-    async with connect_to_database(database_path) as db:
-        await db.execute(
-            """
-            INSERT INTO checklist_progress (user_id, trip_id, phase_id, item_id, completed, updated_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id, trip_id, phase_id, item_id)
-            DO UPDATE SET completed = ?, updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                user_id,
-                update["trip_id"],
-                update["phase_id"],
-                update["item_id"],
-                update["completed"],
-                update["completed"],
-            ),
+    trip_traveler = await _resolve_trip_traveler(user_id, update["trip_id"], session)
+    trip_id = _parse_uuid(update["trip_id"], "Trip not found")
+    phase_id = _parse_uuid(update["phase_id"], "Phase not found")
+    item_id = _parse_uuid(update["item_id"], "Checklist item not found")
+
+    checklist_item = await session.scalar(
+        select(TripPhaseChecklistItem)
+        .join(TripPhase, TripPhase.id == TripPhaseChecklistItem.trip_phase_id)
+        .where(
+            TripPhaseChecklistItem.id == item_id,
+            TripPhaseChecklistItem.trip_phase_id == phase_id,
+            TripPhase.trip_id == trip_id,
         )
-        await db.commit()
+    )
+    if not checklist_item:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+
+    completed_at = datetime.now(UTC) if update["completed"] else None
+    statement = insert(TravelerChecklistProgress).values(
+        trip_traveler_id=trip_traveler.id,
+        trip_phase_checklist_item_id=checklist_item.id,
+        is_completed=update["completed"],
+        completed_at=completed_at,
+    )
+    statement = statement.on_conflict_do_update(
+        index_elements=[
+            TravelerChecklistProgress.trip_traveler_id,
+            TravelerChecklistProgress.trip_phase_checklist_item_id,
+        ],
+        set_={
+            "is_completed": statement.excluded.is_completed,
+            "completed_at": statement.excluded.completed_at,
+            "updated_at": datetime.now(UTC),
+        },
+    )
+    await session.execute(statement)
+    await session.commit()
 
     return {"message": "Checklist item updated"}
 
 
 async def get_checklist_progress(
     trip_id: str,
-    user_id: int,
-    database_path: str | Path | None = None,
+    user_id: str,
+    session: AsyncSession,
 ) -> dict:
     """Return all persisted checklist progress for one user and trip."""
-    async with connect_to_database(database_path) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT phase_id, item_id, completed FROM checklist_progress WHERE user_id = ? AND trip_id = ?",
-            (user_id, trip_id),
+    trip_traveler = await _resolve_trip_traveler(user_id, trip_id, session)
+    rows = await session.execute(
+        select(
+            TravelerChecklistProgress,
+            TripPhaseChecklistItem.trip_phase_id,
         )
-        rows = await cursor.fetchall()
+        .join(
+            TripPhaseChecklistItem,
+            TripPhaseChecklistItem.id
+            == TravelerChecklistProgress.trip_phase_checklist_item_id,
+        )
+        .where(TravelerChecklistProgress.trip_traveler_id == trip_traveler.id)
+    )
 
     progress: dict[str, dict[str, bool]] = {}
-    for row in rows:
-        phase_id = row["phase_id"]
-        progress.setdefault(phase_id, {})[row["item_id"]] = bool(row["completed"])
+    for progress_row, phase_id in rows.all():
+        phase_key = str(phase_id)
+        progress.setdefault(phase_key, {})[
+            str(progress_row.trip_phase_checklist_item_id)
+        ] = progress_row.is_completed
 
     return {"trip_id": trip_id, "user_id": user_id, "progress": progress}
 
 
 async def update_phase_completion(
-    user_id: int,
+    user_id: str,
     update: dict,
-    database_path: str | Path | None = None,
+    session: AsyncSession,
 ) -> dict:
     """Persist one phase completion state for a user."""
-    async with connect_to_database(database_path) as db:
-        await db.execute(
-            """
-            INSERT INTO phase_completion (user_id, trip_id, phase_id, completed, updated_at)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id, trip_id, phase_id)
-            DO UPDATE SET completed = ?, updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                user_id,
-                update["trip_id"],
-                update["phase_id"],
-                update["completed"],
-                update["completed"],
-            ),
+    trip_traveler = await _resolve_trip_traveler(user_id, update["trip_id"], session)
+    phase = await session.scalar(
+        select(TripPhase).where(
+            TripPhase.id == _parse_uuid(update["phase_id"], "Phase not found"),
+            TripPhase.trip_id == _parse_uuid(update["trip_id"], "Trip not found"),
         )
-        await db.commit()
+    )
+    if not phase:
+        raise HTTPException(status_code=404, detail="Phase not found")
+
+    completed_at = datetime.now(UTC) if update["completed"] else None
+    statement = insert(TravelerPhaseProgress).values(
+        trip_traveler_id=trip_traveler.id,
+        trip_phase_id=phase.id,
+        is_completed=update["completed"],
+        completed_at=completed_at,
+    )
+    statement = statement.on_conflict_do_update(
+        index_elements=[
+            TravelerPhaseProgress.trip_traveler_id,
+            TravelerPhaseProgress.trip_phase_id,
+        ],
+        set_={
+            "is_completed": statement.excluded.is_completed,
+            "completed_at": statement.excluded.completed_at,
+            "updated_at": datetime.now(UTC),
+        },
+    )
+    await session.execute(statement)
+    await session.commit()
 
     return {"message": "Phase completion updated"}
 
 
 async def get_phase_completions(
     trip_id: str,
-    user_id: int,
-    database_path: str | Path | None = None,
+    user_id: str,
+    session: AsyncSession,
 ) -> dict:
     """Return all persisted phase completion states for one user and trip."""
-    async with connect_to_database(database_path) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT phase_id, completed FROM phase_completion WHERE user_id = ? AND trip_id = ?",
-            (user_id, trip_id),
+    trip_traveler = await _resolve_trip_traveler(user_id, trip_id, session)
+    rows = await session.scalars(
+        select(TravelerPhaseProgress).where(
+            TravelerPhaseProgress.trip_traveler_id == trip_traveler.id
         )
-        rows = await cursor.fetchall()
+    )
 
-    completions = {row["phase_id"]: bool(row["completed"]) for row in rows}
+    completions = {
+        str(row.trip_phase_id): row.is_completed for row in rows.all()
+    }
     return {"trip_id": trip_id, "user_id": user_id, "completions": completions}

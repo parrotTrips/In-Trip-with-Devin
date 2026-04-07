@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import random
+import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Awaitable, Callable
 
-import aiosqlite
 import httpx
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import (
     WHATSAPP_ACCESS_TOKEN,
@@ -17,7 +18,8 @@ from app.core.config import (
     WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_TEMPLATE_NAME,
 )
-from app.db.database import connect_to_database
+from app.db.models.auth import OTPCode
+from app.db.models.user import User
 
 
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
@@ -67,7 +69,7 @@ async def send_whatsapp_otp(phone: str, code: str) -> bool:
 
 async def request_otp(
     phone: str,
-    database_path: str | Path | None = None,
+    session: AsyncSession,
     otp_sender: Callable[[str, str], Awaitable[bool]] = send_whatsapp_otp,
     code_generator: Callable[[], str] | None = None,
 ) -> dict:
@@ -76,12 +78,14 @@ async def request_otp(
     code = generator()
     expires_at = datetime.now(UTC) + timedelta(minutes=10)
 
-    async with connect_to_database(database_path) as db:
-        await db.execute(
-            "INSERT INTO otp_codes (phone, code, expires_at) VALUES (?, ?, ?)",
-            (phone, code, expires_at.isoformat()),
+    session.add(
+        OTPCode(
+            phone=phone,
+            code=code,
+            expires_at=expires_at,
         )
-        await db.commit()
+    )
+    await session.commit()
 
     whatsapp_sent = await otp_sender(phone, code)
     response_data = {"message": "OTP sent successfully"}
@@ -97,42 +101,44 @@ async def request_otp(
 async def verify_otp(
     phone: str,
     code: str,
-    database_path: str | Path | None = None,
+    session: AsyncSession,
 ) -> dict:
     """Validate an OTP and create the user on first successful login."""
-    async with connect_to_database(database_path) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """
-            SELECT * FROM otp_codes
-            WHERE phone = ? AND code = ? AND used = FALSE
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (phone, code),
+    otp = await session.scalar(
+        select(OTPCode)
+        .where(
+            OTPCode.phone == phone,
+            OTPCode.code == code,
+            OTPCode.used.is_(False),
         )
-        otp = await cursor.fetchone()
+        .order_by(OTPCode.created_at.desc())
+        .limit(1)
+    )
+    if not otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
 
-        if not otp:
-            raise HTTPException(status_code=400, detail="Invalid OTP code")
+    if otp.expires_at < datetime.now(UTC):
+        raise HTTPException(status_code=400, detail="OTP code expired")
 
-        if datetime.fromisoformat(otp["expires_at"]) < datetime.now(UTC):
-            raise HTTPException(status_code=400, detail="OTP code expired")
+    otp.used = True
 
-        await db.execute("UPDATE otp_codes SET used = TRUE WHERE id = ?", (otp["id"],))
+    user = await session.scalar(select(User).where(User.phone == phone))
+    if not user:
+        user = User(
+            id=uuid.uuid4(),
+            phone=phone,
+            full_name=None,
+            email=None,
+            status="active",
+        )
+        session.add(user)
 
-        cursor = await db.execute("SELECT * FROM users WHERE phone = ?", (phone,))
-        user = await cursor.fetchone()
-        if not user:
-            await db.execute("INSERT INTO users (phone) VALUES (?)", (phone,))
-            await db.commit()
-            cursor = await db.execute("SELECT * FROM users WHERE phone = ?", (phone,))
-            user = await cursor.fetchone()
-        else:
-            await db.commit()
+    await session.commit()
+    await session.refresh(user)
 
     return {
-        "user_id": user["id"],
-        "phone": user["phone"],
-        "name": user["name"],
+        "user_id": str(user.id),
+        "phone": user.phone,
+        "name": user.full_name,
         "message": "Login successful",
     }
