@@ -43,18 +43,6 @@ SCHEMA_STATEMENTS = [
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS comments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        trip_id TEXT NOT NULL,
-        phase_id TEXT NOT NULL,
-        text TEXT NOT NULL,
-        is_private BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-    """,
-    """
     CREATE TABLE IF NOT EXISTS otp_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         phone TEXT NOT NULL,
@@ -62,20 +50,6 @@ SCHEMA_STATEMENTS = [
         expires_at TIMESTAMP NOT NULL,
         used BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        trip_id TEXT NOT NULL DEFAULT 'ross26',
-        title TEXT NOT NULL,
-        body TEXT NOT NULL,
-        type TEXT NOT NULL DEFAULT 'info',
-        link TEXT,
-        read BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id)
     )
     """,
     """

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getPhaseById,
@@ -11,25 +11,11 @@ import {
   MapPin,
   Star,
   ChevronRight,
-  Send,
   Camera,
   Check,
   DollarSign,
   ImagePlus,
 } from 'lucide-react';
-import { useAuth } from '../../../app/providers/auth-context';
-import { addComment as apiAddComment, getComments } from '../services/trip-api';
-
-const TRIP_ID = 'ross26';
-
-interface BackendComment {
-  id: number;
-  user_id: number;
-  user_name: string;
-  text: string;
-  created_at: string;
-  is_private: boolean;
-}
 
 function ActivityCard({ activity, index }: { activity: Activity; index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -167,25 +153,8 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
 export default function DayDetails() {
   const { dayId } = useParams<{ dayId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const phase = dayId ? getPhaseById(dayId) : undefined;
-  const [comment, setComment] = useState('');
-  const [backendComments, setBackendComments] = useState<BackendComment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const loadComments = useCallback(async () => {
-    if (!dayId) return;
-    try {
-      const data = await getComments(TRIP_ID, dayId);
-      setBackendComments(data.comments);
-    } catch {
-      // silently fail
-    }
-  }, [dayId]);
-
-  useEffect(() => {
-    loadComments();
-  }, [loadComments]);
 
   if (!phase || !isTripDay(phase)) {
     return (
@@ -194,17 +163,6 @@ export default function DayDetails() {
       </div>
     );
   }
-
-  const handleAddComment = async () => {
-    if (!comment.trim() || !user || !dayId) return;
-    try {
-      await apiAddComment(user.userId, TRIP_ID, dayId, comment.trim());
-      setComment('');
-      await loadComments();
-    } catch {
-      // silently fail
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
@@ -299,58 +257,6 @@ export default function DayDetails() {
               <p className="text-sm text-gray-400">No photos yet. Be the first to share!</p>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Comments Section */}
-      <div className="px-4 mt-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-50">
-            <h3 className="font-semibold text-gray-800 font-[Fredoka]">Share Your Experience</h3>
-          </div>
-
-          <div className="p-4 space-y-4">
-            {backendComments.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">
-                How was your day? Share with the group!
-              </p>
-            ) : (
-              backendComments.map(c => (
-                <div key={c.id} className="flex gap-3">
-                  <div className="flex-shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <span className="text-sm font-bold text-emerald-600">{c.user_name.charAt(0)}</span>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-sm font-semibold text-gray-800">{c.user_name}</span>
-                    <p className="text-sm text-gray-600 mt-0.5">{c.text}</p>
-                    <span className="text-xs text-gray-400 mt-1 block">{new Date(c.created_at).toLocaleString()}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="p-4 border-t border-gray-50">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={comment}
-                onChange={e => setComment(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddComment()}
-                placeholder="Share your experience today!"
-                className="flex-1 py-2.5 px-4 bg-gray-50 rounded-full text-sm outline-none focus:ring-2 focus:ring-emerald-300 transition-all"
-              />
-              <button
-                onClick={handleAddComment}
-                disabled={!comment.trim()}
-                className="p-2.5 bg-emerald-500 text-white rounded-full hover:bg-emerald-600 disabled:opacity-40 transition-all"
-              >
-                <Send size={16} />
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

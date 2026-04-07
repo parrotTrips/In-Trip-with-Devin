@@ -289,9 +289,6 @@ poetry run fastapi dev app/main.py
 | `GET` | `/checklist/{trip_id}/{user_id}` | ler progresso do checklist |
 | `POST` | `/phases/complete` | marcar fase como concluida |
 | `GET` | `/phases/{trip_id}/{user_id}` | ler fases concluidas |
-| `POST` | `/comments` | adicionar comentario |
-| `GET` | `/comments/{trip_id}/{phase_id}` | listar comentarios |
-| `GET` | `/notifications/{user_id}` | listar notificacoes |
 | `GET` | `/missions/{trip_id}` | listar missoes |
 
 ## Viagem Atual no Projeto

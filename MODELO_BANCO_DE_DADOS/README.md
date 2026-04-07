@@ -10,6 +10,8 @@ Este diretório concentra a modelagem do banco de dados do projeto, separada por
 4. [Modelo para Vertabelo](./04-vertabelo.md)
 5. [Cardinalidades](./05-cardinalidades.md)
 6. [Mídia e Storage](./06-midia-e-storage.md)
+7. [Dicionário de Dados](./07-dicionario-de-dados.md)
+8. [Relações Explicadas](./08-relacoes-explicadas.md)
 
 ## Objetivo
 
@@ -28,11 +30,9 @@ O banco deve cobrir o que existe no app hoje:
 - fases pré-viagem e durante a viagem
 - atividades por fase/dia
 - checklist
-- comentários por fase
-- notificações
 - autenticação
 - perfil do viajante dentro da viagem
-- interface externa de backoffice no mesmo repositório
+- dados operacionais e comerciais do viajante
 
 Fora do escopo inicial:
 

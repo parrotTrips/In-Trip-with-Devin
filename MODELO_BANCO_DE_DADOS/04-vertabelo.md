@@ -9,26 +9,22 @@
 - `full_name text NULL`
 - `email text NULL`
 - `status text NOT NULL`
-- `role text NOT NULL`
 - `created_at timestamptz NOT NULL`
 - `updated_at timestamptz NOT NULL`
 
 Checks:
 
 - `status in ('active', 'inactive', 'blocked')`
-- `role in ('traveler', 'team', 'admin')`
 
 ### `trips`
 
 - `id uuid PK`
-- `slug text NOT NULL UNIQUE`
 - `name text NOT NULL`
 - `short_name text NULL`
 - `description text NULL`
 - `start_date date NOT NULL`
 - `end_date date NOT NULL`
 - `status text NOT NULL`
-- `default_timezone text NOT NULL`
 - `created_at timestamptz NOT NULL`
 - `updated_at timestamptz NOT NULL`
 
@@ -41,19 +37,12 @@ Checks:
 - `id uuid PK`
 - `trip_id uuid NOT NULL FK -> trips.id`
 - `user_id uuid NOT NULL FK -> users.id`
-- `display_name text NULL`
-- `enrollment_status text NOT NULL`
-- `joined_at timestamptz NULL`
 - `created_at timestamptz NOT NULL`
 - `updated_at timestamptz NOT NULL`
 
 Regras:
 
 - `UNIQUE (trip_id, user_id)`
-
-Checks:
-
-- `enrollment_status in ('invited', 'active', 'cancelled')`
 
 ### `traveler_profiles`
 
@@ -81,7 +70,6 @@ Checks:
 - `trip_id uuid NOT NULL FK -> trips.id`
 - `parent_phase_id uuid NULL FK -> trip_phases.id`
 - `phase_type text NOT NULL`
-- `slug text NOT NULL`
 - `title text NOT NULL`
 - `subtitle text NULL`
 - `icon text NULL`
@@ -97,8 +85,6 @@ Checks:
 
 Regras:
 
-- `UNIQUE (trip_id, slug)`
-
 Checks:
 
 - `phase_type in ('pre_trip', 'in_trip')`
@@ -107,17 +93,12 @@ Checks:
 
 - `id uuid PK`
 - `trip_phase_id uuid NOT NULL FK -> trip_phases.id`
-- `item_code text NOT NULL`
 - `label text NOT NULL`
 - `description text NULL`
 - `sort_order integer NOT NULL`
 - `is_required boolean NOT NULL DEFAULT false`
 - `created_at timestamptz NOT NULL`
 - `updated_at timestamptz NOT NULL`
-
-Regras:
-
-- `UNIQUE (trip_phase_id, item_code)`
 
 ### `trip_phase_links`
 
@@ -132,51 +113,32 @@ Regras:
 ### `media_assets`
 
 - `id uuid PK`
-- `storage_provider text NOT NULL`
-- `storage_bucket text NULL`
-- `storage_key text NOT NULL`
+- `drive_file_id text NOT NULL`
+- `drive_path text NULL`
 - `public_url text NULL`
 - `mime_type text NULL`
 - `original_filename text NULL`
-- `file_size_bytes bigint NULL`
 - `created_at timestamptz NOT NULL`
 - `updated_at timestamptz NOT NULL`
 
 Regras:
 
-- `UNIQUE (storage_provider, storage_key)`
-
-### `trip_phase_attachments`
-
-- `id uuid PK`
-- `trip_phase_id uuid NOT NULL FK -> trip_phases.id`
-- `media_asset_id uuid NOT NULL FK -> media_assets.id`
-- `name text NOT NULL`
-- `file_type text NULL`
-- `sort_order integer NOT NULL`
-- `created_at timestamptz NOT NULL`
-- `updated_at timestamptz NOT NULL`
+- `UNIQUE (drive_file_id)`
 
 ### `trip_activities`
 
 - `id uuid PK`
 - `trip_phase_id uuid NOT NULL FK -> trip_phases.id`
-- `activity_code text NOT NULL`
 - `name text NOT NULL`
 - `activity_type text NOT NULL`
 - `starts_at timestamptz NULL`
 - `duration_minutes integer NULL`
 - `short_description text NOT NULL`
 - `practical_info text NULL`
-- `price_label text NULL`
-- `vibe text NULL`
+- `amount_brl numeric(12,2) NULL`
 - `sort_order integer NOT NULL`
 - `created_at timestamptz NOT NULL`
 - `updated_at timestamptz NOT NULL`
-
-Regras:
-
-- `UNIQUE (trip_phase_id, activity_code)`
 
 Checks:
 
@@ -222,32 +184,6 @@ Regras:
 
 - `UNIQUE (trip_traveler_id, trip_phase_id)`
 
-### `phase_comments`
-
-- `id uuid PK`
-- `trip_phase_id uuid NOT NULL FK -> trip_phases.id`
-- `trip_traveler_id uuid NOT NULL FK -> trip_travelers.id`
-- `body text NOT NULL`
-- `is_private boolean NOT NULL DEFAULT false`
-- `created_at timestamptz NOT NULL`
-- `updated_at timestamptz NOT NULL`
-
-### `notifications`
-
-- `id uuid PK`
-- `trip_traveler_id uuid NOT NULL FK -> trip_travelers.id`
-- `title text NOT NULL`
-- `body text NOT NULL`
-- `notification_type text NOT NULL`
-- `link_url text NULL`
-- `is_read boolean NOT NULL DEFAULT false`
-- `read_at timestamptz NULL`
-- `created_at timestamptz NOT NULL`
-
-Checks:
-
-- `notification_type in ('info', 'warning', 'success', 'alert')`
-
 ## Ordem recomendada de montagem
 
 1. `users`
@@ -259,10 +195,7 @@ Checks:
 7. `trip_phases`
 8. `trip_phase_checklist_items`
 9. `trip_phase_links`
-10. `trip_phase_attachments`
-11. `trip_activities`
-12. `activity_media`
-13. `traveler_checklist_progress`
-14. `traveler_phase_progress`
-15. `phase_comments`
-16. `notifications`
+10. `trip_activities`
+11. `activity_media`
+12. `traveler_checklist_progress`
+13. `traveler_phase_progress`

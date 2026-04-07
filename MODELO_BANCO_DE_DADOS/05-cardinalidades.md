@@ -19,10 +19,7 @@
 - `TripPhase 0..N -> 0..1 TripPhase (parent)`
 - `TripPhase 1 -> 0..N TripPhaseChecklistItem`
 - `TripPhase 1 -> 0..N TripPhaseLink`
-- `TripPhase 1 -> 0..N TripPhaseAttachment`
 - `TripPhase 1 -> 0..N TripActivity`
-- `TripPhaseAttachment N -> 1 MediaAsset`
-- `MediaAsset 1 -> 0..N TripPhaseAttachment`
 - `TripActivity 1 -> 0..N ActivityMedia`
 - `ActivityMedia N -> 1 MediaAsset`
 - `MediaAsset 1 -> 0..N ActivityMedia`
@@ -33,9 +30,6 @@
 - `TripPhaseChecklistItem 1 -> 0..N TravelerChecklistProgress`
 - `TripTraveler 1 -> 0..N TravelerPhaseProgress`
 - `TripPhase 1 -> 0..N TravelerPhaseProgress`
-- `TripTraveler 1 -> 0..N PhaseComment`
-- `TripPhase 1 -> 0..N PhaseComment`
-- `TripTraveler 1 -> 0..N Notification`
 
 ## Relações 1:1 importantes
 

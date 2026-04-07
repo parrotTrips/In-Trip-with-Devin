@@ -52,9 +52,7 @@ def test_init_db_creates_tables_for_the_active_scope(tmp_path):
         "users",
         "checklist_progress",
         "phase_completion",
-        "comments",
         "otp_codes",
-        "notifications",
         "user_profiles",
     }
 

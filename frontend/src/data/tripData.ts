@@ -12,16 +12,6 @@ export interface ChecklistItem {
   completed: boolean;
 }
 
-export interface Comment {
-  id: string;
-  userId: string;
-  userName: string;
-  userAvatar: string;
-  text: string;
-  timestamp: string;
-  isTeam?: boolean;
-}
-
 export interface Phase {
   id: string;
   type: 'pre-trip' | 'in-trip';
@@ -32,8 +22,6 @@ export interface Phase {
   detailedDescription?: string;
   checklist?: ChecklistItem[];
   links?: { label: string; url: string }[];
-  attachments?: { name: string; type: string }[];
-  comments: Comment[];
   completed: boolean;
   locked: boolean;
   order: number;
@@ -49,7 +37,6 @@ export interface Activity {
   practicalInfo: string;
   price?: string;
   images: string[];
-  vibe?: string;
 }
 
 export interface TripDay extends Phase {
@@ -97,7 +84,6 @@ export const preTripPhases: Phase[] = [
     completed: true,
     locked: false,
     order: 0,
-    comments: [],
   },
   {
     id: 'vaccination',
@@ -121,7 +107,6 @@ export const preTripPhases: Phase[] = [
     completed: true,
     locked: false,
     order: 1,
-    comments: [],
   },
   {
     id: 'packing',
@@ -152,7 +137,6 @@ export const preTripPhases: Phase[] = [
     completed: true,
     locked: false,
     order: 2,
-    comments: [],
   },
   {
     id: 'documents',
@@ -177,14 +161,9 @@ export const preTripPhases: Phase[] = [
       { label: 'Download Pre-Departure Form', url: '#' },
       { label: 'Travel Insurance Guide', url: '#' },
     ],
-    attachments: [
-      { name: 'Pre-Departure Checklist', type: 'PDF' },
-      { name: 'Emergency Contacts Card', type: 'PDF' },
-    ],
     completed: true,
     locked: false,
     order: 3,
-    comments: [],
   },
 ];
 
@@ -197,7 +176,6 @@ export const tripDays: TripDay[] = [
     icon: 'plane-landing',
     description: 'Airport pickup, Hotel Check-in, Ipanema Beach & Welcome Happy Hour',
     detailedDescription: 'Welcome to Rio de Janeiro! Get picked up from the airport, check into the Astoria Ipanema Hotel, explore Ipanema Beach, then join us for a Welcome Happy Hour at La Carioca En La Playa.',
-    comments: [],
     completed: true,
     locked: false,
     order: 4,
@@ -263,7 +241,6 @@ export const tripDays: TripDay[] = [
     icon: 'flame',
     description: "Brazilian Barbecue at Bernardo's & explore Rio nightlife",
     detailedDescription: "Experience an authentic Brazilian barbecue (churrasco) hosted by Bernardo, then explore Rio's legendary nightlife scene.",
-    comments: [],
     completed: true,
     locked: false,
     order: 5,
@@ -299,7 +276,6 @@ export const tripDays: TripDay[] = [
     icon: 'mountain',
     description: 'Bike Tour, Christ the Redeemer & Sugarloaf Mountain + Samba @ Bosque Bar',
     detailedDescription: "Optional morning bike tour, then visit two of Rio's most iconic landmarks \u2014 Christ the Redeemer and Sugarloaf Mountain. In the evening, catch a samba party at Bosque Bar.",
-    comments: [],
     completed: false,
     locked: false,
     order: 6,
@@ -323,7 +299,6 @@ export const tripDays: TripDay[] = [
         description: '07:30 AM | Departure from the Astoria Hotel Lobby.\n01:00 PM | Estimated return to the hotel.\n\nPlaces we will visit: Christ the Redeemer and the SugarLoaf. \n\nGood To know: \n- Bring a small day-pack with water, sunscreen, sunglasses, and a hat (or bucket hat).\n- We recommend light, breathable clothing and comfortable walking shoes. There are a few steps and some walking involved at both sites.\n- Hike opportunity: On our second stop, Sugarloaf, it\'s possible to do a 40 minutes hike up to the first hill (Urca) and from there get a cable car to the Sugarloaf mountain. \n- Check the forecast! If there is a chance of rain, we highly recommend bringing a light rain jacket.',
         practicalInfo: 'See Rio from its most iconic viewpoints! Visit the towering Christ the Redeemer and ride the Sugarloaf cable car for panoramic city views.\n\nChrist the Redeemer & Corcovado Train \n\n  \n- We begin aboard the Corcovado rack railway, inaugurated in 1884 and electrified in 1910—the first electrified railroad in Brazil—climbing through Tijuca National Park to the 700 m summit. \n\n  \n- At the top, you’ll meet the world-famous Art Deco statue, completed in 1931: 30 m tall (38 m including the pedestal), arms spanning 28 m, built of reinforced concrete with a soapstone veneer, designed and engineered by Heitor da Silva Costa (with Albert Caquot) and sculpted in part by Paul Landowski (face by Gheorghe Leonida). \n\nSugarloaf (Pão de Açúcar) & Cable Car \n\n  \n- For our second stop, we head to Urca for the two-stage cable car: Praia Vermelha → Morro da Urca → Sugarloaf. \n\n  \n- Rio’s cableway opened its first section in 1912 and is presented by the park as the oldest operating cable car in the world—two historic cabins (1912 and 1972) are on display at Cable Car Square. \n\n  \n- Sugarloaf’s name dates to the 16th-century Portuguese sugar trade, when refined sugar was shipped in conical “loaves” whose shape the mountain resembles; the peak rises 396 m at the mouth of Guanabara Bay and is part of Rio’s UNESCO-listed landscape. \n\n  \n- Each stop offers viewpoints, short walks, and cafés with bay-to-ocean panoramas. \n\nINCLUDED:  \n\n  \n- Tickets to Christ the redeemer train and entrance Fast Pass tickets to the Sugarloaf cable car and entrance  \n\n  \n- Tranportation \n\nNOT INCLUDES:  Anything that is not metioned on the tour discription',
         images: ['https://static.wixstatic.com/media/5c464c_ed1255180692453c804a86dfbeee96bb~mv2.webp/PARROT%20TRIPS%202025_DIA%202_-22.webp'],
-        vibe: 'Sightseeing',
       },
       {
         id: 'a-samba-bosque',
@@ -334,7 +309,6 @@ export const tripDays: TripDay[] = [
         description: 'This is Rio\'s official Sunday party!  “Sambinha do Bosque” is a Sunday samba/pagode party with live acts and DJs. Samba and pagode are Brazilian music styles. \n\nTotally optional—join if you feel like it! \n\nThere’s a TT Burger inside if you want a bite.',
         practicalInfo: '- Bosque Bar — Sambinha do Bosque (8:00 PM) Bosque Bar is a venue inside the Jockey Club area in Gávea (Av. Bartolomeu Mitre, 1314). It\'s Sunday\'s official party place in Rio\n\n  \n- It’s known for live music, DJs, easy access/parking, and a relaxed vibe—great for a casual night out. \n\n  \n- How it works “Sambinha do Bosque” is a Sunday samba/pagode party with live acts and DJs. Samba and pagode are Brazilian music styles. \n\n  \n- Doors open in the evening; for our group, we suggest 8:00 PM. \n\n  \n- Expect standing areas with some lounge spots. \n\n  \n- Tickets Buy online via Ingresse. Some listings require the digital ticket in the Ingresse app and note that late arrivals after door-closing may be denied entry—so plan to arrive on time.. \n\n  \n- Food & drinks There’s TT Burger inside for a quick bite, plus a full bar. \n\n  \n- Tips Bring a photo ID (events are typically 18+), dress casual, and consider ride-share for convenience. \n\n  \n- If it sells out, door sales may close early.',
         images: ['https://static.wixstatic.com/media/e340b3_8ce79096bd3540fa9e9ba89822e924fb~mv2.png/bosque%20bar.png'],
-        vibe: 'Gathering',
       },
     ],
     albumPhotos: [],
@@ -347,7 +321,6 @@ export const tripDays: TripDay[] = [
     icon: 'landmark',
     description: 'SUP at Sunrise, Historic Center Tour, Footvolley & Pedra do Sal',
     detailedDescription: "Optional sunrise paddleboarding, then explore Rio's historic center with an expert guide. Afternoon footvolley class and evening samba at Pedra do Sal.",
-    comments: [],
     completed: false,
     locked: false,
     order: 7,
@@ -361,7 +334,6 @@ export const tripDays: TripDay[] = [
         description: 'Departure: 4:00 AM from hotel — please be on time!\nPaddling time: from 4:40 to 5:40 (☀ Sunrise at 5:10 AM)\nEstimates return time: 6:30am\n\nDifficulty leve: Easy to moderate \nVisited places: Copacabana beach \n\nGood to know:\n- Be on time at the meeting point\n-There is a luggage storage but bring only the essential \n-Wear sunscreen, hat and sunglasses \n-Life jackets are mantory and will be provided by the crew',
         practicalInfo: 'Paddle the calm waters of Posto 6 by the Copacabana Fort—one of Rio’s classic SUP spots known for gentle conditions and scenic views. Sessions usually begin with a quick on-shore briefing on balance and paddling before you launch with an instructor nearby. Sunrise times are especially popular for smoother seas and softer light along Copacabana’s curve.\n\nIncluded:\n1 board per person\nLuggage storage\nWarm-up session\nPaddling instruction\nSUP equipment: life jacket, paddle, board\nThe tour takes place even in cloudy weather. In cases of rain, strong winds, high tide, or rough seas, the tour will be canceled and the activity fee refunded.',
         images: ['https://static.wixstatic.com/media/5c464c_f45b992ec6894d808470365f72dc9f02~mv2.webp/edb07a4a-6a82-4ea0-a4d2-e33d0faaf218%20(1).webp'],
-        vibe: 'Outdoor',
       },
       {
         id: 'a-historic',
@@ -372,7 +344,6 @@ export const tripDays: TripDay[] = [
         description: '09:00 AM| Departure from the Astoria Hotel Lobby.\n01:00 PM | Estimated return to the hotel.\n\nExplore Rio’s historical landmarks with an expert local guide.\n\nGood to Know\n- For your comfort and safety, please wear comfortable closed-toe shoes (sneakers are ideal). Expect to navigate hills, stairs, and traditional cobblestone streets.\n- We recommend bringing a small day-pack with sunscreen, a hat, and a bottle of water.\n- It is useful to have some local currency (cash) for small purchases or snacks along the way.\n- To ensure the best experience, please stay close to your guide at all times.\n- Punctuality: To make the most of our itinerary, please be at the meeting point by 08:50 AM.',
         practicalInfo: "Explore Rio's historical landmarks with an expert local guide. Walk through colonial streets, visit churches, see the Royal Portuguese Reading Room.",
         images: ['https://static.wixstatic.com/media/e340b3_4f87b0d9df2049c991a251bb33eaad16~mv2.jpg/PARROT%20TRIPS%202025_DIA%203-6.jpg'],
-        vibe: 'Outdoor',
       },
       {
         id: 'a-footvolley',
@@ -383,7 +354,6 @@ export const tripDays: TripDay[] = [
         description: 'Time to go really deep into the Carioca culture, playing foot volley in Ipanema beach.\n\n1 hour class\n\n Wear light sportswear, swimwear, or clothes you don\'t mind getting sandy.\n\nSunscreen and a bottle of water are highly recommended. \n\nLocation and further instructions will be sent closer to the date',
         practicalInfo: '-  Classes are structured to accommodate all levels, from complete beginners to intermediate players. \n\n  \n- The instructor will provide drills and friendly game scenarios to practice new skills. \n\n  \n- In case of heavy rain or storms, the activity may be canceled and the fee refunded. \n\n  \n- Included: - Professional instructor, footvolley balls,  marked court/net setup',
         images: ['https://static.wixstatic.com/media/7693bd_81817979b2fe4fc1a8bad262557905c7~mv2.webp/futevolei.webp'],
-        vibe: 'Outdoor',
       },
       {
         id: 'a-pedradosal',
@@ -394,7 +364,6 @@ export const tripDays: TripDay[] = [
         description: 'The purest Brazilian juice \u2014 popular, open-air samba music, known as the birthplace of Samba! Monday is the most famous day.',
         practicalInfo: '- Pedra do Sal is located here but the dropp off point is the Largo de São Francisco da Prainha\n\n  \n- It is a historical heritage site and the birthplace of urban samba in Rio. It’s an open-air street party, known for its deep cultural roots, live acoustic samba, and a very casual, energetic crowd. \n\n  \n- How it works The "Roda de Samba" happens at the foot of the rock, where musicians gather around a table to play classics. The crowd stands around them, singing and dancing. It usually happens on Monday nights (the traditional one) and sometimes Fridays. \n\n  \n- Expect a packed street, standing room only, and a vibrant, communal atmosphere. \n\nGood to know: \n\n  \n- Tickets No tickets required.\n\n  \n-  It is a public street event and completely free to enter. \n\n  \n-  There are no formal waiters. You buy drinks (beers, caipirinhas) and food (street BBQ, pastries) from the many street vendors and tents scattered around the area. \n\n  \n- Bring cash as some vendors might not take cards, though many do. - \n\n  \n- Safety: It gets very crowded. Keep your phone and wallet in front pockets or a fanny pack; avoid wearing expensive jewelry. \n\n  \n- Dress code: Very casual. Wear comfortable shoes (sneakers) as the ground is uneven/cobblestone and you will be standing. \n\n  \n- Transport: We highly recommend using Uber/rideshare to get there and back',
         images: ['https://static.wixstatic.com/media/7693bd_0197d7e6df05465f8db34296c0a6fde2~mv2.webp/Pedra-do-Sal-Rio-de-Janeiro.webp'],
-        vibe: 'Gathering',
       },
     ],
     albumPhotos: [],
@@ -407,7 +376,6 @@ export const tripDays: TripDay[] = [
     icon: 'sun',
     description: 'Beach time, Dois Irm\u00e3os Hike & Favela Vidigal Tour',
     detailedDescription: "Relaxed morning at the beach, then hike to the top of Dois Irm\u00e3os for one of the best views in Rio, passing through Vidigal Favela.",
-    comments: [],
     completed: false,
     locked: false,
     order: 8,
@@ -431,7 +399,6 @@ export const tripDays: TripDay[] = [
         description: "Hike up the Dois Irm\u00e3os trail and enjoy one of the best views in Rio. Pass through Vidigal Favela.",
         practicalInfo: '- How this activity will be: \n\n- We will leave the hotel by 1:30PM \n\n- Meet our local favela guide at the botton part of the favela Vidigal \n\n- Get a another transfer ( a local favela van) up to the hiking starting point \n\n- Hike up then down \n\n- Walk down the Favela \n\n  \n- The trail is steep in parts, but the view from the top is one of the most rewarding in Rio. \n\n  \n- The total duration of the hike (up and down) is approximately 3 to 4 hours hours, depending on the group\'s pace.\n\n  \n- Come with proper hike clothing and comfortable shoes. Bring sunscreem and water\n\n  \n- In case of rain: we will assess the with the guide what is possible to do and update everyone.',
         images: ['https://static.wixstatic.com/media/7693bd_e3c1b51b1bfc4febba07f0338297e88c~mv2.avif/trilha-dois-irmaos.avif'],
-        vibe: 'Sightseeing',
       },
     ],
     albumPhotos: [],
@@ -444,7 +411,6 @@ export const tripDays: TripDay[] = [
     icon: 'ship',
     description: 'Transfer to Ilha Grande Island & Brazilian Dance Class',
     detailedDescription: 'Say goodbye to Rio and journey to the paradise island of Ilha Grande! Bus + boat transfer, beachfront hotel, and Forr\u00f3 dance lesson.',
-    comments: [],
     completed: false,
     locked: false,
     order: 9,
@@ -458,7 +424,6 @@ export const tripDays: TripDay[] = [
         description: 'Journey from Rio to Ilha Grande island. ~3 hours driving + 1-hour boat ride.',
         practicalInfo: '- We depart from the Astoria Hotel at 08:00 AM, arriving at the Conceição de Jacareí pier by 11:00 AM. From there, we will proceed by boat to Ilha Grande.',
         images: ['https://static.wixstatic.com/media/e340b3_430325a3ce6f4867b451e82f68a4386a~mv2.jpeg/WhatsApp%20Image%202025-08-12%20at%2016.21.22.jpeg'],
-        vibe: 'Transfer',
       },
       {
         id: 'a-checkin-ilha',
@@ -469,7 +434,6 @@ export const tripDays: TripDay[] = [
         description: 'Check into the Recreio Da Praia hotel on Ilha Grande.',
         practicalInfo: 'Check-in: From 02:00 PM. Have ID/Passport handy.\nBreakfast: 07:00 AM \u2013 10:00 AM\n\nIsland Tips: Buy water at local "mercadinhos" (cheaper).',
         images: ['https://static.wixstatic.com/media/e340b3_4bf232eb627d4d289f3c8768307db329~mv2.avif/recreio%20da%20praia.avif'],
-        vibe: 'Hotel',
       },
       {
         id: 'a-dance',
@@ -480,7 +444,6 @@ export const tripDays: TripDay[] = [
         description: 'Immerse yourself in the authentic rhythms and flavors of Brazil! Energetic Forr\u00f3 dance lesson followed by a hands-on Caipirinha mixology workshop.',
         practicalInfo: 'Highlights\n\n  \n- Exclusive Privacy: A private boat tour dedicated entirely to our group.\n\n  \n- Scenic Swim Stops: 2 to 3 stops at breathtaking spots for swimming and snorkeling.\n\n  \n- Premium Inclusions: Lunch served onboard and a full Open Bar featuring authentic caipirinhas and cold beer.',
         images: ['https://static.wixstatic.com/media/e340b3_7f0a22b252f346c7abe0453b618f15e6~mv2.jpg/pexels-drethousand-8571178%20(1).jpg'],
-        vibe: 'Culture',
       },
     ],
     albumPhotos: [],
@@ -493,7 +456,6 @@ export const tripDays: TripDay[] = [
     icon: 'sailboat',
     description: 'Private boat ride around Ilha Grande with swim stops & lunch',
     detailedDescription: 'The highlight of Ilha Grande! Private boat tour with swim stops, snorkeling, lunch onboard, and open bar.',
-    comments: [],
     completed: false,
     locked: false,
     order: 10,
@@ -507,7 +469,6 @@ export const tripDays: TripDay[] = [
         description: 'Exclusive private boat tour dedicated entirely to our group. 2\u20133 scenic swim stops for swimming and snorkeling, lunch onboard, open bar with caipirinhas and cold beer.',
         practicalInfo: '10:30 AM | Meet in Hotel Lobby.\\n11:00 AM | Boat Departure.\\n05:00 PM | Return to pier.\\n\\nBring towel, sunscreen, hat, sunglasses. Non-slip sandals recommended.',
         images: ['https://static.wixstatic.com/media/e340b3_7f0a22b252f346c7abe0453b618f15e6~mv2.jpg'],
-        vibe: 'Outdoor',
       },
       {
         id: 'a-freenight',
@@ -530,7 +491,6 @@ export const tripDays: TripDay[] = [
     icon: 'palmtree',
     description: 'Free beach day, optional canoeing/hike & farewell dinner',
     detailedDescription: "A relaxed day to enjoy Ilha Grande at your own pace \u2014 then the unforgettable Goodbye Dinner at Bonito Para\u00edso restaurant.",
-    comments: [],
     completed: false,
     locked: false,
     order: 11,
@@ -564,7 +524,6 @@ export const tripDays: TripDay[] = [
         description: 'The Grand Finale! Farewell dinner at Bonito Para\u00edso restaurant.',
         practicalInfo: '07:30 PM | Departure from the Pier.\n07:45 PM | Arrival at Bonito Para\u00edso.\n\nDress code: Smart casual.',
         images: ['https://static.wixstatic.com/media/e340b3_af6d6414168843f4a4883ed70cddfca4~mv2.jpg'],
-        vibe: 'Outdoor',
       },
     ],
     albumPhotos: [],
@@ -577,7 +536,6 @@ export const tripDays: TripDay[] = [
     icon: 'bus',
     description: 'Return to Rio de Janeiro via boat + bus',
     detailedDescription: 'Journey back from Ilha Grande to Rio with a boat ride, bus transfer, and airport drop-offs.',
-    comments: [],
     completed: false,
     locked: false,
     order: 12,
@@ -591,7 +549,6 @@ export const tripDays: TripDay[] = [
         description: 'Journey back from Ilha Grande to Rio. Scenic boat ride + bus transfer with airport drop-off.',
         practicalInfo: 'GIG Airport Drop-off\n\nFor travelers departing today, the transfer will stop at GIG Airport before continuing to the Astoria Hotel.\n\nScheduled Travelers for GIG:\n\n  \n- Flight at 10:55 PM: Jacqueline Barraza, Ivan Barrueta, Jasmin Lopez, and Tyler Gray.\n\nEstimated Arrival at GIG: Approximately 04:00 PM, allowing ample time for check-in and security.',
         images: ['https://static.wixstatic.com/media/e340b3_430325a3ce6f4867b451e82f68a4386a~mv2.jpeg/WhatsApp%20Image%202025-08-12%20at%2016.21.22.jpeg'],
-        vibe: 'Transfer',
       },
     ],
     albumPhotos: [],
@@ -604,7 +561,6 @@ export const tripDays: TripDay[] = [
     icon: 'plane',
     description: 'Airport transfers \u2014 until next time!',
     detailedDescription: 'The final day! Airport transfers arranged according to your departure form. Safe travels!',
-    comments: [],
     completed: false,
     locked: false,
     order: 13,
@@ -618,7 +574,6 @@ export const tripDays: TripDay[] = [
         description: 'Group transfer from Astoria Ipanema to GIG International Airport.',
         practicalInfo: 'Airport Drop-offs & Departures\n\nMarch 8th, 2026\n\n  \n- 04:00 PM | Hotel Pickup: Group transfer from Astoria Ipanema to GIG Airport for the following travelers:\n\nFlight at 08:00 PM: Kristen Fernandez, Jonathan Pizano, Bernardo G. C. G. Ferreira, Daniel Tineo, and DeVar Jones.\n\nFlight at 09:30 PM: Terry Winston, Isaiah Thomas Pihlstrom, and Dario Garcia.\n\nFlight at 10:55 PM: Bailey Ethier and Abrahm Philip Coury.',
         images: ['https://static.wixstatic.com/media/e340b3_ca732f1773e54c888606be94003cb864~mv2.jpg/v1/fill/w_1365,h_2048,al_c,q_90,enc_auto/PARROT%20TRIPS%202025_DIA%203-32%20(1).jpg'],
-        vibe: 'Flight',
       },
     ],
     albumPhotos: [],

@@ -9,9 +9,6 @@ import {
   CheckCircle2,
   Circle,
   ExternalLink,
-  FileDown,
-  Send,
-  MessageSquare,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -20,20 +17,9 @@ import {
   updateChecklistItem as apiUpdateChecklist,
   getChecklistProgress,
   updatePhaseCompletion,
-  addComment as apiAddComment,
-  getComments,
 } from '../services/trip-api';
 
 const TRIP_ID = 'ross26';
-
-interface BackendComment {
-  id: number;
-  user_id: number;
-  user_name: string;
-  text: string;
-  created_at: string;
-  is_private: boolean;
-}
 
 export default function PhaseDetails() {
   const { phaseId } = useParams<{ phaseId: string }>();
@@ -42,20 +28,8 @@ export default function PhaseDetails() {
   const phase = phaseId ? getPhaseById(phaseId) : undefined;
   const [isCompleted, setIsCompleted] = useState(phase?.completed || false);
   const [checklist, setChecklist] = useState(phase?.checklist || []);
-  const [comment, setComment] = useState('');
-  const [backendComments, setBackendComments] = useState<BackendComment[]>([]);
   const [showDetails, setShowDetails] = useState(true);
   const travelers = phaseId ? getTravelersAtPhase(phaseId) : [];
-
-  const loadComments = useCallback(async () => {
-    if (!phaseId) return;
-    try {
-      const data = await getComments(TRIP_ID, phaseId);
-      setBackendComments(data.comments);
-    } catch {
-      // silently fail
-    }
-  }, [phaseId]);
 
   const loadChecklistProgress = useCallback(async () => {
     if (!user || !phaseId) return;
@@ -74,9 +48,8 @@ export default function PhaseDetails() {
   }, [user, phaseId]);
 
   useEffect(() => {
-    loadComments();
     loadChecklistProgress();
-  }, [loadComments, loadChecklistProgress]);
+  }, [loadChecklistProgress]);
 
   if (!phase) {
     return (
@@ -114,17 +87,6 @@ export default function PhaseDetails() {
       } catch {
         setIsCompleted(!newVal);
       }
-    }
-  };
-
-  const handleAddComment = async () => {
-    if (!comment.trim() || !user || !phaseId) return;
-    try {
-      await apiAddComment(user.userId, TRIP_ID, phaseId, comment.trim());
-      setComment('');
-      await loadComments();
-    } catch {
-      // silently fail
     }
   };
 
@@ -276,87 +238,6 @@ export default function PhaseDetails() {
             </div>
           </div>
         )}
-
-        {/* Attachments */}
-        {phase.attachments && phase.attachments.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-            <h3 className="font-semibold text-gray-800 font-[Fredoka] mb-3">Documents</h3>
-            <div className="space-y-2">
-              {phase.attachments.map((att, i) => (
-                <button
-                  key={i}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors w-full text-left"
-                >
-                  <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <FileDown size={18} className="text-red-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">{att.name}</p>
-                    <p className="text-xs text-gray-400 uppercase">{att.type}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Comments Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-50">
-            <h3 className="font-semibold text-gray-800 font-[Fredoka]">Comments</h3>
-          </div>
-
-          {/* Comment feed */}
-          <div className="p-4 space-y-4">
-            {backendComments.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4">
-                No comments yet. Be the first to share!
-              </p>
-            ) : (
-              backendComments.map(c => (
-                <div key={c.id} className="flex gap-3">
-                  <div className="flex-shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-sm font-bold text-blue-600">{c.user_name.charAt(0)}</span>
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-gray-800">
-                      {c.user_name}
-                    </span>
-                    <p className="text-sm text-gray-600 mt-0.5">{c.text}</p>
-                    <span className="text-xs text-gray-400 mt-1 block">{new Date(c.created_at).toLocaleString()}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Add comment */}
-          <div className="p-4 border-t border-gray-50">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={comment}
-                onChange={e => setComment(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddComment()}
-                placeholder="Add public comment..."
-                className="flex-1 py-2.5 px-4 bg-gray-50 rounded-full text-sm outline-none focus:ring-2 focus:ring-blue-300 transition-all"
-              />
-              <button
-                onClick={handleAddComment}
-                disabled={!comment.trim()}
-                className="p-2.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-40 disabled:hover:bg-blue-500 transition-all"
-              >
-                <Send size={16} />
-              </button>
-            </div>
-            <button className="flex items-center gap-2 mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors">
-              <MessageSquare size={14} />
-              <span>Send Private Feedback to Team</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

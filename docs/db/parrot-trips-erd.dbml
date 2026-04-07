@@ -1,0 +1,190 @@
+Project parrot_trips_erd {
+  database_type: "PostgreSQL"
+  Note: "Lean ERD view based on the current logical model."
+}
+
+// Identity and participation
+
+Table users {
+  id uuid [pk]
+  phone text [not null, unique]
+  full_name text
+  email text
+  status text [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table trips {
+  id uuid [pk]
+  name text [not null]
+  short_name text
+  description text
+  start_date date [not null]
+  end_date date [not null]
+  status text [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table trip_travelers {
+  id uuid [pk]
+  trip_id uuid [not null, ref: > trips.id]
+  user_id uuid [not null, ref: > users.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (trip_id, user_id) [unique]
+  }
+}
+
+// Traveler profile and operational data
+
+Table traveler_profiles {
+  id uuid [pk]
+  trip_traveler_id uuid [not null, unique, ref: > trip_travelers.id]
+  preferred_name text
+  date_of_birth date
+  gender text
+  passport_first_name text
+  passport_last_name text
+  passport_country text
+  passport_number text
+  passport_issue_date date
+  passport_expiration_date date
+  dietary_restrictions_flag boolean
+  dietary_restrictions_details text
+  seasickness_flag boolean
+  plus_one_flag boolean
+  plus_one_name text
+  plus_one_email text
+  needs_flight_help_flag boolean
+  flight_help_details text
+  needs_travel_insurance_help_flag boolean
+  unforgettable_trip_details text
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table traveler_products {
+  id uuid [pk]
+  trip_traveler_id uuid [not null, unique, ref: > trip_travelers.id]
+  package_name text
+  room_type text
+  amount_paid_usd numeric(12,2)
+  purchased_addons_summary text
+  service_agreement_media_asset_id uuid [ref: > media_assets.id]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+// Trip catalog and media
+
+Table media_assets {
+  id uuid [pk]
+  drive_file_id text [not null]
+  drive_path text
+  public_url text
+  mime_type text
+  original_filename text
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (drive_file_id) [unique]
+  }
+}
+
+Table trip_phases {
+  id uuid [pk]
+  trip_id uuid [not null, ref: > trips.id]
+  parent_phase_id uuid [ref: > trip_phases.id]
+  phase_type text [not null]
+  title text [not null]
+  subtitle text
+  icon text
+  short_description text [not null]
+  detailed_description text
+  sort_order integer [not null]
+  starts_at timestamptz
+  ends_at timestamptz
+  is_locked_by_default boolean [not null]
+  is_visible boolean [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table trip_phase_checklist_items {
+  id uuid [pk]
+  trip_phase_id uuid [not null, ref: > trip_phases.id]
+  label text [not null]
+  description text
+  sort_order integer [not null]
+  is_required boolean [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table trip_phase_links {
+  id uuid [pk]
+  trip_phase_id uuid [not null, ref: > trip_phases.id]
+  label text [not null]
+  url text [not null]
+  sort_order integer [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table trip_activities {
+  id uuid [pk]
+  trip_phase_id uuid [not null, ref: > trip_phases.id]
+  name text [not null]
+  activity_type text [not null]
+  starts_at timestamptz
+  duration_minutes integer
+  short_description text [not null]
+  practical_info text
+  amount_brl numeric(12,2)
+  sort_order integer [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+}
+
+Table activity_media {
+  id uuid [pk]
+  trip_activity_id uuid [not null, ref: > trip_activities.id]
+  media_asset_id uuid [not null, ref: > media_assets.id]
+  media_type text [not null]
+  caption text
+  sort_order integer [not null]
+  created_at timestamptz [not null]
+}
+
+// Traveler progress and interaction
+
+Table traveler_checklist_progress {
+  id uuid [pk]
+  trip_traveler_id uuid [not null, ref: > trip_travelers.id]
+  trip_phase_checklist_item_id uuid [not null, ref: > trip_phase_checklist_items.id]
+  is_completed boolean [not null]
+  completed_at timestamptz
+  updated_at timestamptz [not null]
+
+  indexes {
+    (trip_traveler_id, trip_phase_checklist_item_id) [unique]
+  }
+}
+
+Table traveler_phase_progress {
+  id uuid [pk]
+  trip_traveler_id uuid [not null, ref: > trip_travelers.id]
+  trip_phase_id uuid [not null, ref: > trip_phases.id]
+  is_completed boolean [not null]
+  completed_at timestamptz
+  updated_at timestamptz [not null]
+
+  indexes {
+    (trip_traveler_id, trip_phase_id) [unique]
+  }
+}

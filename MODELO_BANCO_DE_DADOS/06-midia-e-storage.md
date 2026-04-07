@@ -7,7 +7,7 @@ Arquivos e mídias não devem ser salvos diretamente no banco como estratégia p
 Direção recomendada:
 
 - `PostgreSQL` para dados relacionais
-- storage externo para arquivos e imagens
+- Google Drive para arquivos e imagens
 - banco guardando apenas referência e metadados
 
 ## Por que não salvar mídia direto no banco
@@ -21,22 +21,28 @@ Problemas principais:
 - servir arquivos fica menos eficiente
 - escala pior no médio prazo
 
+## Organização escolhida
+
+Os arquivos serão organizados em Google Drive com pastas e subpastas.
+
+O banco não precisa modelar a árvore completa de pastas.
+
+Ele só precisa guardar a referência principal do arquivo e um caminho legível para organização operacional.
+
 ## O que fica no banco
 
 Na entidade `media_assets`, o banco deve armazenar:
 
 - `id`
-- `storage_provider`
-- `storage_bucket`
-- `storage_key`
+- `drive_file_id`
+- `drive_path`
 - `public_url`
 - `mime_type`
 - `original_filename`
-- `file_size_bytes`
 - `created_at`
 - `updated_at`
 
-## O que fica no storage
+## O que fica no Google Drive
 
 - imagens de atividades
 - anexos de fases
@@ -45,14 +51,6 @@ Na entidade `media_assets`, o banco deve armazenar:
 - possíveis vídeos futuros
 
 ## Relação com o modelo
-
-### `trip_phase_attachments`
-
-Não guarda `file_url` diretamente.
-
-Deve referenciar:
-
-- `media_asset_id`
 
 ### `activity_media`
 
@@ -78,3 +76,4 @@ Usar `media_assets`:
 - centraliza metadados de arquivo
 - facilita reaproveitamento
 - deixa o ERD mais limpo
+- mantém a referência do arquivo alinhada com a organização por pastas no Drive

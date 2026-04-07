@@ -10,7 +10,7 @@ O que muda por viajante é principalmente:
 - comentários
 - perfil
 
-Além do app do viajante, o mesmo repositório terá uma interface externa de backoffice para a equipe.
+O produto modelado aqui cobre apenas a experiência do viajante autenticado no app.
 
 ## Abordagem recomendada
 
@@ -19,7 +19,7 @@ A modelagem segue um modelo relacional híbrido, separando:
 1. conteúdo compartilhado da viagem
 2. participação do viajante na viagem
 3. estado e interação por viajante
-4. operação e backoffice
+4. dados operacionais e comerciais do viajante
 
 ## Banco-alvo
 
@@ -75,11 +75,11 @@ Checklist, links, anexos e atividades ficam ligados a `trip_phases`.
 
 ### Decisão 7
 
-O banco atende o app do viajante e uma interface externa de backoffice no mesmo repositório.
+O banco atende exclusivamente o app do viajante nesta fase.
 
 ### Decisão 8
 
-Usuários internos da equipe não participam da viagem como `trip_travelers`.
+`users` representa apenas viajantes autenticados no escopo atual.
 
 ### Decisão 9
 

@@ -4,7 +4,7 @@
 
 ### `users`
 
-Representa qualquer pessoa autenticada no sistema.
+Representa cada viajante autenticado no sistema.
 
 Atributos principais:
 
@@ -13,12 +13,11 @@ Atributos principais:
 - `full_name`
 - `email`
 - `status`
-- `role`
 
 Observação:
 
-- usuários internos do backoffice existem aqui
-- usuários internos não entram em `trip_travelers` nesta primeira versão
+- `users` cobre apenas viajantes nesta modelagem
+- o vínculo do viajante com uma viagem específica acontece em `trip_travelers`
 
 ### `trips`
 
@@ -27,14 +26,12 @@ Representa a viagem.
 Atributos principais:
 
 - `id`
-- `slug`
 - `name`
 - `short_name`
 - `description`
 - `start_date`
 - `end_date`
 - `status`
-- `default_timezone`
 
 ### `trip_travelers`
 
@@ -45,9 +42,6 @@ Atributos principais:
 - `id`
 - `trip_id`
 - `user_id`
-- `display_name`
-- `enrollment_status`
-- `joined_at`
 
 ## Cadastro do viajante
 
@@ -93,7 +87,6 @@ Atributos principais:
 - `trip_id`
 - `parent_phase_id`
 - `phase_type`
-- `slug`
 - `title`
 - `subtitle`
 - `icon`
@@ -117,10 +110,6 @@ Links úteis de uma fase.
 
 Representa o ativo físico em storage externo.
 
-### `trip_phase_attachments`
-
-Anexos ligados à fase.
-
 ### `trip_activities`
 
 Atividades de uma fase.
@@ -139,18 +128,6 @@ Estado do viajante em cada item de checklist.
 
 Estado agregado do viajante em cada fase.
 
-### `phase_comments`
-
-Comentários do viajante na fase.
-
-Regra:
-
-- comentários existem apenas no nível de fase nesta primeira versão
-
-### `notifications`
-
-Notificações para o viajante.
-
 ## Mermaid ER
 
 ```mermaid
@@ -165,10 +142,8 @@ erDiagram
 
     TRIP_PHASES ||--o{ TRIP_PHASE_CHECKLIST_ITEMS : has
     TRIP_PHASES ||--o{ TRIP_PHASE_LINKS : has
-    TRIP_PHASES ||--o{ TRIP_PHASE_ATTACHMENTS : has
     TRIP_PHASES ||--o{ TRIP_ACTIVITIES : has
 
-    MEDIA_ASSETS ||--o{ TRIP_PHASE_ATTACHMENTS : stores
     TRIP_ACTIVITIES ||--o{ ACTIVITY_MEDIA : has
     MEDIA_ASSETS ||--o{ ACTIVITY_MEDIA : stores
     MEDIA_ASSETS ||--o{ TRAVELER_PRODUCTS : supports
@@ -179,8 +154,4 @@ erDiagram
     TRIP_TRAVELERS ||--o{ TRAVELER_PHASE_PROGRESS : tracks
     TRIP_PHASES ||--o{ TRAVELER_PHASE_PROGRESS : tracked_by
 
-    TRIP_TRAVELERS ||--o{ PHASE_COMMENTS : writes
-    TRIP_PHASES ||--o{ PHASE_COMMENTS : receives
-
-    TRIP_TRAVELERS ||--o{ NOTIFICATIONS : receives
 ```

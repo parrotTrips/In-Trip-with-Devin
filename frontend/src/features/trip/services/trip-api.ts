@@ -1,14 +1,5 @@
 import { request } from '../../../shared/api/client';
 
-export interface TripComment {
-  id: number;
-  user_id: number;
-  user_name: string;
-  text: string;
-  created_at: string;
-  is_private: boolean;
-}
-
 export async function updateChecklistItem(
   userId: number,
   tripId: string,
@@ -48,25 +39,4 @@ export async function getPhaseCompletions(tripId: string, userId: number) {
     user_id: number;
     completions: Record<string, boolean>;
   }>(`/phases/${tripId}/${userId}`);
-}
-
-export async function addComment(
-  userId: number,
-  tripId: string,
-  phaseId: string,
-  text: string,
-  isPrivate = false
-) {
-  return request<{ message: string }>(`/comments?user_id=${userId}`, {
-    method: 'POST',
-    body: JSON.stringify({ trip_id: tripId, phase_id: phaseId, text, is_private: isPrivate }),
-  });
-}
-
-export async function getComments(tripId: string, phaseId: string) {
-  return request<{
-    trip_id: string;
-    phase_id: string;
-    comments: TripComment[];
-  }>(`/comments/${tripId}/${phaseId}`);
 }

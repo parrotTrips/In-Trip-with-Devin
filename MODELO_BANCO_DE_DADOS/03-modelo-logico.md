@@ -9,21 +9,18 @@
 - `full_name`
 - `email`
 - `status`
-- `role`
 - `created_at`
 - `updated_at`
 
 ### `trips`
 
 - `id`
-- `slug`
 - `name`
 - `short_name`
 - `description`
 - `start_date`
 - `end_date`
 - `status`
-- `default_timezone`
 - `created_at`
 - `updated_at`
 
@@ -32,9 +29,6 @@
 - `id`
 - `trip_id`
 - `user_id`
-- `display_name`
-- `enrollment_status`
-- `joined_at`
 - `created_at`
 - `updated_at`
 
@@ -66,7 +60,6 @@ Regras:
 - `flight_help_details`
 - `needs_travel_insurance_help_flag`
 - `unforgettable_trip_details`
-- `receive_addon_updates_flag`
 - `created_at`
 - `updated_at`
 
@@ -88,7 +81,6 @@ Regras:
 - `trip_id`
 - `parent_phase_id`
 - `phase_type`
-- `slug`
 - `title`
 - `subtitle`
 - `icon`
@@ -106,7 +98,6 @@ Regras:
 
 - `id`
 - `trip_phase_id`
-- `item_code`
 - `label`
 - `description`
 - `sort_order`
@@ -127,24 +118,11 @@ Regras:
 ### `media_assets`
 
 - `id`
-- `storage_provider`
-- `storage_bucket`
-- `storage_key`
+- `drive_file_id`
+- `drive_path`
 - `public_url`
 - `mime_type`
 - `original_filename`
-- `file_size_bytes`
-- `created_at`
-- `updated_at`
-
-### `trip_phase_attachments`
-
-- `id`
-- `trip_phase_id`
-- `media_asset_id`
-- `name`
-- `file_type`
-- `sort_order`
 - `created_at`
 - `updated_at`
 
@@ -152,15 +130,13 @@ Regras:
 
 - `id`
 - `trip_phase_id`
-- `activity_code`
 - `name`
 - `activity_type`
 - `starts_at`
 - `duration_minutes`
 - `short_description`
 - `practical_info`
-- `price_label`
-- `vibe`
+- `amount_brl`
 - `sort_order`
 - `created_at`
 - `updated_at`
@@ -193,28 +169,6 @@ Regras:
 - `completed_at`
 - `updated_at`
 
-### `phase_comments`
-
-- `id`
-- `trip_phase_id`
-- `trip_traveler_id`
-- `body`
-- `is_private`
-- `created_at`
-- `updated_at`
-
-### `notifications`
-
-- `id`
-- `trip_traveler_id`
-- `title`
-- `body`
-- `notification_type`
-- `link_url`
-- `is_read`
-- `read_at`
-- `created_at`
-
 ## Relações principais
 
 ### Relações de catálogo
@@ -222,10 +176,8 @@ Regras:
 - `Trip 1:N TripPhase`
 - `TripPhase 1:N TripPhaseChecklistItem`
 - `TripPhase 1:N TripPhaseLink`
-- `TripPhase 1:N TripPhaseAttachment`
 - `TripPhase 1:N TripActivity`
 - `TripActivity 1:N ActivityMedia`
-- `MediaAsset 1:N TripPhaseAttachment`
 - `MediaAsset 1:N ActivityMedia`
 
 ### Relações de participação
@@ -239,5 +191,3 @@ Regras:
 
 - `TripTraveler 1:N TravelerChecklistProgress`
 - `TripTraveler 1:N TravelerPhaseProgress`
-- `TripTraveler 1:N PhaseComment`
-- `TripTraveler 1:N Notification`

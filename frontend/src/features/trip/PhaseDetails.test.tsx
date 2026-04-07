@@ -7,7 +7,7 @@ import { server } from '../../test/server';
 import PhaseDetails from './pages/PhaseDetails';
 
 describe('PhaseDetails', () => {
-  test('loads checklist progress and public comments for the phase', async () => {
+  test('loads checklist progress for the phase', async () => {
     let checklistRequested = false;
 
     localStorage.setItem(
@@ -23,23 +23,7 @@ describe('PhaseDetails', () => {
           user_id: 1,
           progress: { visa: { 'visa-1': true } },
         });
-      }),
-      http.get('http://localhost:8000/comments/ross26/visa', () =>
-        HttpResponse.json({
-          trip_id: 'ross26',
-          phase_id: 'visa',
-          comments: [
-            {
-              id: 1,
-              user_id: 1,
-              user_name: 'Alice',
-              text: 'Looks good from the API',
-              created_at: '2026-02-20T10:00:00+00:00',
-              is_private: false,
-            },
-          ],
-        })
-      )
+      })
     );
 
     render(
@@ -55,6 +39,6 @@ describe('PhaseDetails', () => {
     await waitFor(() => {
       expect(checklistRequested).toBe(true);
     });
-    expect(await screen.findByText('Looks good from the API')).toBeInTheDocument();
+    expect(screen.getByText('Checklist')).toBeInTheDocument();
   });
 });

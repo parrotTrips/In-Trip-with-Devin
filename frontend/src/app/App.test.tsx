@@ -1,9 +1,7 @@
 import { render, screen } from '@testing-library/react';
-import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import App from './App';
-import { server } from '../test/server';
 
 describe('App composition', () => {
   beforeEach(() => {
@@ -30,11 +28,6 @@ describe('App composition', () => {
       JSON.stringify({ userId: 1, phone: '+15551111111', name: 'Alice' })
     );
     window.history.pushState({}, '', '/');
-    server.use(
-      http.get('http://localhost:8000/notifications/:userId/count', () =>
-        HttpResponse.json({ unread_count: 0 })
-      )
-    );
 
     render(<App />);
 
@@ -52,11 +45,6 @@ describe('App composition', () => {
     vi.stubEnv('VITE_DEV_USER_NAME', 'Dev Traveler');
 
     window.history.pushState({}, '', '/');
-    server.use(
-      http.get('http://localhost:8000/notifications/:userId/count', () =>
-        HttpResponse.json({ unread_count: 0 })
-      )
-    );
 
     render(<App />);
 

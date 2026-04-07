@@ -2,7 +2,6 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
 import DayDetails from '../features/trip/pages/DayDetails';
 import HomeScreen from '../features/trip/pages/HomeScreen';
-import NotificationsScreen from '../features/notifications/pages/NotificationsScreen';
 import ProfileScreen from '../features/profile/pages/ProfileScreen';
 import PhaseDetails from '../features/trip/pages/PhaseDetails';
 import BottomNav from '../shared/components/BottomNav';
@@ -16,7 +15,6 @@ export default function AppRouter() {
           <Route path="/phase/:phaseId" element={<PhaseDetails />} />
           <Route path="/day/:dayId" element={<DayDetails />} />
           <Route path="/profile" element={<ProfileScreen />} />
-          <Route path="/notifications" element={<NotificationsScreen />} />
         </Routes>
         <BottomNav />
       </div>
