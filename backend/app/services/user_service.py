@@ -2,42 +2,48 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from uuid import UUID
 
-import aiosqlite
 from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.database import connect_to_database
+from app.db.models.user import User
+
+
+def _parse_user_id(user_id: str) -> UUID:
+    try:
+        return UUID(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="User not found") from exc
 
 
 async def update_user(
-    user_id: int,
+    user_id: str,
     update: dict,
-    database_path: str | Path | None = None,
+    session: AsyncSession,
 ) -> dict:
     """Persist editable user fields without changing the HTTP contract."""
-    async with connect_to_database(database_path) as db:
-        if update.get("name") is not None:
-            await db.execute(
-                "UPDATE users SET name = ? WHERE id = ?",
-                (update["name"], user_id),
-            )
-        await db.commit()
+    user = await session.scalar(select(User).where(User.id == _parse_user_id(user_id)))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if update.get("name") is not None:
+        user.full_name = update["name"]
+
+    await session.commit()
 
     return {"message": "User updated"}
 
 
-async def get_user(user_id: int, database_path: str | Path | None = None) -> dict:
+async def get_user(user_id: str, session: AsyncSession) -> dict:
     """Fetch one user and raise the same 404 used by the existing API."""
-    async with connect_to_database(database_path) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        user = await cursor.fetchone()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+    user = await session.scalar(select(User).where(User.id == _parse_user_id(user_id)))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
     return {
-        "id": user["id"],
-        "phone": user["phone"],
-        "name": user["name"],
+        "id": str(user.id),
+        "phone": user.phone,
+        "name": user.full_name,
     }
