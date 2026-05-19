@@ -23,6 +23,10 @@ WHATSAPP_API_URL = (
     f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
 )
 
+JWT_SECRET = os.environ.get("JWT_SECRET", "")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRY_DAYS = 14
+
 
 def get_database_url() -> str:
     """Return the configured SQLAlchemy database URL."""
