@@ -9,10 +9,14 @@ from typing import Awaitable, Callable
 
 import httpx
 from fastapi import HTTPException
+from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import (
+    JWT_ALGORITHM,
+    JWT_EXPIRY_DAYS,
+    JWT_SECRET,
     WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_API_URL,
     WHATSAPP_PHONE_NUMBER_ID,
@@ -20,6 +24,12 @@ from app.core.config import (
 )
 from app.db.models.auth import OTPCode
 from app.db.models.user import User
+
+
+def _create_access_token(user_id: str, phone: str) -> str:
+    expire = datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS)
+    payload = {"sub": user_id, "phone": phone, "exp": expire}
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
@@ -78,13 +88,7 @@ async def request_otp(
     code = generator()
     expires_at = datetime.now(UTC) + timedelta(minutes=10)
 
-    session.add(
-        OTPCode(
-            phone=phone,
-            code=code,
-            expires_at=expires_at,
-        )
-    )
+    session.add(OTPCode(phone=phone, code=code, expires_at=expires_at))
     await session.commit()
 
     whatsapp_sent = await otp_sender(phone, code)
@@ -103,7 +107,7 @@ async def verify_otp(
     code: str,
     session: AsyncSession,
 ) -> dict:
-    """Validate an OTP and create the user on first successful login."""
+    """Validate an OTP, create the user on first login, and return a JWT."""
     otp = await session.scalar(
         select(OTPCode)
         .where(
@@ -136,9 +140,12 @@ async def verify_otp(
     await session.commit()
     await session.refresh(user)
 
+    access_token = _create_access_token(str(user.id), user.phone)
+
     return {
         "user_id": str(user.id),
         "phone": user.phone,
         "name": user.full_name,
         "message": "Login successful",
+        "access_token": access_token,
     }
