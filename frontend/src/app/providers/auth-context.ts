@@ -4,11 +4,12 @@ export interface AuthUser {
   userId: number;
   phone: string;
   name: string | null;
+  token: string;
 }
 
 export interface AuthContextType {
   user: AuthUser | null;
-  login: (userId: number, phone: string, name: string | null) => void;
+  login: (userId: number, phone: string, name: string | null, token: string) => void;
   logout: () => void;
   isLoggedIn: boolean;
 }

@@ -22,6 +22,7 @@ function getDevAutoLoginUser(): AuthUser | null {
     userId: Number.isNaN(userId) ? 1 : userId,
     phone: import.meta.env.VITE_DEV_USER_PHONE ?? '+15550000001',
     name: import.meta.env.VITE_DEV_USER_NAME ?? 'Dev Traveler',
+    token: import.meta.env.VITE_DEV_TOKEN ?? '',
   };
 }
 
@@ -33,12 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('parrot_user', JSON.stringify(user));
       return;
     }
-
     localStorage.removeItem('parrot_user');
   }, [user]);
 
-  const login = (userId: number, phone: string, name: string | null) => {
-    setUser({ userId, phone, name });
+  const login = (userId: number, phone: string, name: string | null, token: string) => {
+    setUser({ userId, phone, name, token });
   };
 
   const logout = () => {
