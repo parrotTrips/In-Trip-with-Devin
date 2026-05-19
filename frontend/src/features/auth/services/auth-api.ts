@@ -8,7 +8,13 @@ export async function requestOTP(phone: string) {
 }
 
 export async function verifyOTP(phone: string, code: string) {
-  return request<{ user_id: number; phone: string; name: string | null; message: string }>(
+  return request<{
+    user_id: number;
+    phone: string;
+    name: string | null;
+    message: string;
+    access_token: string;
+  }>(
     '/auth/verify-otp',
     { method: 'POST', body: JSON.stringify({ phone, code }) }
   );
