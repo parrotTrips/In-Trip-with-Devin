@@ -27,6 +27,7 @@ MODULES_TO_CLEAR = [
     "app.routers.users",
     "app.routers.profile",
     "app.routers.checklist",
+    "app.middleware.auth",
 ]
 
 
@@ -133,6 +134,7 @@ def session_factory(database_url):
 @pytest.fixture
 def client(monkeypatch, database_url):
     monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-testing-only")
     monkeypatch.delenv("WHATSAPP_PHONE_NUMBER_ID", raising=False)
     monkeypatch.delenv("WHATSAPP_ACCESS_TOKEN", raising=False)
 

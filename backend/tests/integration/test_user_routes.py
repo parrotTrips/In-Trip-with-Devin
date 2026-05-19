@@ -4,12 +4,14 @@ def create_user(client, phone="+5511444444444"):
         "/auth/verify-otp",
         json={"phone": phone, "code": otp_response.json()["debug_code"]},
     )
-    return verify_response.json()["user_id"]
+    data = verify_response.json()
+    return data["user_id"], data["access_token"]
 
 
 def test_get_user_route_returns_existing_user(client):
-    user_id = create_user(client)
-    response = client.get(f"/users/{user_id}")
+    user_id, token = create_user(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.get(f"/users/{user_id}", headers=headers)
 
     assert response.status_code == 200
     assert response.json() == {
@@ -20,9 +22,10 @@ def test_get_user_route_returns_existing_user(client):
 
 
 def test_update_user_route_preserves_contract(client):
-    user_id = create_user(client, phone="+5511333333333")
-    update_response = client.put(f"/users/{user_id}", json={"name": "Carol"})
-    get_response = client.get(f"/users/{user_id}")
+    user_id, token = create_user(client, phone="+5511333333333")
+    headers = {"Authorization": f"Bearer {token}"}
+    update_response = client.put(f"/users/{user_id}", json={"name": "Carol"}, headers=headers)
+    get_response = client.get(f"/users/{user_id}", headers=headers)
 
     assert update_response.status_code == 200
     assert update_response.json() == {"message": "User updated"}

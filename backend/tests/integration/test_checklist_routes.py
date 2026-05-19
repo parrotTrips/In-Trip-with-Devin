@@ -61,11 +61,13 @@ def create_user(client, phone="+5511991000000"):
         "/auth/verify-otp",
         json={"phone": phone, "code": otp_response.json()["debug_code"]},
     )
-    return verify_response.json()["user_id"]
+    data = verify_response.json()
+    return data["user_id"], data["access_token"]
 
 
 def test_checklist_routes_persist_progress(client, session_factory):
-    user_id = create_user(client)
+    user_id, token = create_user(client)
+    headers = {"Authorization": f"Bearer {token}"}
     seeded = asyncio.run(seed_checklist_context(session_factory, user_id=user_id))
 
     update_response = client.post(
@@ -76,8 +78,9 @@ def test_checklist_routes_persist_progress(client, session_factory):
             "item_id": seeded["item_id"],
             "completed": True,
         },
+        headers=headers,
     )
-    get_response = client.get(f"/checklist/{seeded['trip_id']}/{user_id}")
+    get_response = client.get(f"/checklist/{seeded['trip_id']}/{user_id}", headers=headers)
 
     assert update_response.status_code == 200
     assert update_response.json() == {"message": "Checklist item updated"}
@@ -90,7 +93,8 @@ def test_checklist_routes_persist_progress(client, session_factory):
 
 
 def test_phase_routes_persist_completion(client, session_factory):
-    user_id = create_user(client, phone="+5511991000001")
+    user_id, token = create_user(client, phone="+5511991000001")
+    headers = {"Authorization": f"Bearer {token}"}
     seeded = asyncio.run(seed_checklist_context(session_factory, user_id=user_id))
 
     update_response = client.post(
@@ -100,8 +104,9 @@ def test_phase_routes_persist_completion(client, session_factory):
             "phase_id": seeded["phase_id"],
             "completed": True,
         },
+        headers=headers,
     )
-    get_response = client.get(f"/phases/{seeded['trip_id']}/{user_id}")
+    get_response = client.get(f"/phases/{seeded['trip_id']}/{user_id}", headers=headers)
 
     assert update_response.status_code == 200
     assert update_response.json() == {"message": "Phase completion updated"}

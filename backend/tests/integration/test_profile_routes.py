@@ -34,14 +34,16 @@ def create_user(client, phone="+5511990000000"):
         "/auth/verify-otp",
         json={"phone": phone, "code": otp_response.json()["debug_code"]},
     )
-    return verify_response.json()["user_id"]
+    data = verify_response.json()
+    return data["user_id"], data["access_token"]
 
 
 def test_profile_routes_read_and_update_profile(client, session_factory):
-    user_id = create_user(client)
+    user_id, token = create_user(client)
+    headers = {"Authorization": f"Bearer {token}"}
     trip_id = asyncio.run(seed_trip_assignment(session_factory, user_id=user_id))
 
-    initial_response = client.get(f"/profile/{user_id}?trip_id={trip_id}")
+    initial_response = client.get(f"/profile/{user_id}?trip_id={trip_id}", headers=headers)
     update_response = client.put(
         f"/profile/{user_id}?trip_id={trip_id}",
         json={
@@ -49,8 +51,9 @@ def test_profile_routes_read_and_update_profile(client, session_factory):
             "email": "eva@example.com",
             "package_option": "Shared Room",
         },
+        headers=headers,
     )
-    updated_response = client.get(f"/profile/{user_id}?trip_id={trip_id}")
+    updated_response = client.get(f"/profile/{user_id}?trip_id={trip_id}", headers=headers)
 
     assert initial_response.status_code == 200
     assert initial_response.json()["profile"] is None
@@ -67,13 +70,14 @@ def test_profile_routes_read_and_update_profile(client, session_factory):
 def test_trip_travelers_route_scopes_roommate_selection_to_the_trip(
     client, session_factory
 ):
-    user_1_id = create_user(client, phone="+5511990000001")
-    user_2_id = create_user(client, phone="+5511990000002")
+    user_1_id, token_1 = create_user(client, phone="+5511990000001")
+    user_2_id, token_2 = create_user(client, phone="+5511990000002")
+    headers = {"Authorization": f"Bearer {token_1}"}
 
     trip_id = asyncio.run(seed_trip_assignment(session_factory, user_id=user_1_id))
     asyncio.run(seed_trip_assignment(session_factory, user_id=user_2_id))
 
-    response = client.get(f"/trip/{trip_id}/travelers")
+    response = client.get(f"/trip/{trip_id}/travelers", headers=headers)
 
     assert response.status_code == 200
     assert response.json() == {
@@ -89,7 +93,8 @@ def test_trip_travelers_route_scopes_roommate_selection_to_the_trip(
 
 
 def test_profile_route_rejects_unsupported_orphan_fields(client, session_factory):
-    user_id = create_user(client, phone="+5511990000003")
+    user_id, token = create_user(client, phone="+5511990000003")
+    headers = {"Authorization": f"Bearer {token}"}
     trip_id = asyncio.run(seed_trip_assignment(session_factory, user_id=user_id))
 
     response = client.put(
@@ -98,6 +103,7 @@ def test_profile_route_rejects_unsupported_orphan_fields(client, session_factory
             "transfer_platform": "wise",
             "arrival_date": "2026-02-01",
         },
+        headers=headers,
     )
 
     assert response.status_code == 400

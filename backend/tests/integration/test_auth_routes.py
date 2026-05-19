@@ -26,3 +26,4 @@ def test_verify_otp_route_creates_user_on_first_login(client):
     assert verify_response.json()["name"] is None
     assert verify_response.json()["message"] == "Login successful"
     assert UUID(verify_response.json()["user_id"])
+    assert verify_response.json()["access_token"]
