@@ -20,6 +20,7 @@ from app.core.config import (
     WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_API_URL,
     WHATSAPP_PHONE_NUMBER_ID,
+    WHATSAPP_TEMPLATE_LANGUAGE,
     WHATSAPP_TEMPLATE_NAME,
 )
 from app.db.models.auth import OTPCode
@@ -33,35 +34,49 @@ def _create_access_token(user_id: str, phone: str) -> str:
 
 
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
-    """Send an OTP through the configured WhatsApp Business API template."""
+    """Send an OTP via WhatsApp Cloud API.
+
+    Uses a plain text message while the intripauth template is pending approval.
+    Switch WHATSAPP_USE_TEMPLATE=true in .env once the template is approved.
+    """
     if not WHATSAPP_PHONE_NUMBER_ID or not WHATSAPP_ACCESS_TOKEN:
         return False
 
+    to = phone.replace("+", "").replace(" ", "").replace("-", "")
     headers = {
         "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone.replace("+", "").replace(" ", "").replace("-", ""),
-        "type": "template",
-        "template": {
-            "name": WHATSAPP_TEMPLATE_NAME,
-            "language": {"code": "en_US"},
-            "components": [
-                {
-                    "type": "body",
-                    "parameters": [{"type": "text", "text": code}],
-                },
-                {
-                    "type": "button",
-                    "sub_type": "url",
-                    "index": "0",
-                    "parameters": [{"type": "text", "text": code}],
-                },
-            ],
-        },
-    }
+
+    if WHATSAPP_TEMPLATE_NAME == "intripauth":
+        # Production path: Authentication template with copy-code button.
+        payload: dict = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": {
+                "name": "intripauth",
+                "language": {"code": WHATSAPP_TEMPLATE_LANGUAGE},
+                "components": [
+                    {"type": "body", "parameters": [{"type": "text", "text": code}]},
+                    {"type": "button", "sub_type": "url", "index": "0",
+                     "parameters": [{"type": "text", "text": code}]},
+                ],
+            },
+        }
+    else:
+        # Temporary path: plain text message while template is not yet approved.
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "text",
+            "text": {
+                "body": (
+                    f"Seu código de verificação para logar no app da Parrot Trips "
+                    f"é {code}. Válido por 10 minutos."
+                )
+            },
+        }
 
     try:
         async with httpx.AsyncClient() as client:

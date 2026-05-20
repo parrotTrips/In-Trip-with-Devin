@@ -1,0 +1,110 @@
+## Contexto do projeto
+
+Estou desenvolvendo o Parrot Trips, um aplicativo web para viajantes que inclui autenticação via WhatsApp OTP e gerenciamento de dados de viagem. O backend é FastAPI (Python) e o frontend é React + TypeScript. O banco de dados é PostgreSQL hospedado no Supabase.
+
+---
+
+## O que já foi implementado e validado
+
+### Autenticação: WhatsApp OTP + JWT
+
+O sistema de autenticação está completamente implementado e testado end-to-end:
+
+1. O usuário digita o telefone no frontend
+2. O backend gera um código OTP de 6 dígitos, salva no banco e envia via WhatsApp Cloud API (Meta)
+3. O usuário digita o código no app
+4. O backend valida o OTP, cria o usuário se for o primeiro acesso, e retorna um JWT assinado (HS256, válido por 14 dias)
+5. O frontend armazena `{ userId, phone, name, token }` no localStorage
+6. Todas as chamadas de API incluem `Authorization: Bearer <token>`
+7. O backend valida o token via middleware global (FastAPI `BaseHTTPMiddleware`) em todas as rotas exceto `/auth/*` e `/healthz`
+
+O teste E2E passou com sucesso em todos os 6 passos:
+- OTP entregue via WhatsApp no celular
+- JWT gerado e retornado
+- Rota protegida sem token → 401
+- Rota protegida com token válido → passou
+- Token inválido → 401
+
+### Estado atual do .env do backend
+
+```env
+DATABASE_URL=postgresql+asyncpg://...supabase...
+SUPABASE_ANON_KEY=...
+JWT_SECRET=change-this-to-a-random-32-char-secret-in-production
+WHATSAPP_PHONE_NUMBER_ID=1085386851333264
+WHATSAPP_ACCESS_TOKEN=<token temporário — expira em ~24h>
+WHATSAPP_TEMPLATE_NAME=jaspers_market_order_confirmation_v1
+WHATSAPP_TEMPLATE_LANGUAGE=en_US
+```
+
+### Limitação atual: conta sandbox da Meta
+
+A conta de WhatsApp usada nos testes é o **sandbox de teste da Meta** ("Test WhatsApp Business Account"):
+
+- `WHATSAPP_PHONE_NUMBER_ID=1085386851333264` — número de teste da Meta
+- Só envia para números adicionados manualmente como destinatários de teste
+- **Não tem permissão para criar templates próprios** — tentamos via API e via dashboard, ambos retornaram erro de permissão
+- O access token gerado pela tela "Try it out" expira em ~24h
+- O template em uso (`jaspers_market_order_confirmation_v1`) é um template de exemplo da Meta usado como workaround temporário — o código OTP aparece no campo "número do pedido" da mensagem
+
+### Template desejado para produção
+
+O template final se chama `intripauth` e deve ser do tipo **Authentication** no idioma **pt_BR**. O backend já está preparado para ele: a função `_build_template_components()` em `backend/app/services/auth_service.py` usa o payload correto automaticamente quando `WHATSAPP_TEMPLATE_NAME=intripauth`.
+
+O template `intripauth` deve ter:
+- Corpo com `{{1}}` = código OTP
+- Botão URL com `{{1}}` = código OTP (deep link de verificação)
+- Idioma: pt_BR
+
+---
+
+## O que precisa ser feito agora
+
+### Objetivo
+
+Criar uma conta WhatsApp Business real com permissão para criar templates próprios, criar o template `intripauth` e atualizar o `backend/.env` com as credenciais permanentes.
+
+### Passos esperados
+
+1. **Criar ou usar uma conta Meta Business verificada** com uma WhatsApp Business Account (WABA) real — não o sandbox de teste
+2. **Registrar um número de telefone real** na WABA (pode ser um número Twilio, VoIP ou fixo — não precisa ser celular)
+3. **Criar o template `intripauth`** do tipo Authentication em pt_BR com os componentes descritos acima
+4. **Obter um token de acesso permanente** (System User token) para não precisar gerar novo token a cada 24h
+5. **Atualizar o `backend/.env`** com:
+   ```env
+   WHATSAPP_PHONE_NUMBER_ID=<id_do_numero_real>
+   WHATSAPP_ACCESS_TOKEN=<system_user_token_permanente>
+   WHATSAPP_TEMPLATE_NAME=intripauth
+   WHATSAPP_TEMPLATE_LANGUAGE=pt_BR
+   JWT_SECRET=<string_aleatoria_forte_minimo_32_chars>
+   ```
+
+### Restrições e requisitos
+
+- O access token **não deve ser commitado** no git — só fica no `.env` local (já está no `.gitignore`)
+- O número de telefone do WhatsApp Business não precisa ser o mesmo usado para receber OTPs — é o número remetente
+- O template `intripauth` precisa ser aprovado pela Meta antes de poder ser usado — templates Authentication costumam ser aprovados automaticamente ou muito rápido
+- O público alvo são viajantes brasileiros, então pt_BR é o idioma correto
+- Volume esperado: 50 a 200 usuários por mês — dentro do free tier de 1.000 conversas/mês da Meta
+
+### Variáveis no código que precisam ser atualizadas
+
+Todas essas variáveis são lidas de `backend/.env` via `backend/app/core/config.py`:
+
+| Variável | Situação atual | O que deve ser |
+|---|---|---|
+| `WHATSAPP_PHONE_NUMBER_ID` | `1085386851333264` (sandbox) | ID do número real aprovado |
+| `WHATSAPP_ACCESS_TOKEN` | token temporário 24h | System User token permanente |
+| `WHATSAPP_TEMPLATE_NAME` | `jaspers_market_order_confirmation_v1` | `intripauth` |
+| `WHATSAPP_TEMPLATE_LANGUAGE` | `en_US` | `pt_BR` |
+| `JWT_SECRET` | placeholder | string aleatória forte (mín. 32 chars) |
+
+---
+
+## Arquivos relevantes do projeto
+
+- `backend/app/services/auth_service.py` — lógica de envio WhatsApp e geração de JWT
+- `backend/app/core/config.py` — leitura de variáveis de ambiente
+- `backend/.env` — credenciais locais (não commitado)
+- `PRODUCT_AND_SYSTEM_DESIGN/04-teste-e2e-whatsapp-otp-jwt.md` — registro do teste E2E validado
+- `PRODUCT_AND_SYSTEM_DESIGN/03-autenticacao-opcoes.md` — análise das opções de autenticação e custos
