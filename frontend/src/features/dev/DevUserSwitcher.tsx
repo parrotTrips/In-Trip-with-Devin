@@ -21,10 +21,13 @@ const devUsers: DevUser[] = [...(Object.values(devModules)[0]?.devUsers ?? [])];
 
 export default function DevUserSwitcher() {
   const [open, setOpen] = useState(false);
-  const { user, login } = useAuth();
+  const { user, login, logout } = useAuth();
 
-  // Só aparece em dev, com usuários carregados, e quando staff está logado
-  if (!import.meta.env.DEV || devUsers.length === 0 || user?.role !== 'staff') return null;
+  const isStaff = user?.role === 'staff';
+  const isTraveler = user?.role === 'traveler';
+
+  if (!import.meta.env.DEV || devUsers.length === 0) return null;
+  if (!isStaff && !isTraveler) return null;
 
   const handleSelect = (u: DevUser) => {
     login(u.userId, u.phone, u.name, u.token, u.role);
@@ -32,13 +35,28 @@ export default function DevUserSwitcher() {
     window.location.reload();
   };
 
+  const handleExitPreview = () => {
+    logout();
+    setOpen(false);
+  };
+
   return (
     <div className="fixed bottom-24 right-4 z-50">
       {open && (
         <div className="mb-2 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden w-64">
           <div className="px-4 py-3 border-b border-gray-100">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Ver como viajante</p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+              {isStaff ? 'Ver como viajante' : 'Trocar viagem'}
+            </p>
           </div>
+          {isTraveler && (
+            <button
+              onClick={handleExitPreview}
+              className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-200"
+            >
+              <p className="text-sm font-semibold text-gray-500">← Voltar para staff</p>
+            </button>
+          )}
           {devUsers.map(u => (
             <button
               key={u.userId}
@@ -56,7 +74,7 @@ export default function DevUserSwitcher() {
       <button
         onClick={() => setOpen(!open)}
         className="w-12 h-12 bg-gray-800 text-white rounded-full shadow-lg flex items-center justify-center text-lg hover:bg-gray-700 transition-colors"
-        title="Ver como viajante"
+        title={isStaff ? 'Ver como viajante' : 'Trocar viagem'}
       >
         👁️
       </button>
