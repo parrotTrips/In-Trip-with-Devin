@@ -27,9 +27,9 @@ from app.db.models.auth import OTPCode
 from app.db.models.user import User
 
 
-def _create_access_token(user_id: str, phone: str) -> str:
+def _create_access_token(user_id: str, phone: str, role: str) -> str:
     expire = datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS)
-    payload = {"sub": user_id, "phone": phone, "exp": expire}
+    payload = {"sub": user_id, "phone": phone, "role": role, "exp": expire}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
@@ -86,10 +86,16 @@ async def send_whatsapp_otp(phone: str, code: str) -> bool:
                 json=payload,
                 timeout=10.0,
             )
-    except Exception:
+    except Exception as exc:
+        print(f"[WhatsApp] request exception: {exc}")
         return False
 
-    return response.status_code == 200
+    if response.status_code != 200:
+        print(f"[WhatsApp] API error {response.status_code}: {response.text}")
+        return False
+
+    print(f"[WhatsApp] API 200 OK: {response.text}")
+    return True
 
 
 async def request_otp(
@@ -99,6 +105,10 @@ async def request_otp(
     code_generator: Callable[[], str] | None = None,
 ) -> dict:
     """Generate an OTP, persist it and attempt WhatsApp delivery."""
+    authorized = await session.scalar(select(User).where(User.phone == phone))
+    if not authorized:
+        raise HTTPException(status_code=403, detail="Phone number not authorized")
+
     generator = code_generator or (lambda: str(random.randint(100000, 999999)))
     code = generator()
     expires_at = datetime.now(UTC) + timedelta(minutes=10)
@@ -155,12 +165,13 @@ async def verify_otp(
     await session.commit()
     await session.refresh(user)
 
-    access_token = _create_access_token(str(user.id), user.phone)
+    access_token = _create_access_token(str(user.id), user.phone, user.role)
 
     return {
         "user_id": str(user.id),
         "phone": user.phone,
         "name": user.full_name,
+        "role": user.role,
         "message": "Login successful",
         "access_token": access_token,
     }

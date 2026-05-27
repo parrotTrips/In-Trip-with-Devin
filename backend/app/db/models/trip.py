@@ -3,35 +3,20 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
-class Trip(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "trips"
-
-    name: Mapped[str] = mapped_column(Text, nullable=False)
-    short_name: Mapped[str | None] = mapped_column(Text)
-    description: Mapped[str | None] = mapped_column(Text)
-    start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[date] = mapped_column(Date, nullable=False)
-    status: Mapped[str] = mapped_column(Text, nullable=False)
-
-
 class TripTraveler(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trip_travelers"
-    __table_args__ = (UniqueConstraint("trip_id", "user_id"),)
+    __table_args__ = (UniqueConstraint("wetravel_trip_uuid", "user_id"),)
 
-    trip_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("trips.id"),
-        nullable=False,
-    )
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
@@ -42,11 +27,7 @@ class TripTraveler(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class TripPhase(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trip_phases"
 
-    trip_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("trips.id"),
-        nullable=False,
-    )
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
     parent_phase_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("trip_phases.id"),

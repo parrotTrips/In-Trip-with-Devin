@@ -71,6 +71,12 @@ async def gen(output_path: Path) -> None:
         )
         print(f"Viagens encontradas: {len(trips)}")
 
+        # Limpar todos os vínculos antigos de usuários de teste antes de recriar
+        await conn.execute(
+            "DELETE FROM trip_travelers WHERE user_id IN (SELECT id FROM users WHERE phone LIKE '+1555TEST%')"
+        )
+        print("Vínculos antigos de usuários de teste removidos.")
+
         dev_users = []
 
         for i, trip in enumerate(trips, start=1):

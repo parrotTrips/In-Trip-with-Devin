@@ -1,15 +1,18 @@
 import { createContext, useContext } from 'react';
 
+export type UserRole = 'traveler' | 'staff';
+
 export interface AuthUser {
-  userId: number;
+  userId: string;
   phone: string;
   name: string | null;
   token: string;
+  role: UserRole;
 }
 
 export interface AuthContextType {
   user: AuthUser | null;
-  login: (userId: number, phone: string, name: string | null, token: string) => void;
+  login: (userId: string, phone: string, name: string | null, token: string, role: UserRole) => void;
   logout: () => void;
   isLoggedIn: boolean;
 }

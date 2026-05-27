@@ -1,12 +1,12 @@
 import asyncio
-from datetime import date
+import uuid as _uuid
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
 
 from app.db.models.progress import TravelerChecklistProgress, TravelerPhaseProgress
-from app.db.models.trip import Trip, TripPhase, TripPhaseChecklistItem, TripTraveler
+from app.db.models.trip import TripPhase, TripPhaseChecklistItem, TripTraveler
 from app.db.models.user import User
 from app.services.checklist_service import (
     get_checklist_progress,
@@ -16,26 +16,26 @@ from app.services.checklist_service import (
 )
 
 
-async def seed_checklist_context(session_factory, *, phone="+5511555555555"):
+async def seed_checklist_context(
+    session_factory,
+    *,
+    phone="+5511555555555",
+    wetravel_trip_uuid=None,
+):
+    if wetravel_trip_uuid is None:
+        wetravel_trip_uuid = f"test_trip_{str(_uuid.uuid4())[:8]}"
+
     async with session_factory() as session:
         user = User(phone=phone, full_name="Ana", status="active")
-        trip = Trip(
-            name="Ross 2026",
-            short_name="ross26",
-            description="Checklist test trip",
-            start_date=date(2026, 2, 1),
-            end_date=date(2026, 2, 7),
-            status="published",
-        )
-        session.add_all([user, trip])
+        session.add(user)
         await session.flush()
 
-        trip_traveler = TripTraveler(trip_id=trip.id, user_id=user.id)
+        trip_traveler = TripTraveler(wetravel_trip_uuid=wetravel_trip_uuid, user_id=user.id)
         session.add(trip_traveler)
         await session.flush()
 
         phase = TripPhase(
-            trip_id=trip.id,
+            wetravel_trip_uuid=wetravel_trip_uuid,
             phase_type="pre_trip",
             title="Before departure",
             subtitle=None,
@@ -70,7 +70,7 @@ async def seed_checklist_context(session_factory, *, phone="+5511555555555"):
 
         return {
             "user_id": str(user.id),
-            "trip_id": str(trip.id),
+            "trip_id": wetravel_trip_uuid,
             "trip_traveler_id": trip_traveler.id,
             "phase_id": str(phase.id),
             "passport_item_id": str(passport_item.id),

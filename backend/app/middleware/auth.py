@@ -20,6 +20,9 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
             return await call_next(request)
 
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)

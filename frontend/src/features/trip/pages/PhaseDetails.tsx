@@ -1,10 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  getPhaseById,
-  getTravelersAtPhase,
-} from '../data/tripData';
-import {
   ArrowLeft,
   CheckCircle2,
   Circle,
@@ -13,87 +9,113 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { useAuth } from '../../../app/providers/auth-context';
+import { useTripContext } from '../../../app/providers/trip-context';
 import {
+  getMyTripPhaseDetail,
   updateChecklistItem as apiUpdateChecklist,
   getChecklistProgress,
+  getPhaseCompletions,
   updatePhaseCompletion,
+  type TripPhaseDetail,
 } from '../services/trip-api';
 
-const TRIP_ID = 'ross26';
+interface ChecklistState {
+  id: string;
+  label: string;
+  completed: boolean;
+}
 
 export default function PhaseDetails() {
   const { phaseId } = useParams<{ phaseId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const phase = phaseId ? getPhaseById(phaseId) : undefined;
-  const [isCompleted, setIsCompleted] = useState(phase?.completed || false);
-  const [checklist, setChecklist] = useState(phase?.checklist || []);
-  const [showDetails, setShowDetails] = useState(true);
-  const travelers = phaseId ? getTravelersAtPhase(phaseId) : [];
+  const { tripInfo, travelers, refetch } = useTripContext();
 
-  const loadChecklistProgress = useCallback(async () => {
-    if (!user || !phaseId) return;
-    try {
-      const data = await getChecklistProgress(TRIP_ID, user.userId);
-      const phaseProgress = data.progress[phaseId] || {};
-      setChecklist(prev =>
-        prev.map(item => ({
-          ...item,
-          completed: phaseProgress[item.id] ?? item.completed,
-        }))
-      );
-    } catch {
-      // silently fail
-    }
-  }, [user, phaseId]);
+  const [phase, setPhase] = useState<TripPhaseDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [checklist, setChecklist] = useState<ChecklistState[]>([]);
+  const [showDetails, setShowDetails] = useState(true);
 
   useEffect(() => {
-    loadChecklistProgress();
-  }, [loadChecklistProgress]);
+    if (!phaseId) return;
+    setLoading(true);
+    setError(null);
+    getMyTripPhaseDetail(phaseId)
+      .then(data => {
+        setPhase(data);
+        setChecklist(data.checklist_items.map(item => ({ id: item.id, label: item.label, completed: false })));
+      })
+      .catch(e => setError(e instanceof Error ? e.message : 'Erro ao carregar fase'))
+      .finally(() => setLoading(false));
+  }, [phaseId]);
 
-  if (!phase) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Phase not found</p>
-      </div>
-    );
-  }
+  const loadChecklistProgress = useCallback(async () => {
+    if (!user || !phaseId || !tripInfo) return;
+    try {
+      const [checklistData, phaseData] = await Promise.all([
+        getChecklistProgress(tripInfo.wetravel_trip_uuid, user.userId),
+        getPhaseCompletions(tripInfo.wetravel_trip_uuid, user.userId),
+      ]);
+      const phaseProgress = checklistData.progress[phaseId] ?? {};
+      setChecklist(prev => prev.map(item => ({ ...item, completed: phaseProgress[item.id] ?? item.completed })));
+      setIsCompleted(phaseData.completions[phaseId] ?? false);
+    } catch {
+      // sem crash se falhar
+    }
+  }, [user, phaseId, tripInfo]);
+
+  useEffect(() => {
+    if (phase) loadChecklistProgress();
+  }, [phase, loadChecklistProgress]);
 
   const handleCheckItem = async (itemId: string) => {
     const item = checklist.find(c => c.id === itemId);
-    if (!item) return;
+    if (!item || !user || !phaseId || !tripInfo) return;
     const newCompleted = !item.completed;
-    setChecklist(prev =>
-      prev.map(i => i.id === itemId ? { ...i, completed: newCompleted } : i)
-    );
-    if (user && phaseId) {
-      try {
-        await apiUpdateChecklist(user.userId, TRIP_ID, phaseId, itemId, newCompleted);
-      } catch {
-        // revert on error
-        setChecklist(prev =>
-          prev.map(i => i.id === itemId ? { ...i, completed: !newCompleted } : i)
-        );
-      }
+    setChecklist(prev => prev.map(i => i.id === itemId ? { ...i, completed: newCompleted } : i));
+    try {
+      await apiUpdateChecklist(user.userId, tripInfo.wetravel_trip_uuid, phaseId, itemId, newCompleted);
+    } catch {
+      setChecklist(prev => prev.map(i => i.id === itemId ? { ...i, completed: !newCompleted } : i));
     }
   };
 
   const handleToggleCompleted = async () => {
+    if (!user || !phaseId || !tripInfo) return;
     const newVal = !isCompleted;
     setIsCompleted(newVal);
-    if (user && phaseId) {
-      try {
-        await updatePhaseCompletion(user.userId, TRIP_ID, phaseId, newVal);
-      } catch {
-        setIsCompleted(!newVal);
-      }
+    try {
+      await updatePhaseCompletion(user.userId, tripInfo.wetravel_trip_uuid, phaseId, newVal);
+      refetch();
+    } catch {
+      setIsCompleted(!newVal);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !phase) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
+        <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center text-2xl">⚠️</div>
+        <p className="text-gray-700 font-semibold text-center">Fase não encontrada</p>
+        <p className="text-gray-400 text-sm text-center">{error}</p>
+        <button onClick={() => navigate(-1)} className="text-blue-500 text-sm font-medium">Voltar</button>
+      </div>
+    );
+  }
+
+  const travelersHere = travelers.filter(t => t.current_phase_id === phaseId);
   const completedCount = checklist.filter(c => c.completed).length;
-  const checklistProgress = checklist.length > 0
-    ? Math.round((completedCount / checklist.length) * 100)
-    : 0;
+  const checklistProgress = checklist.length > 0 ? Math.round((completedCount / checklist.length) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
@@ -108,32 +130,31 @@ export default function PhaseDetails() {
           </button>
           <div className="flex-1">
             <h1 className="text-xl font-bold font-[Fredoka]">{phase.title}</h1>
-            {phase.subtitle && (
-              <p className="text-blue-100 text-sm">{phase.subtitle}</p>
-            )}
+            {phase.subtitle && <p className="text-blue-100 text-sm">{phase.subtitle}</p>}
           </div>
         </div>
 
-        {/* Travelers here */}
-        {travelers.length > 0 && (
+        {travelersHere.length > 0 && (
           <div className="px-4 pb-4 flex items-center gap-2">
             <div className="flex -space-x-2">
-              {travelers.slice(0, 5).map(t => (
-                <img
+              {travelersHere.slice(0, 5).map(t => (
+                <div
                   key={t.id}
-                  src={t.avatar}
-                  alt={t.name}
-                  className="w-7 h-7 rounded-full border-2 border-blue-500 object-cover"
-                />
+                  className="w-7 h-7 rounded-full border-2 border-blue-500 bg-emerald-400 flex items-center justify-center"
+                  title={t.name ?? t.phone}
+                >
+                  <span className="text-white text-xs font-bold">
+                    {(t.name ?? t.phone).charAt(0).toUpperCase()}
+                  </span>
+                </div>
               ))}
             </div>
             <span className="text-xs text-blue-200">
-              {travelers.length} traveler{travelers.length !== 1 ? 's' : ''} on this phase
+              {travelersHere.length} traveler{travelersHere.length !== 1 ? 's' : ''} on this phase
             </span>
           </div>
         )}
 
-        {/* Status button */}
         <div className="px-4 pb-5">
           <button
             onClick={handleToggleCompleted}
@@ -144,23 +165,15 @@ export default function PhaseDetails() {
             }`}
           >
             {isCompleted ? (
-              <>
-                <CheckCircle2 size={18} />
-                Completed!
-              </>
+              <><CheckCircle2 size={18} /> Completed!</>
             ) : (
-              <>
-                <Circle size={18} />
-                Mark as Completed
-              </>
+              <><Circle size={18} /> Mark as Completed</>
             )}
           </button>
         </div>
       </div>
 
-      {/* Content */}
       <div className="px-4 -mt-3 space-y-4">
-        {/* Checklist Card */}
         {checklist.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 border-b border-gray-50">
@@ -183,14 +196,12 @@ export default function PhaseDetails() {
                   className="flex items-start gap-3 w-full text-left p-2 rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   <div className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                    item.completed
-                      ? 'bg-emerald-500 border-emerald-500'
-                      : 'border-gray-300'
+                    item.completed ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300'
                   }`}>
                     {item.completed && <span className="text-white text-xs font-bold">✓</span>}
                   </div>
                   <span className={`text-sm ${item.completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
-                    {item.text}
+                    {item.label}
                   </span>
                 </button>
               ))}
@@ -198,8 +209,7 @@ export default function PhaseDetails() {
           </div>
         )}
 
-        {/* Detailed Instructions */}
-        {phase.detailedDescription && (
+        {phase.detailed_description && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <button
               onClick={() => setShowDetails(!showDetails)}
@@ -211,21 +221,20 @@ export default function PhaseDetails() {
             {showDetails && (
               <div className="px-4 pb-4">
                 <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                  {phase.detailedDescription}
+                  {phase.detailed_description}
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* Links */}
-        {phase.links && phase.links.length > 0 && (
+        {phase.links.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
             <h3 className="font-semibold text-gray-800 font-[Fredoka] mb-3">Useful Links</h3>
             <div className="space-y-2">
-              {phase.links.map((link, i) => (
+              {phase.links.map(link => (
                 <a
-                  key={i}
+                  key={link.id}
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"

@@ -22,13 +22,14 @@ def reload_module(module_name: str):
 
 
 def load_config_module(monkeypatch, **env_overrides):
-    for key in (
-        "WHATSAPP_PHONE_NUMBER_ID",
-        "WHATSAPP_ACCESS_TOKEN",
-        "WHATSAPP_TEMPLATE_NAME",
-        "DATABASE_URL",
-    ):
-        monkeypatch.delenv(key, raising=False)
+    defaults = {
+        "WHATSAPP_PHONE_NUMBER_ID": "",
+        "WHATSAPP_ACCESS_TOKEN": "",
+        "WHATSAPP_TEMPLATE_NAME": "intripauth",
+        "DATABASE_URL": "",
+    }
+    for key, value in defaults.items():
+        monkeypatch.setenv(key, value)
 
     for key, value in env_overrides.items():
         monkeypatch.setenv(key, value)
@@ -77,19 +78,17 @@ def test_metadata_exposes_the_approved_postgres_tables():
 
     expected_tables = {
         "users",
-        "trips",
         "trip_travelers",
         "traveler_profiles",
-        "traveler_products",
         "trip_phases",
         "trip_phase_checklist_items",
         "trip_phase_links",
         "trip_activities",
-        "media_assets",
-        "activity_media",
         "traveler_checklist_progress",
         "traveler_phase_progress",
         "otp_codes",
+        "trip_staff",
+        "staff_tasks",
     }
 
     assert expected_tables.issubset(base_module.metadata.tables)
@@ -215,10 +214,8 @@ def temporary_postgres_database(tmp_path):
 def test_alembic_upgrade_creates_the_full_schema(monkeypatch, tmp_path):
     expected_tables = {
         "users",
-        "trips",
         "trip_travelers",
         "traveler_profiles",
-        "traveler_products",
         "trip_phases",
         "trip_phase_checklist_items",
         "trip_phase_links",
@@ -228,6 +225,8 @@ def test_alembic_upgrade_creates_the_full_schema(monkeypatch, tmp_path):
         "traveler_checklist_progress",
         "traveler_phase_progress",
         "otp_codes",
+        "trip_staff",
+        "staff_tasks",
     }
 
     with temporary_postgres_database(tmp_path) as database_url:

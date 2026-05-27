@@ -1,7 +1,10 @@
 import asyncio
+import uuid
 import os
 from uuid import UUID
 
+import pytest
+from fastapi import HTTPException
 from jose import jwt
 from sqlalchemy import select
 
@@ -18,9 +21,17 @@ def fixed_code() -> str:
     return "123456"
 
 
+async def _seed_user(session, phone: str, role: str = "traveler") -> User:
+    user = User(id=uuid.uuid4(), phone=phone, status="active", role=role)
+    session.add(user)
+    await session.commit()
+    return user
+
+
 def test_request_otp_generates_and_stores_code(session_factory):
     async def run_test():
         async with session_factory() as session:
+            await _seed_user(session, "+5511999999999")
             response = await request_otp(
                 "+5511999999999",
                 session,
@@ -44,9 +55,25 @@ def test_request_otp_generates_and_stores_code(session_factory):
     asyncio.run(run_test())
 
 
-def test_verify_otp_creates_user_on_first_login(session_factory):
+def test_request_otp_rejects_unauthorized_phone(session_factory):
     async def run_test():
         async with session_factory() as session:
+            with pytest.raises(HTTPException) as exc_info:
+                await request_otp(
+                    "+5500000000000",
+                    session,
+                    otp_sender=fake_sender,
+                    code_generator=fixed_code,
+                )
+            assert exc_info.value.status_code == 403
+
+    asyncio.run(run_test())
+
+
+def test_verify_otp_succeeds_for_authorized_user(session_factory):
+    async def run_test():
+        async with session_factory() as session:
+            await _seed_user(session, "+5511888888888")
             await request_otp(
                 "+5511888888888",
                 session,
@@ -68,7 +95,7 @@ def test_verify_otp_creates_user_on_first_login(session_factory):
             assert otp_row is not None
             assert response["user_id"] == str(user_row.id)
             assert response["phone"] == "+5511888888888"
-            assert response["name"] is None
+            assert response["role"] == "traveler"
             assert response["message"] == "Login successful"
             assert "access_token" in response
             assert UUID(response["user_id"]) == user_row.id
@@ -88,6 +115,7 @@ def test_verify_otp_returns_access_token(session_factory, monkeypatch):
 
     async def run_test():
         async with session_factory() as session:
+            await _seed_user(session, "+5511777777777")
             await request_otp(
                 "+5511777777777",
                 session,
@@ -103,6 +131,7 @@ def test_verify_otp_returns_access_token(session_factory, monkeypatch):
                 algorithms=["HS256"],
             )
             assert payload["phone"] == "+5511777777777"
+            assert payload["role"] == "traveler"
             assert "sub" in payload
             assert "exp" in payload
 

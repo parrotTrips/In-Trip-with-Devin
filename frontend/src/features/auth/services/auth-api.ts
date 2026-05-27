@@ -9,9 +9,10 @@ export async function requestOTP(phone: string) {
 
 export async function verifyOTP(phone: string, code: string) {
   return request<{
-    user_id: number;
+    user_id: string;
     phone: string;
     name: string | null;
+    role: 'traveler' | 'staff';
     message: string;
     access_token: string;
   }>(

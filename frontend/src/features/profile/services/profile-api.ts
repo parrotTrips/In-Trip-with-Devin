@@ -28,7 +28,7 @@ export interface ProfileData {
   unforgettable_trip_details: string | null;
   receive_addon_updates: string | null;
   esim_qr_image: string | null;
-  roommate_user_id: number | null;
+  roommate_user_id: string | null;
   arrival_date: string | null;
   arrival_time: string | null;
   arrival_flight: string | null;
@@ -39,18 +39,19 @@ export interface ProfileData {
 }
 
 export interface ProfileResponse {
-  user_id: number;
+  user_id: string;
+  wetravel_trip_uuid: string;
   phone: string;
   name: string | null;
   profile: ProfileData | null;
-  roommate: { id: number; name: string | null; phone: string } | null;
+  roommate: { id: string; name: string | null; phone: string } | null;
 }
 
-export async function getProfile(userId: number) {
+export async function getProfile(userId: string) {
   return request<ProfileResponse>(`/profile/${userId}`);
 }
 
-export async function updateProfile(userId: number, data: Partial<ProfileData>) {
+export async function updateProfile(userId: string, data: Partial<ProfileData>) {
   return request<{ message: string }>(`/profile/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(data),

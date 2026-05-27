@@ -2,6 +2,7 @@ import { ArrowLeft, User, FileText, ChevronDown, ChevronUp, Save, Loader2, Shopp
 import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../app/providers/auth-context';
+import { useTripContext } from '../../../app/providers/trip-context';
 import { getProfile, updateProfile, type ProfileData } from '../services/profile-api';
 
 interface SectionProps {
@@ -126,11 +127,12 @@ function TextAreaField({ label, value, onChange, placeholder }: {
 export default function ProfileScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { tripInfo } = useTripContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
-  // Keep only the fields used by the simplified profile experience.
   const [form, setForm] = useState<Record<string, string>>({
     preferred_name: '',
     email: '',
@@ -157,7 +159,6 @@ export default function ProfileScreen() {
     intl_flights_help_details: '',
     travel_insurance_help_yn: '',
     unforgettable_trip_details: '',
-    receive_addon_updates: '',
     service_agreement_url: '',
   });
 
@@ -204,6 +205,7 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
+    setSaveError(false);
     try {
       const data: Partial<ProfileData> = {};
       for (const [key, val] of Object.entries(form)) {
@@ -222,6 +224,8 @@ export default function ProfileScreen() {
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error('Failed to save profile:', err);
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 4000);
     } finally {
       setSaving(false);
     }
@@ -264,7 +268,7 @@ export default function ProfileScreen() {
                 {form.preferred_name || user?.name || 'Traveler'}
               </h2>
               <p className="text-emerald-100 text-sm">{user?.phone}</p>
-              <p className="text-emerald-200 text-xs mt-1">Bernardo Brazil Trip 2026</p>
+              {tripInfo && <p className="text-emerald-200 text-xs mt-1">{tripInfo.title}</p>}
             </div>
           </div>
         </div>
@@ -351,10 +355,6 @@ export default function ProfileScreen() {
                   { value: 'no', label: 'No' },
                 ]} />
                 <TextAreaField label="What would make this trip unforgettable?" value={form.unforgettable_trip_details} onChange={v => setField('unforgettable_trip_details', v)} placeholder="Share your ideas..." />
-                <SelectField label="Receive updates about add-ons?" value={form.receive_addon_updates} onChange={v => setField('receive_addon_updates', v)} options={[
-                  { value: 'yes', label: 'Yes' },
-                  { value: 'no', label: 'No' },
-                ]} />
               </div>
             </div>
           </div>
@@ -434,7 +434,9 @@ export default function ProfileScreen() {
             onClick={handleSave}
             disabled={saving}
             className={`w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
-              saved
+              saveError
+                ? 'bg-red-500 text-white'
+                : saved
                 ? 'bg-emerald-500 text-white'
                 : 'bg-emerald-700 hover:bg-emerald-800 text-white'
             }`}
@@ -443,6 +445,11 @@ export default function ProfileScreen() {
               <>
                 <Loader2 size={18} className="animate-spin" />
                 Saving...
+              </>
+            ) : saveError ? (
+              <>
+                <Save size={18} />
+                Error saving — try again
               </>
             ) : saved ? (
               <>

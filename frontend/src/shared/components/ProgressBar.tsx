@@ -1,12 +1,14 @@
-import {
-  currentUserPhaseId,
-  getProgressPercentage,
-  parrotPhaseId,
-} from '../../data/tripData';
+interface Props {
+  totalPhases: number;
+  currentPhaseOrder: number;
+  parrotPhaseOrder: number;
+}
 
-export default function ProgressBar() {
-  const userProgress = getProgressPercentage(currentUserPhaseId);
-  const parrotProgress = getProgressPercentage(parrotPhaseId);
+export default function ProgressBar({ totalPhases, currentPhaseOrder, parrotPhaseOrder }: Props) {
+  if (totalPhases === 0) return null;
+
+  const userProgress = Math.round(((currentPhaseOrder + 1) / totalPhases) * 100);
+  const parrotProgress = Math.round(((parrotPhaseOrder + 1) / totalPhases) * 100);
   const isBehind = userProgress < parrotProgress;
 
   return (

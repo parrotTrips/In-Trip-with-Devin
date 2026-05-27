@@ -1,14 +1,16 @@
 import asyncio
-from datetime import date
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from app.db.models.traveler import TravelerProduct, TravelerProfile
-from app.db.models.trip import Trip, TripTraveler
+from app.db.models.traveler import TravelerProfile
+from app.db.models.trip import TripTraveler
 from app.db.models.user import User
 from app.services.profile_service import get_profile, get_trip_travelers, update_profile
+
+TEST_TRIP_A = "test_profile_trip_A"
+TEST_TRIP_B = "test_profile_trip_B"
 
 
 async def seed_trip_assignment(
@@ -16,29 +18,20 @@ async def seed_trip_assignment(
     *,
     phone="+5511222222222",
     name=None,
-    trip_name="Ross 2026",
-    short_name="ross26",
+    wetravel_trip_uuid=TEST_TRIP_A,
 ):
     async with session_factory() as session:
         user = User(phone=phone, full_name=name, status="active")
-        trip = Trip(
-            name=trip_name,
-            short_name=short_name,
-            description="Test trip",
-            start_date=date(2026, 2, 1),
-            end_date=date(2026, 2, 7),
-            status="published",
-        )
-        session.add_all([user, trip])
+        session.add(user)
         await session.flush()
 
-        trip_traveler = TripTraveler(trip_id=trip.id, user_id=user.id)
+        trip_traveler = TripTraveler(wetravel_trip_uuid=wetravel_trip_uuid, user_id=user.id)
         session.add(trip_traveler)
         await session.commit()
 
         return {
             "user_id": str(user.id),
-            "trip_id": str(trip.id),
+            "wetravel_trip_uuid": wetravel_trip_uuid,
             "trip_traveler_id": trip_traveler.id,
         }
 
@@ -48,11 +41,11 @@ def test_get_profile_returns_empty_profile_for_existing_trip_traveler(session_fa
         seeded = await seed_trip_assignment(session_factory, name="Alice")
 
         async with session_factory() as session:
-            response = await get_profile(seeded["user_id"], seeded["trip_id"], session)
+            response = await get_profile(seeded["user_id"], seeded["wetravel_trip_uuid"], session)
 
         assert response == {
             "user_id": seeded["user_id"],
-            "trip_id": seeded["trip_id"],
+            "wetravel_trip_uuid": seeded["wetravel_trip_uuid"],
             "phone": "+5511222222222",
             "name": "Alice",
             "profile": None,
@@ -62,47 +55,35 @@ def test_get_profile_returns_empty_profile_for_existing_trip_traveler(session_fa
     asyncio.run(run_test())
 
 
-def test_update_profile_creates_profile_and_product_through_trip_traveler(session_factory):
+def test_update_profile_creates_profile_through_trip_traveler(session_factory):
     async def run_test():
         seeded = await seed_trip_assignment(session_factory)
 
         async with session_factory() as session:
             update_response = await update_profile(
                 seeded["user_id"],
-                seeded["trip_id"],
+                seeded["wetravel_trip_uuid"],
                 {
                     "preferred_name": "Carol",
                     "email": "carol@example.com",
-                    "package_option": "Premium Cabin",
-                    "usd_amount": 2999.5,
                 },
                 session,
             )
             profile_response = await get_profile(
-                seeded["user_id"], seeded["trip_id"], session
+                seeded["user_id"], seeded["wetravel_trip_uuid"], session
             )
             profile_row = await session.scalar(
                 select(TravelerProfile).where(
                     TravelerProfile.trip_traveler_id == seeded["trip_traveler_id"]
                 )
             )
-            product_row = await session.scalar(
-                select(TravelerProduct).where(
-                    TravelerProduct.trip_traveler_id == seeded["trip_traveler_id"]
-                )
-            )
 
         assert update_response == {"message": "Profile updated"}
         assert profile_row is not None
-        assert product_row is not None
         assert profile_row.preferred_name == "Carol"
-        assert product_row.package_name == "Premium Cabin"
-        assert float(product_row.amount_paid_usd) == 2999.5
         assert profile_response["name"] == "Carol"
         assert profile_response["profile"]["preferred_name"] == "Carol"
         assert profile_response["profile"]["email"] == "carol@example.com"
-        assert profile_response["profile"]["package_option"] == "Premium Cabin"
-        assert profile_response["profile"]["usd_amount"] == 2999.5
 
     asyncio.run(run_test())
 
@@ -113,22 +94,20 @@ def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(sessio
             session_factory,
             phone="+5511333333333",
             name="Ana",
-            trip_name="Ross 2026",
-            short_name="ross26",
+            wetravel_trip_uuid=TEST_TRIP_A,
         )
         await seed_trip_assignment(
             session_factory,
             phone="+5511444444444",
             name="Bia",
-            trip_name="Pantanal 2026",
-            short_name="pantanal26",
+            wetravel_trip_uuid=TEST_TRIP_B,
         )
 
         async with session_factory() as session:
-            response = await get_trip_travelers(primary["trip_id"], session)
+            response = await get_trip_travelers(primary["wetravel_trip_uuid"], session)
 
         assert response == {
-            "trip_id": primary["trip_id"],
+            "trip_id": primary["wetravel_trip_uuid"],
             "travelers": [
                 {
                     "id": primary["user_id"],
@@ -149,7 +128,7 @@ def test_update_profile_rejects_unsupported_orphan_fields(session_factory):
             with pytest.raises(HTTPException) as exc_info:
                 await update_profile(
                     seeded["user_id"],
-                    seeded["trip_id"],
+                    seeded["wetravel_trip_uuid"],
                     {
                         "transfer_platform": "wise",
                         "proof_of_transfer": "https://example.com/proof.png",
@@ -158,7 +137,7 @@ def test_update_profile_rejects_unsupported_orphan_fields(session_factory):
                 )
 
             profile_response = await get_profile(
-                seeded["user_id"], seeded["trip_id"], session
+                seeded["user_id"], seeded["wetravel_trip_uuid"], session
             )
 
         assert exc_info.value.status_code == 400

@@ -21,7 +21,7 @@ WHATSAPP_TEMPLATE_NAME = os.environ.get(
 WHATSAPP_TEMPLATE_LANGUAGE = os.environ.get("WHATSAPP_TEMPLATE_LANGUAGE", "pt_BR")
 DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
 WHATSAPP_API_URL = (
-    f"https://graph.facebook.com/v25.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    f"https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
 )
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "")

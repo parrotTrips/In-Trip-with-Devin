@@ -347,30 +347,29 @@ async def seed(trip_uuid: str, start_date: datetime) -> None:
             )
             if phase_ids:
                 ids = [str(r["id"]) for r in phase_ids]
-                # activity_media → trip_activities
-                await conn.execute(
-                    f"DELETE FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", ids
-                )
-                await conn.execute(
-                    f"DELETE FROM trip_phase_checklist_items WHERE trip_phase_id = ANY($1::uuid[])", ids
-                )
-                await conn.execute(
-                    f"DELETE FROM trip_phase_links WHERE trip_phase_id = ANY($1::uuid[])", ids
-                )
-                # traveler progress
+                # traveler progress deve vir primeiro (FK → checklist_items e phases)
                 traveler_ids = await conn.fetch(
                     "SELECT id FROM trip_travelers WHERE wetravel_trip_uuid = $1", trip_uuid
                 )
                 if traveler_ids:
                     tt_ids = [str(r["id"]) for r in traveler_ids]
                     await conn.execute(
-                        "DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[])", tt_ids
-                    )
-                    await conn.execute(
                         "DELETE FROM traveler_checklist_progress WHERE trip_traveler_id = ANY($1::uuid[])", tt_ids
                     )
+                    await conn.execute(
+                        "DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[])", tt_ids
+                    )
                 await conn.execute(
-                    f"DELETE FROM trip_phases WHERE wetravel_trip_uuid = $1", trip_uuid
+                    "DELETE FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", ids
+                )
+                await conn.execute(
+                    "DELETE FROM trip_phase_checklist_items WHERE trip_phase_id = ANY($1::uuid[])", ids
+                )
+                await conn.execute(
+                    "DELETE FROM trip_phase_links WHERE trip_phase_id = ANY($1::uuid[])", ids
+                )
+                await conn.execute(
+                    "DELETE FROM trip_phases WHERE wetravel_trip_uuid = $1", trip_uuid
                 )
 
             print("Inserindo fases pre-trip...")
@@ -468,9 +467,6 @@ def main() -> None:
     except ValueError:
         print("Erro: --start-date deve estar no formato YYYY-MM-DD")
         sys.exit(1)
-
-    if not JWT_SECRET:
-        print("Aviso: JWT_SECRET não está configurado. Os tokens gerados serão inválidos.")
 
     asyncio.run(seed(args.trip_uuid, start_date))
 

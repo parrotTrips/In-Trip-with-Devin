@@ -1,10 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  getPhaseById,
-  isTripDay,
-  type Activity,
-} from '../data/tripData';
 import {
   ArrowLeft,
   Clock,
@@ -15,11 +10,21 @@ import {
   Check,
   DollarSign,
   ImagePlus,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
+import { useAuth } from '../../../app/providers/auth-context';
+import { useTripContext } from '../../../app/providers/trip-context';
+import {
+  getMyTripPhaseDetail,
+  getPhaseCompletions,
+  updatePhaseCompletion,
+  type Activity,
+  type TripPhaseDetail,
+} from '../services/trip-api';
 
 function ActivityCard({ activity, index }: { activity: Activity; index: number }) {
   const [expanded, setExpanded] = useState(false);
-  const [currentImage, setCurrentImage] = useState(0);
 
   const typeConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
     included: { label: 'Included', color: 'bg-emerald-100 text-emerald-700', icon: <Check size={12} /> },
@@ -28,111 +33,78 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
     logistics: { label: 'Logistics', color: 'bg-gray-100 text-gray-700', icon: <MapPin size={12} /> },
   };
 
-  const config = typeConfig[activity.type] || typeConfig.included;
+  const config = typeConfig[activity.activity_type] ?? typeConfig.included;
+
+  function formatTime(startsAt: string | null, durationMinutes: number | null): string {
+    if (!startsAt) return '—';
+    const d = new Date(startsAt);
+    const hours = d.getHours();
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const h = hours % 12 || 12;
+    const base = `${h}:${minutes} ${ampm}`;
+    if (!durationMinutes) return base;
+    const hrs = Math.floor(durationMinutes / 60);
+    const mins = durationMinutes % 60;
+    const dur = hrs > 0 ? (mins > 0 ? `${hrs}h ${mins}min` : `${hrs}h`) : `${mins}min`;
+    return `${base} · ~${dur}`;
+  }
 
   return (
     <div className="relative">
-      {/* Timeline connector */}
       <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200" />
 
       <div className="relative flex gap-3">
-        {/* Timeline dot */}
         <div className="flex-shrink-0 w-12 flex flex-col items-center">
           <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-            activity.type === 'included' ? 'bg-emerald-500' : activity.type === 'optional' ? 'bg-amber-500' : activity.type === 'logistics' ? 'bg-gray-500' : 'bg-blue-500'
+            activity.activity_type === 'included' ? 'bg-emerald-500'
+            : activity.activity_type === 'optional' ? 'bg-amber-500'
+            : activity.activity_type === 'logistics' ? 'bg-gray-500'
+            : 'bg-blue-500'
           }`}>
             {index + 1}
           </div>
         </div>
 
-        {/* Activity content */}
         <div className="flex-1 pb-6">
           <button
             onClick={() => setExpanded(!expanded)}
             className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
           >
-            {/* Activity images carousel */}
-            {activity.images.length > 0 && (
-              <div className="relative h-40 overflow-hidden">
-                <img
-                  src={activity.images[currentImage]}
-                  alt={activity.name}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Photo';
-                  }}
-                />
-                {activity.images.length > 1 && (
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                    {activity.images.map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={(e) => { e.stopPropagation(); setCurrentImage(i); }}
-                        className={`w-1.5 h-1.5 rounded-full transition-all ${
-                          i === currentImage ? 'bg-white w-4' : 'bg-white/60'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
-                {/* Type badge on image */}
-                <div className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${config.color}`}>
+            <div className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${config.color}`}>
                   {config.icon}
                   {config.label}
-                </div>
-                {activity.price && (
-                  <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/90 text-gray-800 flex items-center gap-1">
+                </span>
+                {activity.amount_brl !== null && (
+                  <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
                     <DollarSign size={12} />
-                    {activity.price}
-                  </div>
+                    R$ {activity.amount_brl}
+                  </span>
                 )}
               </div>
-            )}
 
-            <div className="p-4">
-              {/* No image - show badge inline */}
-              {activity.images.length === 0 && (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${config.color}`}>
-                    {config.icon}
-                    {config.label}
-                  </span>
-                  {activity.price && (
-                    <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
-                      <DollarSign size={12} />
-                      {activity.price}
-                    </span>
-                  )}
-                </div>
-              )}
+              <h4 className="font-semibold text-gray-800 text-sm font-[Fredoka]">{activity.name}</h4>
 
-              <h4 className="font-semibold text-gray-800 text-sm font-[Fredoka]">
-                {activity.name}
-              </h4>
-
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                <span className="flex items-center gap-1">
-                  <Clock size={12} />
-                  {activity.time}
-                </span>
-                <span className="flex items-center gap-1">
-                  ⏱ {activity.duration}
-                </span>
+              <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                <Clock size={12} />
+                <span>{formatTime(activity.starts_at, activity.duration_minutes)}</span>
               </div>
 
               <div className="text-sm text-gray-600 mt-2 leading-relaxed whitespace-pre-line">
-                {activity.description}
+                {activity.short_description}
               </div>
 
-              {expanded && (
+              {expanded && activity.practical_info && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-start gap-2 text-sm text-gray-600">
                     <MapPin size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-                    <div className="whitespace-pre-line">{activity.practicalInfo}</div>
+                    <div className="whitespace-pre-line">{activity.practical_info}</div>
                   </div>
-                  {activity.price && activity.type === 'optional' && (
+                  {activity.amount_brl !== null && activity.activity_type === 'optional' && (
                     <button className="mt-3 w-full py-2.5 bg-amber-500 text-white rounded-xl font-semibold text-sm hover:bg-amber-600 transition-colors">
-                      Book Now — {activity.price}
+                      Book Now — R$ {activity.amount_brl}
                     </button>
                   )}
                 </div>
@@ -153,20 +125,65 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
 export default function DayDetails() {
   const { dayId } = useParams<{ dayId: string }>();
   const navigate = useNavigate();
-  const phase = dayId ? getPhaseById(dayId) : undefined;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const { tripInfo, refetch } = useTripContext();
 
-  if (!phase || !isTripDay(phase)) {
+  const [phase, setPhase] = useState<TripPhaseDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isCompleted, setIsCompleted] = useState(false);
+
+  useEffect(() => {
+    if (!dayId) return;
+    setLoading(true);
+    setError(null);
+    getMyTripPhaseDetail(dayId)
+      .then(data => setPhase(data))
+      .catch(e => setError(e instanceof Error ? e.message : 'Erro ao carregar dia'))
+      .finally(() => setLoading(false));
+  }, [dayId]);
+
+  useEffect(() => {
+    if (!phase || !user || !dayId || !tripInfo) return;
+    getPhaseCompletions(tripInfo.wetravel_trip_uuid, user.userId)
+      .then(data => setIsCompleted(data.completions[dayId] ?? false))
+      .catch(() => {});
+  }, [phase, user, dayId, tripInfo]);
+
+  const handleToggleCompleted = async () => {
+    if (!user || !dayId || !tripInfo) return;
+    const newVal = !isCompleted;
+    setIsCompleted(newVal);
+    try {
+      await updatePhaseCompletion(user.userId, tripInfo.wetravel_trip_uuid, dayId, newVal);
+      refetch();
+    } catch {
+      setIsCompleted(!newVal);
+    }
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Day not found</p>
+        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !phase || phase.phase_type !== 'in-trip') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
+        <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center text-2xl">⚠️</div>
+        <p className="text-gray-700 font-semibold text-center">Dia não encontrado</p>
+        <p className="text-gray-400 text-sm text-center">{error}</p>
+        <button onClick={() => navigate(-1)} className="text-emerald-500 text-sm font-medium">Voltar</button>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
-      {/* Header */}
       <div className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 text-white">
         <div className="flex items-center gap-3 px-4 pt-12 pb-2">
           <button
@@ -176,31 +193,40 @@ export default function DayDetails() {
             <ArrowLeft size={22} />
           </button>
           <div className="flex-1">
-            <h1 className="text-xl font-bold font-[Fredoka]">{phase.title} — {phase.subtitle}</h1>
-            <p className="text-emerald-100 text-sm mt-0.5">{phase.description}</p>
+            <h1 className="text-xl font-bold font-[Fredoka]">
+              {phase.subtitle ? `${phase.title} — ${phase.subtitle}` : phase.title}
+            </h1>
+            <p className="text-emerald-100 text-sm mt-0.5">{phase.short_description}</p>
           </div>
         </div>
 
-        {/* Day overview */}
-        <div className="px-4 pb-5 mt-2">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-emerald-100 text-xs">
-              <Clock size={14} />
-              <span>{phase.activities.length} activities</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-emerald-100 text-xs">
-              <Camera size={14} />
-              <span>{phase.albumPhotos.length} photos</span>
-            </div>
+        <div className="px-4 pb-2 mt-2">
+          <div className="flex items-center gap-1.5 text-emerald-100 text-xs">
+            <Clock size={14} />
+            <span>{phase.activities.length} activities</span>
           </div>
+        </div>
+
+        <div className="px-4 pb-5">
+          <button
+            onClick={handleToggleCompleted}
+            className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
+              isCompleted
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                : 'bg-white/15 text-white border border-white/30 hover:bg-white/25'
+            }`}
+          >
+            {isCompleted ? (
+              <><CheckCircle2 size={18} /> Day Completed!</>
+            ) : (
+              <><Circle size={18} /> Mark Day as Completed</>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Activities Timeline */}
       <div className="px-4 pt-6">
-        <h2 className="text-lg font-bold text-gray-800 font-[Fredoka] mb-4">
-          Today's Itinerary
-        </h2>
+        <h2 className="text-lg font-bold text-gray-800 font-[Fredoka] mb-4">Today's Itinerary</h2>
         <div>
           {phase.activities.map((activity, index) => (
             <ActivityCard key={activity.id} activity={activity} index={index} />
@@ -208,7 +234,6 @@ export default function DayDetails() {
         </div>
       </div>
 
-      {/* Collaborative Album */}
       <div className="px-4 mt-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-50 flex items-center justify-between">
@@ -220,43 +245,14 @@ export default function DayDetails() {
               <ImagePlus size={14} />
               Add Photo
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
           </div>
-
-          {phase.albumPhotos.length > 0 ? (
-            <div className="p-4">
-              <div className="grid grid-cols-2 gap-3">
-                {phase.albumPhotos.map(photo => (
-                  <div key={photo.id} className="relative rounded-xl overflow-hidden aspect-square">
-                    <img
-                      src={photo.url}
-                      alt={photo.caption}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://placehold.co/400x300/e2e8f0/94a3b8?text=Photo';
-                      }}
-                    />
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-                      <p className="text-white text-xs font-medium">{photo.userName}</p>
-                      <p className="text-white/80 text-xs">{photo.caption}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <div className="p-8 text-center">
+            <div className="w-16 h-16 mx-auto bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
+              <Camera size={24} className="text-gray-400" />
             </div>
-          ) : (
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 mx-auto bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
-                <Camera size={24} className="text-gray-400" />
-              </div>
-              <p className="text-sm text-gray-400">No photos yet. Be the first to share!</p>
-            </div>
-          )}
+            <p className="text-sm text-gray-400">No photos yet. Be the first to share!</p>
+          </div>
         </div>
       </div>
     </div>

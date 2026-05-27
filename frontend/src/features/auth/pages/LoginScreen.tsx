@@ -35,7 +35,7 @@ export default function LoginScreen() {
     setError('');
     try {
       const result = await verifyOTP(fullPhone, codeStr);
-      login(result.user_id, result.phone, result.name, result.access_token);
+      login(result.user_id, result.phone, result.name, result.access_token, result.role ?? 'traveler');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid code');
       setLoading(false);

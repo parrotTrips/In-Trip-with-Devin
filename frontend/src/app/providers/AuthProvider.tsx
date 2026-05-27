@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { AuthContext, type AuthUser } from './auth-context';
+import { AuthContext, type AuthUser, type UserRole } from './auth-context';
 
 function getStoredUser(): AuthUser | null {
   try {
@@ -16,13 +16,15 @@ function getDevAutoLoginUser(): AuthUser | null {
     return null;
   }
 
-  const userId = Number.parseInt(import.meta.env.VITE_DEV_USER_ID ?? '1', 10);
+  const userId = import.meta.env.VITE_DEV_USER_ID ?? '';
+  const role = (import.meta.env.VITE_DEV_USER_ROLE ?? 'traveler') as UserRole;
 
   return {
-    userId: Number.isNaN(userId) ? 1 : userId,
+    userId,
     phone: import.meta.env.VITE_DEV_USER_PHONE ?? '+15550000001',
     name: import.meta.env.VITE_DEV_USER_NAME ?? 'Dev Traveler',
     token: import.meta.env.VITE_DEV_TOKEN ?? '',
+    role,
   };
 }
 
@@ -37,8 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('parrot_user');
   }, [user]);
 
-  const login = (userId: number, phone: string, name: string | null, token: string) => {
-    setUser({ userId, phone, name, token });
+  const login = (userId: string, phone: string, name: string | null, token: string, role: UserRole) => {
+    setUser({ userId, phone, name, token, role });
   };
 
   const logout = () => {

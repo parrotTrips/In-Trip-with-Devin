@@ -1,5 +1,7 @@
 """Profile HTTP routes."""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +15,7 @@ router = APIRouter(tags=["profile"])
 @router.get("/profile/{user_id}")
 async def get_profile_handler(
     user_id: str,
-    trip_id: str,
+    trip_id: Optional[str] = None,
     session: AsyncSession = Depends(get_db_session),
 ):
     """Return the persisted profile payload for one traveler."""
@@ -24,7 +26,7 @@ async def get_profile_handler(
 async def update_profile_handler(
     user_id: str,
     update: ProfileUpdate,
-    trip_id: str,
+    trip_id: Optional[str] = None,
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create or update the persisted traveler profile."""

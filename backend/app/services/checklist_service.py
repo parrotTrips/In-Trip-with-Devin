@@ -29,7 +29,7 @@ async def _resolve_trip_traveler(
     trip_traveler = await session.scalar(
         select(TripTraveler).where(
             TripTraveler.user_id == _parse_uuid(user_id, "User not found"),
-            TripTraveler.trip_id == _parse_uuid(trip_id, "Trip not found"),
+            TripTraveler.wetravel_trip_uuid == trip_id,
         )
     )
     if not trip_traveler:
@@ -44,7 +44,6 @@ async def update_checklist_item(
 ) -> dict:
     """Persist one checklist item completion state for a user."""
     trip_traveler = await _resolve_trip_traveler(user_id, update["trip_id"], session)
-    trip_id = _parse_uuid(update["trip_id"], "Trip not found")
     phase_id = _parse_uuid(update["phase_id"], "Phase not found")
     item_id = _parse_uuid(update["item_id"], "Checklist item not found")
 
@@ -54,7 +53,7 @@ async def update_checklist_item(
         .where(
             TripPhaseChecklistItem.id == item_id,
             TripPhaseChecklistItem.trip_phase_id == phase_id,
-            TripPhase.trip_id == trip_id,
+            TripPhase.wetravel_trip_uuid == update["trip_id"],
         )
     )
     if not checklist_item:
@@ -124,7 +123,7 @@ async def update_phase_completion(
     phase = await session.scalar(
         select(TripPhase).where(
             TripPhase.id == _parse_uuid(update["phase_id"], "Phase not found"),
-            TripPhase.trip_id == _parse_uuid(update["trip_id"], "Trip not found"),
+            TripPhase.wetravel_trip_uuid == update["trip_id"],
         )
     )
     if not phase:

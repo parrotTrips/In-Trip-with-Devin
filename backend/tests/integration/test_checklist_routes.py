@@ -1,28 +1,18 @@
 import asyncio
-from datetime import date
 from uuid import UUID
 
-from app.db.models.trip import Trip, TripPhase, TripPhaseChecklistItem, TripTraveler
+from app.db.models.trip import TripPhase, TripPhaseChecklistItem, TripTraveler
+
+TEST_TRIP_UUID = "test_checklist_trip_001"
 
 
 async def seed_checklist_context(session_factory, *, user_id):
     async with session_factory() as session:
-        trip = Trip(
-            name="Ross 2026",
-            short_name="ross26",
-            description="Checklist integration trip",
-            start_date=date(2026, 2, 1),
-            end_date=date(2026, 2, 7),
-            status="published",
-        )
-        session.add(trip)
-        await session.flush()
-
-        session.add(TripTraveler(trip_id=trip.id, user_id=UUID(user_id)))
+        session.add(TripTraveler(wetravel_trip_uuid=TEST_TRIP_UUID, user_id=UUID(user_id)))
         await session.flush()
 
         phase = TripPhase(
-            trip_id=trip.id,
+            wetravel_trip_uuid=TEST_TRIP_UUID,
             phase_type="pre_trip",
             title="Before departure",
             subtitle=None,
@@ -49,15 +39,15 @@ async def seed_checklist_context(session_factory, *, user_id):
         await session.commit()
 
         return {
-            "trip_id": str(trip.id),
+            "trip_id": TEST_TRIP_UUID,
             "phase_id": str(phase.id),
             "item_id": str(item.id),
         }
 
 
-def create_user(client, phone="+5511991000000"):
-    otp_response = client.post("/auth/request-otp", json={"phone": phone})
-    verify_response = client.post(
+def create_user(seeded_client, phone="+5511991000000"):
+    otp_response = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    verify_response = seeded_client.post(
         "/auth/verify-otp",
         json={"phone": phone, "code": otp_response.json()["debug_code"]},
     )
@@ -65,12 +55,12 @@ def create_user(client, phone="+5511991000000"):
     return data["user_id"], data["access_token"]
 
 
-def test_checklist_routes_persist_progress(client, session_factory):
-    user_id, token = create_user(client)
+def test_checklist_routes_persist_progress(seeded_client, session_factory):
+    user_id, token = create_user(seeded_client)
     headers = {"Authorization": f"Bearer {token}"}
     seeded = asyncio.run(seed_checklist_context(session_factory, user_id=user_id))
 
-    update_response = client.post(
+    update_response = seeded_client.post(
         f"/checklist/update?user_id={user_id}",
         json={
             "trip_id": seeded["trip_id"],
@@ -80,7 +70,7 @@ def test_checklist_routes_persist_progress(client, session_factory):
         },
         headers=headers,
     )
-    get_response = client.get(f"/checklist/{seeded['trip_id']}/{user_id}", headers=headers)
+    get_response = seeded_client.get(f"/checklist/{seeded['trip_id']}/{user_id}", headers=headers)
 
     assert update_response.status_code == 200
     assert update_response.json() == {"message": "Checklist item updated"}
@@ -92,12 +82,12 @@ def test_checklist_routes_persist_progress(client, session_factory):
     }
 
 
-def test_phase_routes_persist_completion(client, session_factory):
-    user_id, token = create_user(client, phone="+5511991000001")
+def test_phase_routes_persist_completion(seeded_client, session_factory):
+    user_id, token = create_user(seeded_client, phone="+5511991000001")
     headers = {"Authorization": f"Bearer {token}"}
     seeded = asyncio.run(seed_checklist_context(session_factory, user_id=user_id))
 
-    update_response = client.post(
+    update_response = seeded_client.post(
         f"/phases/complete?user_id={user_id}",
         json={
             "trip_id": seeded["trip_id"],
@@ -106,7 +96,7 @@ def test_phase_routes_persist_completion(client, session_factory):
         },
         headers=headers,
     )
-    get_response = client.get(f"/phases/{seeded['trip_id']}/{user_id}", headers=headers)
+    get_response = seeded_client.get(f"/phases/{seeded['trip_id']}/{user_id}", headers=headers)
 
     assert update_response.status_code == 200
     assert update_response.json() == {"message": "Phase completion updated"}

@@ -26,6 +26,7 @@ MODULES_TO_CLEAR = [
     "app.routers.auth",
     "app.routers.users",
     "app.routers.profile",
+    "app.routers.trip",
     "app.routers.checklist",
     "app.middleware.auth",
 ]
@@ -135,8 +136,8 @@ def session_factory(database_url):
 def client(monkeypatch, database_url):
     monkeypatch.setenv("DATABASE_URL", database_url)
     monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-testing-only")
-    monkeypatch.delenv("WHATSAPP_PHONE_NUMBER_ID", raising=False)
-    monkeypatch.delenv("WHATSAPP_ACCESS_TOKEN", raising=False)
+    monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "")
+    monkeypatch.setenv("WHATSAPP_ACCESS_TOKEN", "")
 
     for module_name in MODULES_TO_CLEAR:
         sys.modules.pop(module_name, None)
@@ -145,3 +146,34 @@ def client(monkeypatch, database_url):
 
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def seeded_client(client, session_factory):
+    """Client with pre-seeded test users required by integration tests."""
+    import uuid as _uuid
+    from app.db.models.user import User
+
+    async def _seed():
+        phones = [
+            "+5511666666666",
+            "+5511555555555",
+            "+5511444444444",
+            "+5511333333333",
+            "+5511222222222",
+            "+5511111111111",
+            "+5511555444333",
+            "+5511991000000",
+            "+5511991000001",
+            "+5511990000000",
+            "+5511990000001",
+            "+5511990000002",
+            "+5511990000003",
+        ]
+        async with session_factory() as session:
+            for phone in phones:
+                session.add(User(id=_uuid.uuid4(), phone=phone, status="active", role="traveler"))
+            await session.commit()
+
+    asyncio.run(_seed())
+    yield client

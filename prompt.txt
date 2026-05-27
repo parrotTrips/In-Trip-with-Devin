@@ -1,110 +1,134 @@
-## Contexto do projeto
+## Projeto: Parrot Trips — In-Trip App
 
-Estou desenvolvendo o Parrot Trips, um aplicativo web para viajantes que inclui autenticação via WhatsApp OTP e gerenciamento de dados de viagem. O backend é FastAPI (Python) e o frontend é React + TypeScript. O banco de dados é PostgreSQL hospedado no Supabase.
+App web para viajantes acompanharem uma experiência de viagem. Backend FastAPI (Python), frontend React + TypeScript, banco PostgreSQL no Supabase.
 
 ---
 
-## O que já foi implementado e validado
+## O que foi implementado e está funcionando
 
-### Autenticação: WhatsApp OTP + JWT
+### Autenticação WhatsApp OTP + JWT
+- Fluxo completo: telefone → OTP via WhatsApp → JWT de 14 dias
+- Template `intripauth` (Authentication, idioma `en`) aprovado e ativo na Meta
+- Apenas telefones cadastrados na tabela `users` conseguem pedir OTP (403 para não autorizados)
+- JWT contém: `sub` (user_id), `phone`, `role`, `exp`
 
-O sistema de autenticação está completamente implementado e testado end-to-end:
+### Dois tipos de usuário
+- `role = 'traveler'` → vê o mapa da jornada da viagem (tela do viajante)
+- `role = 'staff'` → vê a tela operacional de tarefas do dia (tela staff)
+- O roteamento acontece em `frontend/src/app/App.tsx` baseado no `user.role`
 
-1. O usuário digita o telefone no frontend
-2. O backend gera um código OTP de 6 dígitos, salva no banco e envia via WhatsApp Cloud API (Meta)
-3. O usuário digita o código no app
-4. O backend valida o OTP, cria o usuário se for o primeiro acesso, e retorna um JWT assinado (HS256, válido por 14 dias)
-5. O frontend armazena `{ userId, phone, name, token }` no localStorage
-6. Todas as chamadas de API incluem `Authorization: Bearer <token>`
-7. O backend valida o token via middleware global (FastAPI `BaseHTTPMiddleware`) em todas as rotas exceto `/auth/*` e `/healthz`
+### Usuários cadastrados no banco (Supabase)
+| Nome | Telefone | Role |
+|------|----------|------|
+| Marcelo Angelo da Silva Filho | +5512991296651 | staff |
+| Vitor Sanches | +5511997666680 | staff |
 
-O teste E2E passou com sucesso em todos os 6 passos:
-- OTP entregue via WhatsApp no celular
-- JWT gerado e retornado
-- Rota protegida sem token → 401
-- Rota protegida com token válido → passou
-- Token inválido → 401
-
-### Estado atual do .env do backend
-
-```env
-DATABASE_URL=postgresql+asyncpg://...supabase...
-SUPABASE_ANON_KEY=...
-JWT_SECRET=change-this-to-a-random-32-char-secret-in-production
-WHATSAPP_PHONE_NUMBER_ID=1085386851333264
-WHATSAPP_ACCESS_TOKEN=<token temporário — expira em ~24h>
-WHATSAPP_TEMPLATE_NAME=jaspers_market_order_confirmation_v1
-WHATSAPP_TEMPLATE_LANGUAGE=en_US
+**Atenção**: após rodar a migration 20260520_0002, é necessário executar este SQL no Supabase Studio:
+```sql
+UPDATE users SET role = 'staff' WHERE phone IN ('+5512991296651', '+5511997666680');
 ```
 
-### Limitação atual: conta sandbox da Meta
+### Backend (.env atual)
+```
+WHATSAPP_PHONE_NUMBER_ID=1105174586018276
+WHATSAPP_ACCESS_TOKEN=<System User token permanente — não expira>
+WHATSAPP_TEMPLATE_NAME=intripauth
+WHATSAPP_TEMPLATE_LANGUAGE=en
+WHATSAPP_BUSINESS_ACCOUNT_ID=972993528657511
+JWT_SECRET=ca596c0ef39322effb118a36f43163d52d8f735a3492bd03e40375b35e23c972
+DATABASE_URL=postgresql+asyncpg://...supabase...
+```
 
-A conta de WhatsApp usada nos testes é o **sandbox de teste da Meta** ("Test WhatsApp Business Account"):
+### Banco de dados — tabelas existentes
+- `users` — id, phone, full_name, email, status, role (`traveler` | `staff`)
+- `trips` — viagens
+- `trip_travelers` — vínculo usuário ↔ viagem (para viajantes)
+- `trip_staff` — vínculo usuário ↔ viagem (para staff, com campo `function`)
+- `staff_tasks` — tarefas operacionais do staff por fase/dia da viagem
+- `trip_phases` — fases e dias da viagem
+- `trip_activities` — atividades de lazer do viajante
+- `traveler_profiles`, `traveler_products` — dados do viajante
+- `traveler_checklist_progress`, `traveler_phase_progress` — progresso
 
-- `WHATSAPP_PHONE_NUMBER_ID=1085386851333264` — número de teste da Meta
-- Só envia para números adicionados manualmente como destinatários de teste
-- **Não tem permissão para criar templates próprios** — tentamos via API e via dashboard, ambos retornaram erro de permissão
-- O access token gerado pela tela "Try it out" expira em ~24h
-- O template em uso (`jaspers_market_order_confirmation_v1`) é um template de exemplo da Meta usado como workaround temporário — o código OTP aparece no campo "número do pedido" da mensagem
-
-### Template desejado para produção
-
-O template final se chama `intripauth` e deve ser do tipo **Authentication** no idioma **pt_BR**. O backend já está preparado para ele: a função `_build_template_components()` em `backend/app/services/auth_service.py` usa o payload correto automaticamente quando `WHATSAPP_TEMPLATE_NAME=intripauth`.
-
-O template `intripauth` deve ter:
-- Corpo com `{{1}}` = código OTP
-- Botão URL com `{{1}}` = código OTP (deep link de verificação)
-- Idioma: pt_BR
-
----
-
-## O que precisa ser feito agora
-
-### Objetivo
-
-Criar uma conta WhatsApp Business real com permissão para criar templates próprios, criar o template `intripauth` e atualizar o `backend/.env` com as credenciais permanentes.
-
-### Passos esperados
-
-1. **Criar ou usar uma conta Meta Business verificada** com uma WhatsApp Business Account (WABA) real — não o sandbox de teste
-2. **Registrar um número de telefone real** na WABA (pode ser um número Twilio, VoIP ou fixo — não precisa ser celular)
-3. **Criar o template `intripauth`** do tipo Authentication em pt_BR com os componentes descritos acima
-4. **Obter um token de acesso permanente** (System User token) para não precisar gerar novo token a cada 24h
-5. **Atualizar o `backend/.env`** com:
-   ```env
-   WHATSAPP_PHONE_NUMBER_ID=<id_do_numero_real>
-   WHATSAPP_ACCESS_TOKEN=<system_user_token_permanente>
-   WHATSAPP_TEMPLATE_NAME=intripauth
-   WHATSAPP_TEMPLATE_LANGUAGE=pt_BR
-   JWT_SECRET=<string_aleatoria_forte_minimo_32_chars>
-   ```
-
-### Restrições e requisitos
-
-- O access token **não deve ser commitado** no git — só fica no `.env` local (já está no `.gitignore`)
-- O número de telefone do WhatsApp Business não precisa ser o mesmo usado para receber OTPs — é o número remetente
-- O template `intripauth` precisa ser aprovado pela Meta antes de poder ser usado — templates Authentication costumam ser aprovados automaticamente ou muito rápido
-- O público alvo são viajantes brasileiros, então pt_BR é o idioma correto
-- Volume esperado: 50 a 200 usuários por mês — dentro do free tier de 1.000 conversas/mês da Meta
-
-### Variáveis no código que precisam ser atualizadas
-
-Todas essas variáveis são lidas de `backend/.env` via `backend/app/core/config.py`:
-
-| Variável | Situação atual | O que deve ser |
-|---|---|---|
-| `WHATSAPP_PHONE_NUMBER_ID` | `1085386851333264` (sandbox) | ID do número real aprovado |
-| `WHATSAPP_ACCESS_TOKEN` | token temporário 24h | System User token permanente |
-| `WHATSAPP_TEMPLATE_NAME` | `jaspers_market_order_confirmation_v1` | `intripauth` |
-| `WHATSAPP_TEMPLATE_LANGUAGE` | `en_US` | `pt_BR` |
-| `JWT_SECRET` | placeholder | string aleatória forte (mín. 32 chars) |
+### Frontend — telas existentes
+- `LoginScreen` — login WhatsApp OTP
+- `HomeScreen` — mapa da jornada do viajante (dados mockados, não conectado ao backend)
+- `PhaseDetails` — detalhes de uma fase pré-viagem (parcialmente conectado)
+- `DayDetails` — detalhes de um dia in-trip (mockado)
+- `ProfileScreen` — perfil do viajante (conectado ao backend)
+- `StaffScreen` — tela operacional do staff (mockada, estrutura visual pronta)
 
 ---
 
-## Arquivos relevantes do projeto
+## Dev auto-login (para desenvolver sem passar pelo OTP)
 
-- `backend/app/services/auth_service.py` — lógica de envio WhatsApp e geração de JWT
-- `backend/app/core/config.py` — leitura de variáveis de ambiente
-- `backend/.env` — credenciais locais (não commitado)
-- `PRODUCT_AND_SYSTEM_DESIGN/04-teste-e2e-whatsapp-otp-jwt.md` — registro do teste E2E validado
-- `PRODUCT_AND_SYSTEM_DESIGN/03-autenticacao-opcoes.md` — análise das opções de autenticação e custos
+Descomente no `frontend/.env`:
+```env
+VITE_DEV_AUTO_LOGIN=true
+VITE_DEV_USER_ID=00000000-0000-0000-0000-000000000001
+VITE_DEV_USER_PHONE=+5500000000000
+VITE_DEV_USER_NAME=Viajante Teste
+VITE_DEV_USER_ROLE=traveler
+```
+Troque `VITE_DEV_USER_ROLE=traveler` por `staff` para ver a tela do staff.
+
+---
+
+## Como rodar localmente
+
+```bash
+# Backend
+cd backend && make dev           # uvicorn na porta 8000
+
+# Frontend
+cd frontend && npm run dev       # vite na porta 5173
+
+# Teste E2E de autenticação
+cd backend && make e2e PHONE=+5512991296651
+```
+
+---
+
+## Próximos passos (ordem sugerida)
+
+### 1. Conectar HomeScreen ao backend (RF02 + RF03)
+A tela do viajante (`HomeScreen`) ainda usa dados mockados em `frontend/src/features/trip/data/tripData.ts`. Precisa:
+- Criar endpoint no backend: `GET /trip/active?user_id=...` → retorna a viagem ativa do viajante
+- Criar endpoint: `GET /trip/{trip_id}/phases` → retorna as fases/dias com progresso do viajante
+- Conectar o frontend a esses endpoints
+
+### 2. Conectar StaffScreen ao backend
+A tela do staff também usa dados mockados. Precisa:
+- Criar endpoint: `GET /staff/trip/{trip_id}/tasks` → retorna as tarefas por dia
+- Conectar `StaffScreen` a esse endpoint
+
+### 3. Adicionar dados de viagem no banco
+Hoje o banco tem as tabelas mas sem dados reais. Precisa inserir:
+- Uma trip de exemplo no Supabase
+- Vincular Marcelo e Vitor como `trip_staff` nessa trip
+- Inserir algumas `staff_tasks` para ver a tela do staff com dados reais
+
+### 4. Deploy
+- Backend: Railway, Render ou Fly.io
+- Frontend: Vercel ou Netlify
+- Atualizar `VITE_API_URL` no frontend para a URL de produção
+
+---
+
+## Arquivos relevantes
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `backend/app/services/auth_service.py` | OTP, JWT, autorização por phone |
+| `backend/app/core/config.py` | Variáveis de ambiente |
+| `backend/app/db/models/user.py` | Model User com campo role |
+| `backend/app/db/models/staff.py` | Models TripStaff e StaffTask |
+| `backend/app/db/models/trip.py` | Models Trip, TripTraveler, TripPhase, etc |
+| `backend/alembic/versions/` | Migrations do banco |
+| `frontend/src/app/App.tsx` | Roteamento por role |
+| `frontend/src/app/providers/auth-context.ts` | Tipo AuthUser com role |
+| `frontend/src/features/staff/pages/StaffScreen.tsx` | Tela staff (mockada) |
+| `frontend/src/features/trip/pages/HomeScreen.tsx` | Tela viajante (mockada) |
+| `frontend/src/features/trip/data/tripData.ts` | Dados mockados da viagem |
+| `backend/.env` | Credenciais locais (não commitado) |
+| `frontend/.env` | Config frontend + dev auto-login |

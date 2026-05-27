@@ -5,7 +5,6 @@ import HomeScreen from '../features/trip/pages/HomeScreen';
 import ProfileScreen from '../features/profile/pages/ProfileScreen';
 import PhaseDetails from '../features/trip/pages/PhaseDetails';
 import BottomNav from '../shared/components/BottomNav';
-
 export default function AppRouter() {
   return (
     <BrowserRouter>

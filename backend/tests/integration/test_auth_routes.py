@@ -1,8 +1,8 @@
 from uuid import UUID
 
 
-def test_request_otp_route_returns_debug_code(client):
-    response = client.post("/auth/request-otp", json={"phone": "+5511666666666"})
+def test_request_otp_route_returns_debug_code(seeded_client):
+    response = seeded_client.post("/auth/request-otp", json={"phone": "+5511666666666"})
 
     assert response.status_code == 200
     assert response.json()["message"] == (
@@ -11,9 +11,9 @@ def test_request_otp_route_returns_debug_code(client):
     assert len(response.json()["debug_code"]) == 6
 
 
-def test_verify_otp_route_creates_user_on_first_login(client):
-    otp_response = client.post("/auth/request-otp", json={"phone": "+5511555555555"})
-    verify_response = client.post(
+def test_verify_otp_route_creates_user_on_first_login(seeded_client):
+    otp_response = seeded_client.post("/auth/request-otp", json={"phone": "+5511555555555"})
+    verify_response = seeded_client.post(
         "/auth/verify-otp",
         json={
             "phone": "+5511555555555",

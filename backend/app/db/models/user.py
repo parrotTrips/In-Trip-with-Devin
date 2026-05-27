@@ -15,3 +15,4 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     full_name: Mapped[str | None] = mapped_column(Text)
     email: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False, server_default="traveler")
