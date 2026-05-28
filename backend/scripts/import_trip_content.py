@@ -86,6 +86,98 @@ def read_tab(sheets_svc, sheet_id: str, tab_name: str) -> list[list[str]]:
     return resp.get("values", [])
 
 
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
+
+@dataclass
+class TripConfig:
+    trip_uuid: str
+    trip_title: str
+    start_date: str  # YYYY-MM-DD string — used to compute starts_at for days
+
+
+@dataclass
+class ChecklistItem:
+    label: str
+    is_required: bool
+    sort_order: int
+
+
+@dataclass
+class PhaseLink:
+    label: str
+    url: str
+    sort_order: int
+
+
+@dataclass
+class PreTripPhase:
+    fase: str           # visa | vaccination | packing | documents
+    title: str
+    subtitle: str
+    icon: str
+    short_description: str
+    detailed_description: str
+    checklist: list[ChecklistItem] = field(default_factory=list)
+    links: list[PhaseLink] = field(default_factory=list)
+
+
+@dataclass
+class Activity:
+    name: str
+    activity_type: str   # included | optional | suggested | logistics
+    horario: str         # raw string e.g. "10:00" — stored in short_description context
+    duration_minutes: int | None
+    short_description: str
+    practical_info: str
+    amount_brl: float | None
+    sort_order: int
+
+
+@dataclass
+class InTripDay:
+    dia: int             # day number (1-based)
+    data: str            # YYYY-MM-DD
+    title: str
+    subtitle: str
+    icon: str
+    short_description: str
+    detailed_description: str
+    activities: list[Activity] = field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Parsers
+# ---------------------------------------------------------------------------
+
+def parse_config_tab(rows: list[list[str]]) -> TripConfig:
+    """Parse Config tab rows into TripConfig. First row is header."""
+    data: dict[str, str] = {}
+    for row in rows[1:]:  # skip header
+        if len(row) >= 2:
+            data[row[0].strip()] = row[1].strip()
+    if not data.get("trip_uuid"):
+        raise ValueError("Config tab is missing required key: trip_uuid")
+    return TripConfig(
+        trip_uuid=data["trip_uuid"],
+        trip_title=data.get("trip_title", ""),
+        start_date=data.get("start_date", ""),
+    )
+
+
+def parse_pre_trip_tab(rows: list[list[str]]) -> list[PreTripPhase]:
+    """Parse PreTrip tab rows into list of PreTripPhase. Implementation in Task 3."""
+    # TODO: Task 3 implementation
+    raise NotImplementedError("parse_pre_trip_tab to be implemented in Task 3")
+
+
+def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
+    """Parse Roteiro (itinerary) tab rows into list of InTripDay. Implementation in Task 4."""
+    # TODO: Task 4 implementation
+    raise NotImplementedError("parse_roteiro_tab to be implemented in Task 4")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Import trip content from a Google Sheets spreadsheet into Supabase"
