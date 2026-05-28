@@ -425,6 +425,45 @@ async def write_to_db(
                 )
 
 
+async def main(sheet_id: str) -> None:
+    print("Connecting to Google Sheets...")
+    sheets_svc = build_sheets_client()
+
+    print("Reading Config tab...")
+    config_rows = read_tab(sheets_svc, sheet_id, "Config")
+    config = parse_config_tab(config_rows)
+    print(f"  trip_uuid : {config.trip_uuid}")
+    print(f"  trip_title: {config.trip_title}")
+    print(f"  start_date: {config.start_date}")
+
+    print("Reading Pre-Trip tab...")
+    pre_trip_rows = read_tab(sheets_svc, sheet_id, "Pre-Trip")
+    pre_trip_phases = parse_pre_trip_tab(pre_trip_rows)
+    print(f"  {len(pre_trip_phases)} pre-trip phase(s): {[p.fase for p in pre_trip_phases]}")
+
+    print("Reading Roteiro tab...")
+    roteiro_rows = read_tab(sheets_svc, sheet_id, "Roteiro")
+    in_trip_days = parse_roteiro_tab(roteiro_rows)
+    total_activities = sum(len(d.activities) for d in in_trip_days)
+    print(f"  {len(in_trip_days)} day(s), {total_activities} activit(ies)")
+
+    print("\nConnecting to database...")
+    conn = await asyncpg.connect(PG_URL)
+    try:
+        await write_to_db(conn, config, pre_trip_phases, in_trip_days)
+    finally:
+        await conn.close()
+
+    total_checklist = sum(len(p.checklist) for p in pre_trip_phases)
+    total_links = sum(len(p.links) for p in pre_trip_phases)
+    print("\n✅ Import complete!")
+    print(f"   Pre-trip phases : {len(pre_trip_phases)}")
+    print(f"   Checklist items : {total_checklist}")
+    print(f"   Links           : {total_links}")
+    print(f"   In-trip days    : {len(in_trip_days)}")
+    print(f"   Activities      : {total_activities}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Import trip content from a Google Sheets spreadsheet into Supabase"
@@ -435,4 +474,4 @@ if __name__ == "__main__":
         help="Google Sheets spreadsheet ID (from the URL: /spreadsheets/d/<ID>/edit)",
     )
     args = parser.parse_args()
-    print(f"Sheet ID: {args.sheet_id} (implementation coming in later tasks)")
+    asyncio.run(main(args.sheet_id))
