@@ -167,9 +167,72 @@ def parse_config_tab(rows: list[list[str]]) -> TripConfig:
 
 
 def parse_pre_trip_tab(rows: list[list[str]]) -> list[PreTripPhase]:
-    """Parse PreTrip tab rows into list of PreTripPhase. Implementation in Task 3."""
-    # TODO: Task 3 implementation
-    raise NotImplementedError("parse_pre_trip_tab to be implemented in Task 3")
+    """Parse Pre-Trip tab. Returns one PreTripPhase per distinct fase value."""
+    phases: dict[str, PreTripPhase] = {}
+    checklist_by_fase: dict[str, dict[int, dict[str, str]]] = {}
+    links_by_fase: dict[str, dict[int, dict[str, str]]] = {}
+
+    for row in rows[1:]:  # skip header
+        if len(row) < 5:
+            continue
+        fase, bloco, ordem_str, campo, valor = (row[i].strip() if i < len(row) else "" for i in range(5))
+        if not fase or not bloco or not campo:
+            continue
+
+        try:
+            ordem = int(ordem_str)
+        except ValueError:
+            continue
+
+        if bloco == "header":
+            if fase not in phases:
+                phases[fase] = PreTripPhase(
+                    fase=fase, title="", subtitle="", icon="",
+                    short_description="", detailed_description="",
+                )
+            p = phases[fase]
+            if campo == "title":
+                p.title = valor
+            elif campo == "subtitle":
+                p.subtitle = valor
+            elif campo == "icon":
+                p.icon = valor
+            elif campo == "short_description":
+                p.short_description = valor
+            elif campo == "detailed_description":
+                p.detailed_description = valor
+
+        elif bloco == "checklist":
+            if fase not in checklist_by_fase:
+                checklist_by_fase[fase] = {}
+            if ordem not in checklist_by_fase[fase]:
+                checklist_by_fase[fase][ordem] = {}
+            checklist_by_fase[fase][ordem][campo] = valor
+
+        elif bloco == "link":
+            if fase not in links_by_fase:
+                links_by_fase[fase] = {}
+            if ordem not in links_by_fase[fase]:
+                links_by_fase[fase][ordem] = {}
+            links_by_fase[fase][ordem][campo] = valor
+
+    # Assemble checklist and links into phases
+    for fase, phase in phases.items():
+        for sort_order, fields in sorted(checklist_by_fase.get(fase, {}).items()):
+            label = fields.get("label", "")
+            if not label:
+                continue
+            is_required = fields.get("is_required", "false").lower() == "true"
+            phase.checklist.append(ChecklistItem(label=label, is_required=is_required, sort_order=sort_order - 1))
+
+        for sort_order, fields in sorted(links_by_fase.get(fase, {}).items()):
+            label = fields.get("label", "")
+            url = fields.get("url", "")
+            if not label or not url:
+                continue
+            phase.links.append(PhaseLink(label=label, url=url, sort_order=sort_order - 1))
+
+    return list(phases.values())
 
 
 def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
