@@ -31,6 +31,8 @@ from googleapiclient.discovery import build
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
+    # drive scope needed to list all files in folder (idempotency) and move created sheets into folder.
+    # Restrict access by sharing the target folder only with this service account.
     "https://www.googleapis.com/auth/drive",
 ]
 
@@ -357,6 +359,7 @@ async def main(folder_id: str) -> None:
 
     created = 0
     skipped = 0
+    failed = 0
     urls = []
 
     for trip in trips:
@@ -367,15 +370,28 @@ async def main(folder_id: str) -> None:
             continue
 
         print(f"  ✅ Creating: {name}...")
-        spreadsheet_id = create_spreadsheet(sheets_svc, drive_svc, folder_id, name)
-        populate_config_tab(sheets_svc, spreadsheet_id, trip)
-        add_pre_trip_tab(sheets_svc, spreadsheet_id)
-        add_roteiro_tab(sheets_svc, spreadsheet_id)
-        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
-        urls.append((name, url))
-        created += 1
+        spreadsheet_id = None
+        try:
+            spreadsheet_id = create_spreadsheet(sheets_svc, drive_svc, folder_id, name)
+            populate_config_tab(sheets_svc, spreadsheet_id, trip)
+            add_pre_trip_tab(sheets_svc, spreadsheet_id)
+            add_roteiro_tab(sheets_svc, spreadsheet_id)
+            url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+            urls.append((name, url))
+            created += 1
+        except Exception as exc:
+            print(f"  ❌ Failed: {name} — {exc}")
+            if spreadsheet_id:
+                print(f"     Attempting to delete partially-created spreadsheet {spreadsheet_id}...")
+                try:
+                    drive_svc.files().delete(fileId=spreadsheet_id).execute()
+                    print("     Deleted. Re-run the script to retry this trip.")
+                except Exception:
+                    print(f"     Could not delete. Manually delete it from Google Drive before re-running:")
+                    print(f"     https://docs.google.com/spreadsheets/d/{spreadsheet_id}")
+            failed += 1
 
-    print(f"\nDone: {created} created, {skipped} skipped")
+    print(f"\nDone: {created} created, {skipped} skipped, {failed} failed")
     for name, url in urls:
         print(f"  {name}\n    {url}")
 
