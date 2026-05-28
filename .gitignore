@@ -9,6 +9,9 @@ frontend/dist/
 frontend/.env
 backend/.env
 
+# GCP service account key (never commit)
+backend/secrets/
+
 # Dev user switcher config (gerado pelo seed script, contém tokens JWT)
 frontend/src/config/devUsers.ts
 
