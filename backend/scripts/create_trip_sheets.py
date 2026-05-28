@@ -6,14 +6,19 @@ Each spreadsheet has three tabs:
   - Pre-Trip  : pre-trip phases template (visa, vaccination, packing, documents)
   - Roteiro   : day-by-day itinerary template
 
-Usage:
+Usage (recommended — your own Google account):
+  gcloud auth application-default login
+  cd backend
+  poetry run python scripts/create_trip_sheets.py --folder-id <GOOGLE_DRIVE_FOLDER_ID> --use-adc
+
+Usage (service account):
   cd backend
   poetry run python scripts/create_trip_sheets.py --folder-id <GOOGLE_DRIVE_FOLDER_ID>
 
 Prerequisites:
-  - GCP_SERVICE_ACCOUNT_JSON set in backend/.env (path to service account key)
-  - Service account must have Editor access to the target Google Drive folder
   - Google Sheets API and Google Drive API must be enabled in the GCP project
+  - For --use-adc: run `gcloud auth application-default login` first
+  - For service account: GCP_SERVICE_ACCOUNT_JSON set in backend/.env
 """
 
 from __future__ import annotations
@@ -21,12 +26,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import time
 import sys
 from pathlib import Path
 
 import asyncpg
 from dotenv import load_dotenv
 from google.oauth2 import service_account
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 SCOPES = [
@@ -156,11 +165,40 @@ async def fetch_trips(conn: asyncpg.Connection) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def build_clients(sa_path: Path):
-    """Return (sheets_service, drive_service) authenticated with the service account."""
-    creds = service_account.Credentials.from_service_account_file(
-        str(sa_path), scopes=SCOPES
-    )
+_TOKEN_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-token.json"
+_OAUTH2_CREDS_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-credentials.json"
+
+
+def _get_oauth2_credentials() -> Credentials:
+    """Return OAuth2 credentials, refreshing or prompting as needed."""
+    creds: Credentials | None = None
+    if _TOKEN_FILE.exists():
+        creds = Credentials.from_authorized_user_file(str(_TOKEN_FILE), SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            if not _OAUTH2_CREDS_FILE.exists():
+                print(f"ERROR: OAuth2 credentials file not found: {_OAUTH2_CREDS_FILE}")
+                print("Download it from GCP Console → APIs & Services → Credentials → OAuth 2.0 Client ID → Download JSON")
+                sys.exit(1)
+            flow = InstalledAppFlow.from_client_secrets_file(str(_OAUTH2_CREDS_FILE), SCOPES)
+            creds = flow.run_local_server(port=0)
+        _TOKEN_FILE.write_text(creds.to_json())
+    return creds
+
+
+def build_clients(sa_path: Path | None):
+    """Return (sheets_service, drive_service).
+
+    If sa_path is None, use OAuth2 user credentials (your own Google account).
+    """
+    if sa_path is None:
+        creds = _get_oauth2_credentials()
+    else:
+        creds = service_account.Credentials.from_service_account_file(
+            str(sa_path), scopes=SCOPES
+        )
     sheets = build("sheets", "v4", credentials=creds)
     drive = build("drive", "v3", credentials=creds)
     return sheets, drive
@@ -177,6 +215,8 @@ def list_existing_names(drive, folder_id: str) -> set[str]:
                 q=f"'{folder_id}' in parents and trashed = false",
                 fields="nextPageToken, files(name)",
                 pageToken=page_token,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
             )
             .execute()
         )
@@ -190,7 +230,11 @@ def list_existing_names(drive, folder_id: str) -> set[str]:
 
 def _sheet_name(trip: dict) -> str:
     """Canonical spreadsheet name for a trip."""
-    date_str = trip["start_date"].strftime("%Y-%m-%d") if trip["start_date"] else "0000-00-00"
+    sd = trip["start_date"]
+    if sd:
+        date_str = sd.strftime("%Y-%m-%d") if hasattr(sd, "strftime") else str(sd)[:10]
+    else:
+        date_str = "0000-00-00"
     title = (trip["title"] or "Unnamed Trip")[:50]
     return f"{date_str} {trip['trip_uuid']} — {title}"
 
@@ -201,14 +245,17 @@ def create_spreadsheet(sheets_svc, drive_svc, folder_id: str, name: str) -> str:
     resp = sheets_svc.spreadsheets().create(body=body, fields="spreadsheetId").execute()
     spreadsheet_id = resp["spreadsheetId"]
 
-    # Move from root ("My Drive") to target folder
-    file_meta = drive_svc.files().get(fileId=spreadsheet_id, fields="parents").execute()
+    # Move from root ("My Drive") to target folder (supportsAllDrives for Shared Drive targets)
+    file_meta = drive_svc.files().get(
+        fileId=spreadsheet_id, fields="parents", supportsAllDrives=True
+    ).execute()
     previous_parents = ",".join(file_meta.get("parents", []))
     drive_svc.files().update(
         fileId=spreadsheet_id,
         addParents=folder_id,
         removeParents=previous_parents,
         fields="id, parents",
+        supportsAllDrives=True,
     ).execute()
 
     return spreadsheet_id
@@ -216,8 +263,9 @@ def create_spreadsheet(sheets_svc, drive_svc, folder_id: str, name: str) -> str:
 
 def populate_config_tab(sheets_svc, spreadsheet_id: str, trip: dict) -> None:
     """Fill the first (default) sheet with Config data and rename it to 'Config'."""
-    start_date = trip["start_date"].strftime("%Y-%m-%d") if trip["start_date"] else ""
-    end_date = trip["end_date"].strftime("%Y-%m-%d") if trip["end_date"] else ""
+    sd, ed = trip["start_date"], trip["end_date"]
+    start_date = (sd.strftime("%Y-%m-%d") if hasattr(sd, "strftime") else str(sd)[:10]) if sd else ""
+    end_date = (ed.strftime("%Y-%m-%d") if hasattr(ed, "strftime") else str(ed)[:10]) if ed else ""
 
     # Rename sheet 1 to "Config"
     first_sheet_id = _get_first_sheet_id(sheets_svc, spreadsheet_id)
@@ -329,15 +377,20 @@ def add_roteiro_tab(sheets_svc, spreadsheet_id: str) -> None:
     _apply_header_formatting(sheets_svc, spreadsheet_id, sheet_id, num_cols=len(ROTEIRO_HEADER))
 
 
-async def main(folder_id: str) -> None:
-    if not GCP_SERVICE_ACCOUNT_JSON:
-        print("ERROR: GCP_SERVICE_ACCOUNT_JSON is not set in backend/.env")
-        sys.exit(1)
-
-    sa_path = Path(__file__).parent.parent / GCP_SERVICE_ACCOUNT_JSON
-    if not sa_path.exists():
-        print(f"ERROR: Service account file not found: {sa_path}")
-        sys.exit(1)
+async def main(folder_id: str, use_adc: bool) -> None:
+    sa_path: Path | None
+    if use_adc:
+        sa_path = None
+        print("Using Application Default Credentials (your Google account).")
+    else:
+        if not GCP_SERVICE_ACCOUNT_JSON:
+            print("ERROR: GCP_SERVICE_ACCOUNT_JSON is not set in backend/.env")
+            print("Tip: run with --use-adc to use your own Google account instead.")
+            sys.exit(1)
+        sa_path = Path(__file__).parent.parent / GCP_SERVICE_ACCOUNT_JSON
+        if not sa_path.exists():
+            print(f"ERROR: Service account file not found: {sa_path}")
+            sys.exit(1)
 
     print("Connecting to database...")
     conn = await asyncpg.connect(PG_URL)
@@ -379,12 +432,13 @@ async def main(folder_id: str) -> None:
             url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
             urls.append((name, url))
             created += 1
+            time.sleep(12)  # stay well under 60 writes/min quota (each trip ~5 write calls)
         except Exception as exc:
             print(f"  ❌ Failed: {name} — {exc}")
             if spreadsheet_id:
                 print(f"     Attempting to delete partially-created spreadsheet {spreadsheet_id}...")
                 try:
-                    drive_svc.files().delete(fileId=spreadsheet_id).execute()
+                    drive_svc.files().delete(fileId=spreadsheet_id, supportsAllDrives=True).execute()
                     print("     Deleted. Re-run the script to retry this trip.")
                 except Exception:
                     print(f"     Could not delete. Manually delete it from Google Drive before re-running:")
@@ -399,5 +453,11 @@ async def main(folder_id: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create trip content spreadsheets in Google Drive")
     parser.add_argument("--folder-id", required=True, help="Google Drive folder ID")
+    parser.add_argument(
+        "--use-adc",
+        action="store_true",
+        help="Use Application Default Credentials (your own Google account) instead of service account. "
+             "Run `gcloud auth application-default login` first.",
+    )
     args = parser.parse_args()
-    asyncio.run(main(args.folder_id))
+    asyncio.run(main(args.folder_id, use_adc=args.use_adc))
