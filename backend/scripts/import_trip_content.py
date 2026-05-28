@@ -307,6 +307,124 @@ def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
     return list(days.values())
 
 
+async def write_to_db(
+    conn: asyncpg.Connection,
+    config: TripConfig,
+    pre_trip_phases: list[PreTripPhase],
+    in_trip_days: list[InTripDay],
+) -> None:
+    """Delete all existing phase data for the trip and insert fresh rows. Runs in a transaction."""
+    trip_uuid = config.trip_uuid
+
+    async with conn.transaction():
+        # 1. Delete traveler progress that references checklist items and phases for this trip
+        phase_ids = await conn.fetch(
+            "SELECT id FROM trip_phases WHERE wetravel_trip_uuid = $1", trip_uuid
+        )
+        if phase_ids:
+            ids = [str(r["id"]) for r in phase_ids]
+            traveler_rows = await conn.fetch(
+                "SELECT id FROM trip_travelers WHERE wetravel_trip_uuid = $1", trip_uuid
+            )
+            if traveler_rows:
+                tt_ids = [str(r["id"]) for r in traveler_rows]
+                await conn.execute(
+                    "DELETE FROM traveler_checklist_progress WHERE trip_traveler_id = ANY($1::uuid[])",
+                    tt_ids,
+                )
+                await conn.execute(
+                    "DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[])",
+                    tt_ids,
+                )
+            await conn.execute(
+                "DELETE FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", ids
+            )
+            await conn.execute(
+                "DELETE FROM trip_phase_checklist_items WHERE trip_phase_id = ANY($1::uuid[])", ids
+            )
+            await conn.execute(
+                "DELETE FROM trip_phase_links WHERE trip_phase_id = ANY($1::uuid[])", ids
+            )
+            await conn.execute(
+                "DELETE FROM trip_phases WHERE wetravel_trip_uuid = $1", trip_uuid
+            )
+
+        # 2. Insert pre-trip phases
+        FIXED_PHASE_ORDER = ["visa", "vaccination", "packing", "documents"]
+        phase_map = {p.fase: p for p in pre_trip_phases}
+        sort_order = 0
+        for fase_key in FIXED_PHASE_ORDER:
+            phase = phase_map.get(fase_key)
+            if not phase:
+                continue
+            phase_id = str(uuid.uuid4())
+            await conn.execute(
+                """
+                INSERT INTO trip_phases
+                    (id, wetravel_trip_uuid, phase_type, title, subtitle, icon,
+                     short_description, detailed_description, sort_order,
+                     is_locked_by_default, is_visible, created_at, updated_at)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())
+                """,
+                phase_id, trip_uuid, "pre-trip", phase.title, phase.subtitle,
+                phase.icon, phase.short_description, phase.detailed_description,
+                sort_order, False, True,
+            )
+            sort_order += 1
+            for item in phase.checklist:
+                await conn.execute(
+                    """
+                    INSERT INTO trip_phase_checklist_items
+                        (id, trip_phase_id, label, sort_order, is_required, created_at, updated_at)
+                    VALUES ($1,$2,$3,$4,$5,now(),now())
+                    """,
+                    str(uuid.uuid4()), phase_id, item.label, item.sort_order, item.is_required,
+                )
+            for link in phase.links:
+                await conn.execute(
+                    """
+                    INSERT INTO trip_phase_links
+                        (id, trip_phase_id, label, url, sort_order, created_at, updated_at)
+                    VALUES ($1,$2,$3,$4,$5,now(),now())
+                    """,
+                    str(uuid.uuid4()), phase_id, link.label, link.url, link.sort_order,
+                )
+
+        # 3. Insert in-trip days
+        for day in in_trip_days:
+            phase_id = str(uuid.uuid4())
+            try:
+                starts_at = datetime.strptime(day.data, "%Y-%m-%d").replace(tzinfo=UTC)
+            except ValueError:
+                starts_at = None
+            await conn.execute(
+                """
+                INSERT INTO trip_phases
+                    (id, wetravel_trip_uuid, phase_type, title, subtitle, icon,
+                     short_description, detailed_description, sort_order,
+                     starts_at, is_locked_by_default, is_visible, created_at, updated_at)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),now())
+                """,
+                phase_id, trip_uuid, "in-trip", day.title, day.subtitle,
+                day.icon, day.short_description, day.detailed_description,
+                sort_order, starts_at, False, True,
+            )
+            sort_order += 1
+            for act in day.activities:
+                await conn.execute(
+                    """
+                    INSERT INTO trip_activities
+                        (id, trip_phase_id, name, activity_type,
+                         duration_minutes, short_description, practical_info,
+                         amount_brl, sort_order, created_at, updated_at)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())
+                    """,
+                    str(uuid.uuid4()), phase_id, act.name, act.activity_type,
+                    act.duration_minutes, act.short_description,
+                    act.practical_info or None, act.amount_brl, act.sort_order,
+                )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Import trip content from a Google Sheets spreadsheet into Supabase"
