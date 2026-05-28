@@ -96,6 +96,100 @@ def _sheet_name(trip: dict) -> str:
     return f"{date_str} {trip['trip_uuid']} — {title}"
 
 
+def create_spreadsheet(sheets_svc, drive_svc, folder_id: str, name: str) -> str:
+    """Create an empty spreadsheet with the given name, move it to folder_id, return its ID."""
+    body = {"properties": {"title": name}}
+    resp = sheets_svc.spreadsheets().create(body=body, fields="spreadsheetId").execute()
+    spreadsheet_id = resp["spreadsheetId"]
+
+    # Move from root ("My Drive") to target folder
+    file_meta = drive_svc.files().get(fileId=spreadsheet_id, fields="parents").execute()
+    previous_parents = ",".join(file_meta.get("parents", []))
+    drive_svc.files().update(
+        fileId=spreadsheet_id,
+        addParents=folder_id,
+        removeParents=previous_parents,
+        fields="id, parents",
+    ).execute()
+
+    return spreadsheet_id
+
+
+def populate_config_tab(sheets_svc, spreadsheet_id: str, trip: dict) -> None:
+    """Fill the first (default) sheet with Config data and rename it to 'Config'."""
+    start_date = trip["start_date"].strftime("%Y-%m-%d") if trip["start_date"] else ""
+    end_date = trip["end_date"].strftime("%Y-%m-%d") if trip["end_date"] else ""
+
+    # Rename sheet 1 to "Config"
+    first_sheet_id = _get_first_sheet_id(sheets_svc, spreadsheet_id)
+    requests = [
+        {
+            "updateSheetProperties": {
+                "properties": {"sheetId": first_sheet_id, "title": "Config"},
+                "fields": "title",
+            }
+        }
+    ]
+    sheets_svc.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id, body={"requests": requests}
+    ).execute()
+
+    # Write header row + data rows
+    values = [
+        ["chave", "valor"],
+        ["trip_uuid", trip["trip_uuid"]],
+        ["trip_title", trip["title"] or ""],
+        ["start_date", start_date],
+        ["end_date", end_date],
+    ]
+    sheets_svc.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range="Config!A1",
+        valueInputOption="RAW",
+        body={"values": values},
+    ).execute()
+
+    # Bold the header row and freeze it
+    _apply_header_formatting(sheets_svc, spreadsheet_id, first_sheet_id, num_cols=2)
+
+
+def _get_first_sheet_id(sheets_svc, spreadsheet_id: str) -> int:
+    """Return the sheetId of the first sheet."""
+    meta = sheets_svc.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    return meta["sheets"][0]["properties"]["sheetId"]
+
+
+def _apply_header_formatting(sheets_svc, spreadsheet_id: str, sheet_id: int, num_cols: int) -> None:
+    """Bold row 1 and freeze it for the given sheet."""
+    requests = [
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 0,
+                    "endRowIndex": 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": num_cols,
+                },
+                "cell": {"userEnteredFormat": {"textFormat": {"bold": True}}},
+                "fields": "userEnteredFormat.textFormat.bold",
+            }
+        },
+        {
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": sheet_id,
+                    "gridProperties": {"frozenRowCount": 1},
+                },
+                "fields": "gridProperties.frozenRowCount",
+            }
+        },
+    ]
+    sheets_svc.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id, body={"requests": requests}
+    ).execute()
+
+
 async def main(folder_id: str) -> None:
     if not GCP_SERVICE_ACCOUNT_JSON:
         print("ERROR: GCP_SERVICE_ACCOUNT_JSON is not set in backend/.env")
@@ -124,8 +218,27 @@ async def main(folder_id: str) -> None:
     existing_names = list_existing_names(drive_svc, folder_id)
     print(f"  Found {len(existing_names)} existing file(s)")
 
-    # Spreadsheet creation comes in Task 4
-    print("\n(Spreadsheet creation not yet implemented)")
+    created = 0
+    skipped = 0
+    urls = []
+
+    for trip in trips:
+        name = _sheet_name(trip)
+        if name in existing_names:
+            print(f"  ⏭  Skipped (already exists): {name}")
+            skipped += 1
+            continue
+
+        print(f"  ✅ Creating: {name}...")
+        spreadsheet_id = create_spreadsheet(sheets_svc, drive_svc, folder_id, name)
+        populate_config_tab(sheets_svc, spreadsheet_id, trip)
+        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+        urls.append((name, url))
+        created += 1
+
+    print(f"\nDone: {created} created, {skipped} skipped")
+    for name, url in urls:
+        print(f"  {name}\n    {url}")
 
 
 if __name__ == "__main__":
