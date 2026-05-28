@@ -34,6 +34,67 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+PRE_TRIP_HEADER = ["fase", "bloco", "ordem", "campo", "valor"]
+
+PRE_TRIP_EXAMPLE_ROWS: list[list[str]] = [
+    # visa — header
+    ["visa", "header", "1", "title", "Visto"],
+    ["visa", "header", "1", "subtitle", "Requisitos de entrada para o Brasil"],
+    ["visa", "header", "1", "icon", "passport"],
+    ["visa", "header", "1", "short_description", "Verifique os requisitos de visto para sua nacionalidade."],
+    ["visa", "header", "1", "detailed_description", "Cidadãos americanos precisam de eVisa para o Brasil. Solicite com antecedência."],
+    # visa — checklist
+    ["visa", "checklist", "1", "label", "Verificar se sua nacionalidade requer visto"],
+    ["visa", "checklist", "1", "is_required", "true"],
+    ["visa", "checklist", "2", "label", "Solicitar eVisa no portal oficial (se aplicável)"],
+    ["visa", "checklist", "2", "is_required", "true"],
+    # visa — links
+    ["visa", "link", "1", "label", "Portal eVisa Brasil"],
+    ["visa", "link", "1", "url", "https://www.gov.br/mre/pt-br/assuntos/portal-consular/vistos"],
+    # vaccination — header
+    ["vaccination", "header", "1", "title", "Vacinas"],
+    ["vaccination", "header", "1", "subtitle", "Requisitos de saúde para viagem"],
+    ["vaccination", "header", "1", "icon", "syringe"],
+    ["vaccination", "header", "1", "short_description", "Vacinas obrigatórias e recomendadas para o Brasil."],
+    ["vaccination", "header", "1", "detailed_description", "Febre amarela é fortemente recomendada. Consulte o CDC para recomendações atualizadas."],
+    # vaccination — checklist
+    ["vaccination", "checklist", "1", "label", "Tomar vacina de febre amarela"],
+    ["vaccination", "checklist", "1", "is_required", "true"],
+    ["vaccination", "checklist", "2", "label", "Obter carteira de vacinação internacional"],
+    ["vaccination", "checklist", "2", "is_required", "false"],
+    # vaccination — links
+    ["vaccination", "link", "1", "label", "CDC — Brasil"],
+    ["vaccination", "link", "1", "url", "https://wwwnc.cdc.gov/travel/destinations/traveler/none/brazil"],
+    # packing — header
+    ["packing", "header", "1", "title", "Como Arrumar a Mala"],
+    ["packing", "header", "1", "subtitle", "O que levar na viagem"],
+    ["packing", "header", "1", "icon", "luggage"],
+    ["packing", "header", "1", "short_description", "Dicas de bagagem para o Brasil."],
+    ["packing", "header", "1", "detailed_description", "Climate quente e úmido. Leve roupas leves, protetor solar e adaptador de tomada (Tipo N)."],
+    # packing — checklist
+    ["packing", "checklist", "1", "label", "Roupas leves e respiráveis"],
+    ["packing", "checklist", "1", "is_required", "false"],
+    ["packing", "checklist", "2", "label", "Protetor solar FPS 50+"],
+    ["packing", "checklist", "2", "is_required", "false"],
+    # packing — links
+    ["packing", "link", "1", "label", "Guia de tomadas do Brasil"],
+    ["packing", "link", "1", "url", "https://www.power-plugs-sockets.com/brazil/"],
+    # documents — header
+    ["documents", "header", "1", "title", "Documentos"],
+    ["documents", "header", "1", "subtitle", "Documentos de viagem necessários"],
+    ["documents", "header", "1", "icon", "file-text"],
+    ["documents", "header", "1", "short_description", "Todos os documentos essenciais para a viagem."],
+    ["documents", "header", "1", "detailed_description", "Mantenha cópias digitais e impressas. Passaporte com validade de 6+ meses além da viagem."],
+    # documents — checklist
+    ["documents", "checklist", "1", "label", "Passaporte válido (6+ meses de validade)"],
+    ["documents", "checklist", "1", "is_required", "true"],
+    ["documents", "checklist", "2", "label", "Aprovação de visto impressa"],
+    ["documents", "checklist", "2", "is_required", "true"],
+    # documents — links
+    ["documents", "link", "1", "label", "Guia de seguro viagem"],
+    ["documents", "link", "1", "url", "https://www.gov.br/turismo/pt-br"],
+]
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 DATABASE_URL = os.environ.get(
@@ -190,6 +251,27 @@ def _apply_header_formatting(sheets_svc, spreadsheet_id: str, sheet_id: int, num
     ).execute()
 
 
+def add_pre_trip_tab(sheets_svc, spreadsheet_id: str) -> None:
+    """Add a 'Pre-Trip' sheet with headers and example rows."""
+    # Add the sheet
+    resp = sheets_svc.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": [{"addSheet": {"properties": {"title": "Pre-Trip"}}}]},
+    ).execute()
+    sheet_id = resp["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+    # Write header + example rows
+    values = [PRE_TRIP_HEADER] + PRE_TRIP_EXAMPLE_ROWS
+    sheets_svc.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range="Pre-Trip!A1",
+        valueInputOption="RAW",
+        body={"values": values},
+    ).execute()
+
+    _apply_header_formatting(sheets_svc, spreadsheet_id, sheet_id, num_cols=len(PRE_TRIP_HEADER))
+
+
 async def main(folder_id: str) -> None:
     if not GCP_SERVICE_ACCOUNT_JSON:
         print("ERROR: GCP_SERVICE_ACCOUNT_JSON is not set in backend/.env")
@@ -232,6 +314,7 @@ async def main(folder_id: str) -> None:
         print(f"  ✅ Creating: {name}...")
         spreadsheet_id = create_spreadsheet(sheets_svc, drive_svc, folder_id, name)
         populate_config_tab(sheets_svc, spreadsheet_id, trip)
+        add_pre_trip_tab(sheets_svc, spreadsheet_id)
         url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
         urls.append((name, url))
         created += 1
