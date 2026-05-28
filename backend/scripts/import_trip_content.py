@@ -235,10 +235,76 @@ def parse_pre_trip_tab(rows: list[list[str]]) -> list[PreTripPhase]:
     return list(phases.values())
 
 
+_ROTEIRO_COLS = [
+    "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon",
+    "dia_descricao_curta", "dia_descricao_completa",
+    "atividade_nome", "atividade_tipo", "atividade_horario",
+    "atividade_duracao_min", "atividade_descricao_curta",
+    "atividade_info_pratica", "atividade_preco_brl",
+]
+
+
+def _cell(row: list[str], col: str) -> str:
+    try:
+        idx = _ROTEIRO_COLS.index(col)
+        return row[idx].strip() if idx < len(row) else ""
+    except ValueError:
+        return ""
+
+
 def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
-    """Parse Roteiro (itinerary) tab rows into list of InTripDay. Implementation in Task 4."""
-    # TODO: Task 4 implementation
-    raise NotImplementedError("parse_roteiro_tab to be implemented in Task 4")
+    """Parse Roteiro tab. Returns one InTripDay per distinct dia value, preserving order."""
+    days: dict[int, InTripDay] = {}
+    activity_counters: dict[int, int] = {}
+
+    for row in rows[1:]:  # skip header
+        if len(row) < 8:
+            continue
+        dia_str = _cell(row, "dia")
+        if not dia_str.isdigit():
+            continue
+        dia = int(dia_str)
+
+        if dia not in days:
+            days[dia] = InTripDay(
+                dia=dia,
+                data=_cell(row, "data"),
+                title=_cell(row, "dia_titulo"),
+                subtitle=_cell(row, "dia_subtitulo"),
+                icon=_cell(row, "dia_icon"),
+                short_description=_cell(row, "dia_descricao_curta"),
+                detailed_description=_cell(row, "dia_descricao_completa"),
+            )
+            activity_counters[dia] = 0
+
+        atividade_nome = _cell(row, "atividade_nome")
+        if not atividade_nome:
+            continue
+
+        dur_str = _cell(row, "atividade_duracao_min")
+        duration_minutes: int | None = int(dur_str) if dur_str.isdigit() else None
+
+        preco_str = _cell(row, "atividade_preco_brl")
+        amount_brl: float | None = None
+        try:
+            if preco_str:
+                amount_brl = float(preco_str)
+        except ValueError:
+            pass
+
+        days[dia].activities.append(Activity(
+            name=atividade_nome,
+            activity_type=_cell(row, "atividade_tipo"),
+            horario=_cell(row, "atividade_horario"),
+            duration_minutes=duration_minutes,
+            short_description=_cell(row, "atividade_descricao_curta"),
+            practical_info=_cell(row, "atividade_info_pratica"),
+            amount_brl=amount_brl,
+            sort_order=activity_counters[dia],
+        ))
+        activity_counters[dia] += 1
+
+    return list(days.values())
 
 
 if __name__ == "__main__":

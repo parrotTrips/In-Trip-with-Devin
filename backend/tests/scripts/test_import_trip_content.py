@@ -85,3 +85,70 @@ def test_parse_pre_trip_tab_skips_empty_rows():
     phases = parse_pre_trip_tab(rows)
     assert len(phases) == 1
     assert phases[0].checklist == []
+
+
+def test_parse_roteiro_tab_basic():
+    rows = [
+        [
+            "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon",
+            "dia_descricao_curta", "dia_descricao_completa",
+            "atividade_nome", "atividade_tipo", "atividade_horario",
+            "atividade_duracao_min", "atividade_descricao_curta",
+            "atividade_info_pratica", "atividade_preco_brl",
+        ],
+        [
+            "1", "2026-12-26", "Day 1 — Dec 26", "Chegada", "plane-landing",
+            "Transfer e check-in", "Bem-vindos ao Rio!",
+            "Transfer do Aeroporto", "logistics", "14:00",
+            "120", "Recepção no aeroporto", "Procurar placa Parrot Trips", "",
+        ],
+        [
+            "1", "2026-12-26", "Day 1 — Dec 26", "Chegada", "plane-landing",
+            "Transfer e check-in", "Bem-vindos ao Rio!",
+            "Welcome Happy Hour", "included", "18:00",
+            "240", "Open bar na praia", "", "",
+        ],
+        [
+            "2", "2026-12-27", "Day 2 — Dec 27", "Passeio", "sun",
+            "Dia de praia", "Curta o Rio!",
+            "Praia de Ipanema", "suggested", "09:00",
+            "", "Aproveite a praia", "", "",
+        ],
+    ]
+    days = parse_roteiro_tab(rows)
+    assert len(days) == 2
+
+    day1 = days[0]
+    assert day1.dia == 1
+    assert day1.data == "2026-12-26"
+    assert day1.title == "Day 1 — Dec 26"
+    assert len(day1.activities) == 2
+    assert day1.activities[0].name == "Transfer do Aeroporto"
+    assert day1.activities[0].activity_type == "logistics"
+    assert day1.activities[0].duration_minutes == 120
+    assert day1.activities[1].name == "Welcome Happy Hour"
+
+    day2 = days[1]
+    assert day2.dia == 2
+    assert len(day2.activities) == 1
+    assert day2.activities[0].duration_minutes is None
+
+
+def test_parse_roteiro_tab_optional_price():
+    rows = [
+        [
+            "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon",
+            "dia_descricao_curta", "dia_descricao_completa",
+            "atividade_nome", "atividade_tipo", "atividade_horario",
+            "atividade_duracao_min", "atividade_descricao_curta",
+            "atividade_info_pratica", "atividade_preco_brl",
+        ],
+        [
+            "1", "2026-12-26", "Day 1", "", "sun",
+            "desc", "",
+            "Bike Tour", "optional", "09:00",
+            "180", "Tour de bicicleta", "", "150",
+        ],
+    ]
+    days = parse_roteiro_tab(rows)
+    assert days[0].activities[0].amount_brl == 150.0
