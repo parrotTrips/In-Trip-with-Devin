@@ -95,6 +95,42 @@ PRE_TRIP_EXAMPLE_ROWS: list[list[str]] = [
     ["documents", "link", "1", "url", "https://www.gov.br/turismo/pt-br"],
 ]
 
+ROTEIRO_HEADER = [
+    "dia",
+    "data",
+    "dia_titulo",
+    "dia_subtitulo",
+    "dia_icon",
+    "dia_descricao_curta",
+    "dia_descricao_completa",
+    "atividade_nome",
+    "atividade_tipo",
+    "atividade_horario",
+    "atividade_duracao_min",
+    "atividade_descricao_curta",
+    "atividade_info_pratica",
+    "atividade_preco_brl",
+]
+
+ROTEIRO_EXAMPLE_ROWS: list[list[str]] = [
+    [
+        "1",                                        # dia
+        "YYYY-MM-DD",                               # data
+        "Day 1 — Dec 26",                           # dia_titulo
+        "Chegada",                                  # dia_subtitulo
+        "plane-landing",                            # dia_icon
+        "Transfer do aeroporto e check-in no hotel",# dia_descricao_curta
+        "Bem-vindos! Você será recebido no aeroporto e levado ao hotel. À noite, Welcome Happy Hour.",  # dia_descricao_completa
+        "Transfer do Aeroporto",                    # atividade_nome
+        "logistics",                                # atividade_tipo (included/optional/suggested/logistics)
+        "",                                         # atividade_horario  (ex: 10:00)
+        "",                                         # atividade_duracao_min (ex: 120)
+        "Recepção no aeroporto conforme formulário de pré-viagem.",  # atividade_descricao_curta
+        "Procurar placa com o nome da Parrot Trips na área de desembarque.",  # atividade_info_pratica
+        "",                                         # atividade_preco_brl (só para opcional)
+    ],
+]
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 DATABASE_URL = os.environ.get(
@@ -272,6 +308,25 @@ def add_pre_trip_tab(sheets_svc, spreadsheet_id: str) -> None:
     _apply_header_formatting(sheets_svc, spreadsheet_id, sheet_id, num_cols=len(PRE_TRIP_HEADER))
 
 
+def add_roteiro_tab(sheets_svc, spreadsheet_id: str) -> None:
+    """Add a 'Roteiro' sheet with headers and one example row."""
+    resp = sheets_svc.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": [{"addSheet": {"properties": {"title": "Roteiro"}}}]},
+    ).execute()
+    sheet_id = resp["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+    values = [ROTEIRO_HEADER] + ROTEIRO_EXAMPLE_ROWS
+    sheets_svc.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range="Roteiro!A1",
+        valueInputOption="RAW",
+        body={"values": values},
+    ).execute()
+
+    _apply_header_formatting(sheets_svc, spreadsheet_id, sheet_id, num_cols=len(ROTEIRO_HEADER))
+
+
 async def main(folder_id: str) -> None:
     if not GCP_SERVICE_ACCOUNT_JSON:
         print("ERROR: GCP_SERVICE_ACCOUNT_JSON is not set in backend/.env")
@@ -315,6 +370,7 @@ async def main(folder_id: str) -> None:
         spreadsheet_id = create_spreadsheet(sheets_svc, drive_svc, folder_id, name)
         populate_config_tab(sheets_svc, spreadsheet_id, trip)
         add_pre_trip_tab(sheets_svc, spreadsheet_id)
+        add_roteiro_tab(sheets_svc, spreadsheet_id)
         url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
         urls.append((name, url))
         created += 1
