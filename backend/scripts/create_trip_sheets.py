@@ -26,6 +26,13 @@ from pathlib import Path
 
 import asyncpg
 from dotenv import load_dotenv
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
@@ -48,6 +55,38 @@ async def fetch_trips(conn: asyncpg.Connection) -> list[dict]:
         "SELECT trip_uuid, title, start_date, end_date FROM wetravel_trips ORDER BY start_date NULLS LAST"
     )
     return [dict(r) for r in rows]
+
+
+def build_clients(sa_path: Path):
+    """Return (sheets_service, drive_service) authenticated with the service account."""
+    creds = service_account.Credentials.from_service_account_file(
+        str(sa_path), scopes=SCOPES
+    )
+    sheets = build("sheets", "v4", credentials=creds)
+    drive = build("drive", "v3", credentials=creds)
+    return sheets, drive
+
+
+def list_existing_names(drive, folder_id: str) -> set[str]:
+    """Return the set of file names already present in the Drive folder."""
+    existing: set[str] = set()
+    page_token = None
+    while True:
+        resp = (
+            drive.files()
+            .list(
+                q=f"'{folder_id}' in parents and trashed = false",
+                fields="nextPageToken, files(name)",
+                pageToken=page_token,
+            )
+            .execute()
+        )
+        for f in resp.get("files", []):
+            existing.add(f["name"])
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+    return existing
 
 
 def _sheet_name(trip: dict) -> str:
@@ -78,8 +117,15 @@ async def main(folder_id: str) -> None:
     for t in trips:
         print(f"  - {_sheet_name(t)}")
 
-    # Google API calls come in Task 3
-    print("\n(Google API integration not yet implemented)")
+    print("\nConnecting to Google APIs...")
+    sheets_svc, drive_svc = build_clients(sa_path)
+
+    print(f"Listing existing files in folder {folder_id}...")
+    existing_names = list_existing_names(drive_svc, folder_id)
+    print(f"  Found {len(existing_names)} existing file(s)")
+
+    # Spreadsheet creation comes in Task 4
+    print("\n(Spreadsheet creation not yet implemented)")
 
 
 if __name__ == "__main__":
