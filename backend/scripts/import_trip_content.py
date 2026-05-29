@@ -1,18 +1,18 @@
 """
-Read a filled Google Sheets spreadsheet for a single trip and upsert its
-content into Supabase (trip_phases, checklist_items, links, activities).
+Read a filled Google Sheets spreadsheet (single sheet for all trips) and upsert
+content for a specific trip into Supabase (trip_phases, checklist_items, links, activities).
 
 Usage:
   cd backend
-  poetry run python scripts/import_trip_content.py --sheet-id <SPREADSHEET_ID>
+  poetry run python scripts/import_trip_content.py --trip-uuid gsb-nye-2026
 
-The SPREADSHEET_ID is the long ID in the sheet URL:
-  https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit
+The spreadsheet ID is read from TRIP_CONTENT_SHEET_ID in backend/.env.
 
 Prerequisites:
   - secrets/gcp-oauth2-credentials.json  (OAuth2 Desktop app client)
   - secrets/gcp-oauth2-token.json        (auto-created on first run)
   - DATABASE_URL in backend/.env
+  - TRIP_CONTENT_SHEET_ID in backend/.env
 """
 
 from __future__ import annotations
@@ -53,6 +53,8 @@ PG_URL = (
     .replace("postgresql+psycopg2://", "postgresql://")
 )
 
+TRIP_CONTENT_SHEET_ID = os.environ.get("TRIP_CONTENT_SHEET_ID", "")
+
 
 def _get_credentials() -> Credentials:
     creds: Credentials | None = None
@@ -86,16 +88,18 @@ def read_tab(sheets_svc, sheet_id: str, tab_name: str) -> list[list[str]]:
     return resp.get("values", [])
 
 
+def filter_rows_by_trip(rows: list[list[str]], trip_uuid: str) -> list[list[str]]:
+    """Keep header row and data rows whose first column matches trip_uuid."""
+    if not rows:
+        return []
+    header = rows[0]
+    matching = [row for row in rows[1:] if row and row[0].strip() == trip_uuid]
+    return [header] + matching
+
+
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
-
-@dataclass
-class TripConfig:
-    trip_uuid: str
-    trip_title: str
-    start_date: str  # YYYY-MM-DD string — used to compute starts_at for days
-
 
 @dataclass
 class ChecklistItem:
@@ -113,7 +117,7 @@ class PhaseLink:
 
 @dataclass
 class PreTripPhase:
-    fase: str           # visa | vaccination | packing | documents
+    fase: str
     title: str
     subtitle: str
     icon: str
@@ -126,8 +130,8 @@ class PreTripPhase:
 @dataclass
 class Activity:
     name: str
-    activity_type: str   # included | optional | suggested | logistics
-    horario: str         # raw string e.g. "10:00" — stored in short_description context
+    activity_type: str
+    horario: str
     duration_minutes: int | None
     short_description: str
     practical_info: str
@@ -137,8 +141,8 @@ class Activity:
 
 @dataclass
 class InTripDay:
-    dia: int             # day number (1-based)
-    data: str            # YYYY-MM-DD
+    dia: int
+    data: str
     title: str
     subtitle: str
     icon: str
@@ -151,91 +155,105 @@ class InTripDay:
 # Parsers
 # ---------------------------------------------------------------------------
 
-def parse_config_tab(rows: list[list[str]]) -> TripConfig:
-    """Parse Config tab rows into TripConfig. First row is header."""
-    data: dict[str, str] = {}
+def parse_fases_tab(rows: list[list[str]]) -> list[PreTripPhase]:
+    """Parse Fases tab (already filtered by trip_uuid). Each row is one complete phase.
+    Columns: trip_uuid, ordem, fase, titulo, subtitulo, icone, descricao_curta, descricao_completa
+    Returns phases sorted by ordem."""
+    phases: list[tuple[int, PreTripPhase]] = []
     for row in rows[1:]:  # skip header
-        if len(row) >= 2:
-            data[row[0].strip()] = row[1].strip()
-    if not data.get("trip_uuid"):
-        raise ValueError("Config tab is missing required key: trip_uuid")
-    return TripConfig(
-        trip_uuid=data["trip_uuid"],
-        trip_title=data.get("trip_title", ""),
-        start_date=data.get("start_date", ""),
-    )
-
-
-def parse_pre_trip_tab(rows: list[list[str]]) -> list[PreTripPhase]:
-    """Parse Pre-Trip tab. Returns one PreTripPhase per distinct fase value."""
-    phases: dict[str, PreTripPhase] = {}
-    checklist_by_fase: dict[str, dict[int, dict[str, str]]] = {}
-    links_by_fase: dict[str, dict[int, dict[str, str]]] = {}
-
-    for row in rows[1:]:  # skip header
-        if len(row) < 5:
+        if len(row) < 8:
             continue
-        fase, bloco, ordem_str, campo, valor = (row[i].strip() if i < len(row) else "" for i in range(5))
-        if not fase or not bloco or not campo:
+        _, ordem_str, fase, titulo, subtitulo, icone, descricao_curta, descricao_completa = (
+            row[i].strip() if i < len(row) else "" for i in range(8)
+        )
+        if not fase:
             continue
-
         try:
             ordem = int(ordem_str)
         except ValueError:
             continue
+        phases.append((ordem, PreTripPhase(
+            fase=fase,
+            title=titulo,
+            subtitle=subtitulo,
+            icon=icone,
+            short_description=descricao_curta,
+            detailed_description=descricao_completa,
+        )))
+    return [p for _, p in sorted(phases, key=lambda x: x[0])]
 
-        if bloco == "header":
-            if fase not in phases:
-                phases[fase] = PreTripPhase(
-                    fase=fase, title="", subtitle="", icon="",
-                    short_description="", detailed_description="",
-                )
-            p = phases[fase]
-            if campo == "title":
-                p.title = valor
-            elif campo == "subtitle":
-                p.subtitle = valor
-            elif campo == "icon":
-                p.icon = valor
-            elif campo == "short_description":
-                p.short_description = valor
-            elif campo == "detailed_description":
-                p.detailed_description = valor
 
-        elif bloco == "checklist":
-            if fase not in checklist_by_fase:
-                checklist_by_fase[fase] = {}
-            if ordem not in checklist_by_fase[fase]:
-                checklist_by_fase[fase][ordem] = {}
-            checklist_by_fase[fase][ordem][campo] = valor
+def parse_checklist_tab(rows: list[list[str]], phases: list[PreTripPhase]) -> None:
+    """Parse Checklist tab (already filtered by trip_uuid) and attach items to phases in-place.
+    Columns: trip_uuid, fase, ordem, label, obrigatorio"""
+    phase_map = {p.fase: p for p in phases}
+    by_fase: dict[str, dict[int, dict[str, str]]] = {}
 
-        elif bloco == "link":
-            if fase not in links_by_fase:
-                links_by_fase[fase] = {}
-            if ordem not in links_by_fase[fase]:
-                links_by_fase[fase][ordem] = {}
-            links_by_fase[fase][ordem][campo] = valor
+    for row in rows[1:]:  # skip header
+        if len(row) < 5:
+            continue
+        _, fase, ordem_str, label, obrigatorio = (
+            row[i].strip() if i < len(row) else "" for i in range(5)
+        )
+        if not fase or not label:
+            continue
+        try:
+            ordem = int(ordem_str)
+        except ValueError:
+            continue
+        if fase not in by_fase:
+            by_fase[fase] = {}
+        by_fase[fase][ordem] = {"label": label, "obrigatorio": obrigatorio}
 
-    # Assemble checklist and links into phases
-    for fase, phase in phases.items():
-        for sort_order, fields in sorted(checklist_by_fase.get(fase, {}).items()):
-            label = fields.get("label", "")
-            if not label:
-                continue
-            is_required = fields.get("is_required", "false").lower() == "true"
-            phase.checklist.append(ChecklistItem(label=label, is_required=is_required, sort_order=sort_order - 1))
+    for fase, items in by_fase.items():
+        phase = phase_map.get(fase)
+        if not phase:
+            continue
+        for sort_order, fields in sorted(items.items()):
+            is_required = fields["obrigatorio"].lower() == "true"
+            phase.checklist.append(ChecklistItem(
+                label=fields["label"],
+                is_required=is_required,
+                sort_order=sort_order - 1,
+            ))
 
-        for sort_order, fields in sorted(links_by_fase.get(fase, {}).items()):
-            label = fields.get("label", "")
-            url = fields.get("url", "")
-            if not label or not url:
-                continue
-            phase.links.append(PhaseLink(label=label, url=url, sort_order=sort_order - 1))
 
-    return list(phases.values())
+def parse_links_tab(rows: list[list[str]], phases: list[PreTripPhase]) -> None:
+    """Parse Links tab (already filtered by trip_uuid) and attach links to phases in-place.
+    Columns: trip_uuid, fase, ordem, label, url"""
+    phase_map = {p.fase: p for p in phases}
+    by_fase: dict[str, dict[int, dict[str, str]]] = {}
+
+    for row in rows[1:]:  # skip header
+        if len(row) < 5:
+            continue
+        _, fase, ordem_str, label, url = (
+            row[i].strip() if i < len(row) else "" for i in range(5)
+        )
+        if not fase or not label or not url:
+            continue
+        try:
+            ordem = int(ordem_str)
+        except ValueError:
+            continue
+        if fase not in by_fase:
+            by_fase[fase] = {}
+        by_fase[fase][ordem] = {"label": label, "url": url}
+
+    for fase, links in by_fase.items():
+        phase = phase_map.get(fase)
+        if not phase:
+            continue
+        for sort_order, fields in sorted(links.items()):
+            phase.links.append(PhaseLink(
+                label=fields["label"],
+                url=fields["url"],
+                sort_order=sort_order - 1,
+            ))
 
 
 _ROTEIRO_COLS = [
+    "trip_uuid",
     "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon",
     "dia_descricao_curta", "dia_descricao_completa",
     "atividade_nome", "atividade_tipo", "atividade_horario",
@@ -253,12 +271,12 @@ def _cell(row: list[str], col: str) -> str:
 
 
 def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
-    """Parse Roteiro tab. Returns one InTripDay per distinct dia value, preserving order."""
+    """Parse Roteiro tab rows (already filtered by trip_uuid)."""
     days: dict[int, InTripDay] = {}
     activity_counters: dict[int, int] = {}
 
     for row in rows[1:]:  # skip header
-        if len(row) < 8:
+        if len(row) < 9:
             continue
         dia_str = _cell(row, "dia")
         if not dia_str.isdigit():
@@ -309,15 +327,13 @@ def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
 
 async def write_to_db(
     conn: asyncpg.Connection,
-    config: TripConfig,
+    trip_uuid: str,
     pre_trip_phases: list[PreTripPhase],
     in_trip_days: list[InTripDay],
 ) -> None:
     """Delete all existing phase data for the trip and insert fresh rows. Runs in a transaction."""
-    trip_uuid = config.trip_uuid
-
     async with conn.transaction():
-        # 1. Delete traveler progress that references checklist items and phases for this trip
+        # 1. Delete traveler progress and all phase content for this trip
         phase_ids = await conn.fetch(
             "SELECT id FROM trip_phases WHERE wetravel_trip_uuid = $1", trip_uuid
         )
@@ -349,14 +365,9 @@ async def write_to_db(
                 "DELETE FROM trip_phases WHERE wetravel_trip_uuid = $1", trip_uuid
             )
 
-        # 2. Insert pre-trip phases
-        FIXED_PHASE_ORDER = ["visa", "vaccination", "packing", "documents"]
-        phase_map = {p.fase: p for p in pre_trip_phases}
+        # 2. Insert pre-trip phases — order comes from the spreadsheet
         sort_order = 0
-        for fase_key in FIXED_PHASE_ORDER:
-            phase = phase_map.get(fase_key)
-            if not phase:
-                continue
+        for phase in pre_trip_phases:
             phase_id = str(uuid.uuid4())
             await conn.execute(
                 """
@@ -425,37 +436,48 @@ async def write_to_db(
                 )
 
 
-async def main(sheet_id: str) -> None:
+async def main(trip_uuid: str, sheet_id: str) -> None:
+    if not sheet_id:
+        print("ERROR: TRIP_CONTENT_SHEET_ID is not set in backend/.env")
+        print("Run create_trip_sheets.py first and add the printed sheet ID to .env")
+        sys.exit(1)
+
     print("Connecting to Google Sheets...")
     sheets_svc = build_sheets_client()
 
-    print("Reading Config tab...")
-    config_rows = read_tab(sheets_svc, sheet_id, "Config")
-    config = parse_config_tab(config_rows)
-    print(f"  trip_uuid : {config.trip_uuid}")
-    print(f"  trip_title: {config.trip_title}")
-    print(f"  start_date: {config.start_date}")
+    print("Reading Fases tab...")
+    fases_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Fases"), trip_uuid)
+    pre_trip_phases = parse_fases_tab(fases_rows)
+    print(f"  {len(pre_trip_phases)} fase(s): {[p.fase for p in pre_trip_phases]}")
 
-    print("Reading Pre-Trip tab...")
-    pre_trip_rows = read_tab(sheets_svc, sheet_id, "Pre-Trip")
-    pre_trip_phases = parse_pre_trip_tab(pre_trip_rows)
-    print(f"  {len(pre_trip_phases)} pre-trip phase(s): {[p.fase for p in pre_trip_phases]}")
+    print("Reading Checklist tab...")
+    checklist_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Checklist"), trip_uuid)
+    parse_checklist_tab(checklist_rows, pre_trip_phases)
+
+    print("Reading Links tab...")
+    links_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Links"), trip_uuid)
+    parse_links_tab(links_rows, pre_trip_phases)
+
+    total_checklist = sum(len(p.checklist) for p in pre_trip_phases)
+    total_links = sum(len(p.links) for p in pre_trip_phases)
 
     print("Reading Roteiro tab...")
-    roteiro_rows = read_tab(sheets_svc, sheet_id, "Roteiro")
+    roteiro_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Roteiro"), trip_uuid)
     in_trip_days = parse_roteiro_tab(roteiro_rows)
     total_activities = sum(len(d.activities) for d in in_trip_days)
     print(f"  {len(in_trip_days)} day(s), {total_activities} activit(ies)")
 
+    if not pre_trip_phases and not in_trip_days:
+        print(f"\nNo data found for trip_uuid='{trip_uuid}'. Check the sheet and try again.")
+        sys.exit(1)
+
     print("\nConnecting to database...")
     conn = await asyncpg.connect(PG_URL)
     try:
-        await write_to_db(conn, config, pre_trip_phases, in_trip_days)
+        await write_to_db(conn, trip_uuid, pre_trip_phases, in_trip_days)
     finally:
         await conn.close()
 
-    total_checklist = sum(len(p.checklist) for p in pre_trip_phases)
-    total_links = sum(len(p.links) for p in pre_trip_phases)
     print("\n✅ Import complete!")
     print(f"   Pre-trip phases : {len(pre_trip_phases)}")
     print(f"   Checklist items : {total_checklist}")
@@ -466,12 +488,17 @@ async def main(sheet_id: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Import trip content from a Google Sheets spreadsheet into Supabase"
+        description="Import trip content from the shared Google Sheets spreadsheet into Supabase"
+    )
+    parser.add_argument(
+        "--trip-uuid",
+        required=True,
+        help="The trip UUID to import (must match the trip_uuid column in the sheet)",
     )
     parser.add_argument(
         "--sheet-id",
-        required=True,
-        help="Google Sheets spreadsheet ID (from the URL: /spreadsheets/d/<ID>/edit)",
+        default=TRIP_CONTENT_SHEET_ID,
+        help="Override the spreadsheet ID (default: TRIP_CONTENT_SHEET_ID from .env)",
     )
     args = parser.parse_args()
-    asyncio.run(main(args.sheet_id))
+    asyncio.run(main(args.trip_uuid, args.sheet_id))
