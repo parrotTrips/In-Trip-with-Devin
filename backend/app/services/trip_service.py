@@ -196,7 +196,6 @@ async def get_trip_phase_detail(user_id: str, phase_id: str, session: AsyncSessi
 async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
     trip_uuid = await _get_trip_uuid(user_id, session)
 
-    # Busca todos os travelers do mesmo trip
     tt_result = await session.execute(
         select(TripTraveler, User)
         .join(User, User.id == TripTraveler.user_id)
@@ -209,16 +208,27 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
 
     tt_ids = [tt.id for tt, _ in rows]
 
-    # Fase atual = primeira fase NÃO completada (menor sort_order)
-    first_phase = await session.scalar(
+    all_phases_result = await session.execute(
         select(TripPhase)
         .where(TripPhase.wetravel_trip_uuid == trip_uuid, TripPhase.is_visible.is_(True))
         .order_by(TripPhase.sort_order)
-        .limit(1)
     )
-    first_phase_id = str(first_phase.id) if first_phase else None
+    all_phases = all_phases_result.scalars().all()
 
-    # Carrega progresso de todos os travelers de uma vez
+    phase_dicts = [
+        {
+            "id": str(p.id),
+            "phase_type": p.phase_type,
+            "starts_at": p.starts_at,
+            "sort_order": p.sort_order,
+        }
+        for p in all_phases
+    ]
+    phases_ordered = [(p["sort_order"], p["id"]) for p in phase_dicts]
+
+    now = _datetime.now(UTC)
+    date_completions = compute_in_trip_phase_completions(phase_dicts, now)
+
     progress_result = await session.execute(
         select(TravelerPhaseProgress, TripPhase)
         .join(TripPhase, TripPhase.id == TravelerPhaseProgress.trip_phase_id)
@@ -226,33 +236,19 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
             TravelerPhaseProgress.trip_traveler_id.in_(tt_ids),
             TravelerPhaseProgress.is_completed.is_(True),
         )
-        .order_by(TravelerPhaseProgress.trip_traveler_id, TripPhase.sort_order)
     )
-    completed_by_tt: dict[_uuid.UUID, int] = {}
+    db_completed_ids: dict[_uuid.UUID, set[str]] = {}
     for prog, phase in progress_result.all():
-        # Guarda o maior sort_order completado por traveler
-        current = completed_by_tt.get(prog.trip_traveler_id, -1)
-        if phase.sort_order > current:
-            completed_by_tt[prog.trip_traveler_id] = phase.sort_order
-
-    # Para calcular "current phase" precisamos das fases ordenadas
-    all_phases_result = await session.execute(
-        select(TripPhase)
-        .where(TripPhase.wetravel_trip_uuid == trip_uuid, TripPhase.is_visible.is_(True))
-        .order_by(TripPhase.sort_order)
-    )
-    all_phases = all_phases_result.scalars().all()
-    phases_ordered = [(p.sort_order, str(p.id)) for p in all_phases]
+        db_completed_ids.setdefault(prog.trip_traveler_id, set()).add(str(prog.trip_phase_id))
 
     def _current_phase_id(tt_id: _uuid.UUID) -> str | None:
         if not phases_ordered:
             return None
-        max_completed = completed_by_tt.get(tt_id, -1)
-        # Próxima fase após a última completada
+        tt_db_done = db_completed_ids.get(tt_id, set())
         for sort_order, pid in phases_ordered:
-            if sort_order > max_completed:
+            is_done = (pid in tt_db_done) or date_completions.get(pid, False)
+            if not is_done:
                 return pid
-        # Todas completadas → última fase
         return phases_ordered[-1][1]
 
     travelers = []
