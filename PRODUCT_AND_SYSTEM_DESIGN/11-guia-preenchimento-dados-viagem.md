@@ -141,25 +141,29 @@ Para cada atividade, preencher:
 
 ## Como entregar
 
-A forma mais prática é preencher uma **planilha Google Sheets** com uma aba por viagem, seguindo a estrutura acima:
+Todo o conteúdo de todas as viagens fica em **uma única planilha**: [Parrot Trips — Conteúdo de Viagens](https://drive.google.com/drive/folders/1mqUSDMygVJ-rAFlHQJEyRjTpDPx9MilP).
 
-- **Aba "Pre-trip"**: uma seção por fase (Visto, Vacinas, Mala, Documentos) com o texto, checklist e links
-- **Aba "Roteiro"**: uma linha por atividade, colunas conforme a tabela de atividades
+A planilha tem duas abas:
 
-Com a planilha preenchida, a equipe de desenvolvimento converte o conteúdo para o banco em menos de 1 hora por viagem.
+- **Pre-Trip** — preencher as 4 fases (Visto, Vacinas, Mala, Documentos) para cada viagem. Cada linha começa com o `trip_uuid` da viagem.
+- **Roteiro** — preencher uma linha por atividade para cada viagem. Cada linha começa com o `trip_uuid` da viagem.
+
+Para encontrar o `trip_uuid` de cada viagem, ver a tabela abaixo.
+
+Ao terminar o preenchimento, avise a equipe de desenvolvimento com o `trip_uuid` — o import para o banco leva menos de 5 minutos.
 
 ---
 
-## Viagens que precisam de conteúdo
+## Viagens e seus trip_uuid
 
-| viagem | início | status |
-|---|---|---|
-| K-LATAM 26 Brazil Trek | 20 Nov 2026 | ⚠️ sem conteúdo |
-| YSOM Brazil Trek 26 | 21 Nov 2026 | ⚠️ sem conteúdo |
-| GSB NYE Brazil Trek | 26 Dec 2026 | ⚠️ sem conteúdo |
-| HBS Diaspora Brazil Trek | 15 Jan 2027 | ⚠️ sem conteúdo |
-| Wharton Carnaval Trek 2027 | 4 Feb 2027 | ⚠️ sem conteúdo |
-| UCLA Carnival 27 Trek | 5 Feb 2027 | ⚠️ sem conteúdo |
-| Wharton Brazil Trek December 2026 | 8 Dec 2026 | ✅ placeholder (datas corretas, conteúdo genérico) |
+| viagem | início | trip_uuid | status |
+|---|---|---|---|
+| K-LATAM 26 Brazil Trek | 20 Nov 2026 | a ver no banco | ⚠️ sem conteúdo |
+| YSOM Brazil Trek 26 | 21 Nov 2026 | a ver no banco | ⚠️ sem conteúdo |
+| Wharton Brazil Trek December 2026 | 8 Dec 2026 | a ver no banco | ⚠️ sem conteúdo |
+| GSB NYE Brazil Trek | 26 Dec 2026 | a ver no banco | ⚠️ sem conteúdo |
+| HBS Diaspora Brazil Trek | 15 Jan 2027 | a ver no banco | ⚠️ sem conteúdo |
+| Wharton Carnaval Trek 2027 | 4 Feb 2027 | a ver no banco | ⚠️ sem conteúdo |
+| UCLA Carnival 27 Trek | 5 Feb 2027 | a ver no banco | ⚠️ sem conteúdo |
 
 **Prioridade sugerida:** começar pelas viagens com data mais próxima — K-LATAM e YSOM em novembro de 2026.
