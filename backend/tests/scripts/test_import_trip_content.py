@@ -7,8 +7,6 @@ from scripts.import_trip_content import (
     PreTripPhase,
     ChecklistItem,
     PhaseLink,
-    InTripDay,
-    Activity,
     filter_rows_by_trip,
     parse_fases_tab,
     parse_checklist_tab,
@@ -184,8 +182,11 @@ def test_parse_roteiro_tab_basic():
     assert len(days) == 2
     assert days[0].dia == 1
     assert days[0].data == "2026-12-26"
+    assert days[0].title == "Day 1 — Dec 26"
+    assert days[0].subtitle == "Chegada"
     assert len(days[0].activities) == 2
     assert days[0].activities[0].name == "Transfer do Aeroporto"
+    assert days[0].activities[0].activity_type == "logistics"
     assert days[0].activities[0].duration_minutes == 120
     assert days[1].dia == 2
     assert days[1].activities[0].duration_minutes is None
