@@ -24,8 +24,10 @@ def compute_in_trip_phase_completions(
     phases: list[dict], now: _datetime
 ) -> dict[str, bool]:
     """Return {phase_id: bool} for in-trip phases only.
-    A phase is complete if starts_at is set and starts_at <= now.
+    A phase has started (True) if starts_at is set and starts_at <= now.
     Pre-trip phases are not included."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
     result: dict[str, bool] = {}
     for phase in phases:
         if phase["phase_type"] != "in-trip":

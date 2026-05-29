@@ -55,3 +55,28 @@ def test_multiple_days_partial_completion():
     ]
     result = compute_in_trip_phase_completions(phases, now)
     assert result == {"d1": True, "d2": True, "d3": False}
+
+
+def test_naive_now_does_not_crash():
+    now = datetime(2026, 12, 27, 12, 0, 0)  # no tzinfo
+    phases = [_phase("p1", "in-trip", datetime(2026, 12, 26, tzinfo=UTC))]
+    result = compute_in_trip_phase_completions(phases, now)
+    assert result == {"p1": True}
+
+
+def test_starts_at_as_iso_string():
+    now = datetime(2026, 12, 27, 12, 0, 0, tzinfo=UTC)
+    phases = [{"id": "p1", "phase_type": "in-trip", "starts_at": "2026-12-26T00:00:00+00:00"}]
+    result = compute_in_trip_phase_completions(phases, now)
+    assert result == {"p1": True}
+
+
+def test_empty_phases_returns_empty():
+    now = datetime(2026, 12, 27, tzinfo=UTC)
+    assert compute_in_trip_phase_completions([], now) == {}
+
+
+def test_only_pre_trip_phases_returns_empty():
+    now = datetime(2026, 12, 27, tzinfo=UTC)
+    phases = [_phase("pre1", "pre-trip", None), _phase("pre2", "pre-trip", None)]
+    assert compute_in_trip_phase_completions(phases, now) == {}
