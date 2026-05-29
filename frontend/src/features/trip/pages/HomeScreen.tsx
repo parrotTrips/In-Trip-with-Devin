@@ -176,8 +176,9 @@ export default function HomeScreen() {
               const isLeft = index % 2 === 0;
               const isCurrentUser = phase.id === currentUserPhaseId;
               const isParrotHere = phase.id === parrotPhaseId;
-              const isPast = currentUserIdx >= 0 && index < currentUserIdx;
-              const isCurrent = index === currentUserIdx;
+              const phaseProgressIdx = progressPhases.findIndex(p => p.id === phase.id);
+              const isPast = phaseProgressIdx >= 0 && currentUserIdx >= 0 && phaseProgressIdx < currentUserIdx;
+              const isCurrent = phase.id === currentUserPhaseId;
               const isPreTrip = phase.phase_type === 'pre-trip';
               const travelersHere = travelers.filter(t => t.current_phase_id === phase.id);
 
