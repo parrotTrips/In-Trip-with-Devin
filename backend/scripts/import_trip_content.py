@@ -436,7 +436,40 @@ async def write_to_db(
                 )
 
 
-async def main(trip_uuid: str, sheet_id: str) -> None:
+async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet_id: str) -> dict:
+    """Import a single trip. Returns a summary dict. Sheets tabs are read once and filtered."""
+    fases_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Fases"), trip_uuid)
+    pre_trip_phases = parse_fases_tab(fases_rows)
+
+    checklist_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Checklist"), trip_uuid)
+    parse_checklist_tab(checklist_rows, pre_trip_phases)
+
+    links_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Links"), trip_uuid)
+    parse_links_tab(links_rows, pre_trip_phases)
+
+    roteiro_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Roteiro"), trip_uuid)
+    in_trip_days = parse_roteiro_tab(roteiro_rows)
+
+    if not pre_trip_phases and not in_trip_days:
+        return {"skipped": True}
+
+    await write_to_db(conn, trip_uuid, pre_trip_phases, in_trip_days)
+    return {
+        "skipped": False,
+        "phases": len(pre_trip_phases),
+        "checklist": sum(len(p.checklist) for p in pre_trip_phases),
+        "links": sum(len(p.links) for p in pre_trip_phases),
+        "days": len(in_trip_days),
+        "activities": sum(len(d.activities) for d in in_trip_days),
+    }
+
+
+async def fetch_all_trip_uuids(conn: asyncpg.Connection) -> list[str]:
+    rows = await conn.fetch("SELECT trip_uuid FROM wetravel_trips ORDER BY start_date NULLS LAST")
+    return [r["trip_uuid"] for r in rows]
+
+
+async def main(trip_uuids: list[str], sheet_id: str) -> None:
     if not sheet_id:
         print("ERROR: TRIP_CONTENT_SHEET_ID is not set in backend/.env")
         print("Run create_trip_sheets.py first and add the printed sheet ID to .env")
@@ -445,55 +478,56 @@ async def main(trip_uuid: str, sheet_id: str) -> None:
     print("Connecting to Google Sheets...")
     sheets_svc = build_sheets_client()
 
-    print("Reading Fases tab...")
-    fases_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Fases"), trip_uuid)
-    pre_trip_phases = parse_fases_tab(fases_rows)
-    print(f"  {len(pre_trip_phases)} fase(s): {[p.fase for p in pre_trip_phases]}")
-
-    print("Reading Checklist tab...")
-    checklist_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Checklist"), trip_uuid)
-    parse_checklist_tab(checklist_rows, pre_trip_phases)
-
-    print("Reading Links tab...")
-    links_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Links"), trip_uuid)
-    parse_links_tab(links_rows, pre_trip_phases)
-
-    total_checklist = sum(len(p.checklist) for p in pre_trip_phases)
-    total_links = sum(len(p.links) for p in pre_trip_phases)
-
-    print("Reading Roteiro tab...")
-    roteiro_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Roteiro"), trip_uuid)
-    in_trip_days = parse_roteiro_tab(roteiro_rows)
-    total_activities = sum(len(d.activities) for d in in_trip_days)
-    print(f"  {len(in_trip_days)} day(s), {total_activities} activit(ies)")
-
-    if not pre_trip_phases and not in_trip_days:
-        print(f"\nNo data found for trip_uuid='{trip_uuid}'. Check the sheet and try again.")
-        sys.exit(1)
-
-    print("\nConnecting to database...")
+    print("Connecting to database...")
     conn = await asyncpg.connect(PG_URL)
+
+    totals = {"phases": 0, "checklist": 0, "links": 0, "days": 0, "activities": 0}
+    skipped = []
+    failed = []
+
     try:
-        await write_to_db(conn, trip_uuid, pre_trip_phases, in_trip_days)
+        for trip_uuid in trip_uuids:
+            print(f"\n▶  {trip_uuid}")
+            try:
+                result = await import_one(sheets_svc, conn, trip_uuid, sheet_id)
+                if result["skipped"]:
+                    print(f"   ⏭  No data in sheet — skipped")
+                    skipped.append(trip_uuid)
+                else:
+                    print(f"   ✅ {result['phases']} phases, {result['checklist']} checklist, {result['links']} links, {result['days']} days, {result['activities']} activities")
+                    for k in totals:
+                        totals[k] += result[k]
+            except Exception as exc:
+                print(f"   ❌ Failed: {exc}")
+                failed.append(trip_uuid)
     finally:
         await conn.close()
 
-    print("\n✅ Import complete!")
-    print(f"   Pre-trip phases : {len(pre_trip_phases)}")
-    print(f"   Checklist items : {total_checklist}")
-    print(f"   Links           : {total_links}")
-    print(f"   In-trip days    : {len(in_trip_days)}")
-    print(f"   Activities      : {total_activities}")
+    print(f"\n{'='*50}")
+    print(f"Import complete — {len(trip_uuids)} trip(s) processed")
+    print(f"  Imported : {len(trip_uuids) - len(skipped) - len(failed)}")
+    print(f"  Skipped  : {len(skipped)}")
+    print(f"  Failed   : {len(failed)}")
+    if failed:
+        print(f"  Failed UUIDs: {failed}")
+    print(f"\nTotals:")
+    for k, v in totals.items():
+        print(f"  {k}: {v}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Import trip content from the shared Google Sheets spreadsheet into Supabase"
     )
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
         "--trip-uuid",
-        required=True,
-        help="The trip UUID to import (must match the trip_uuid column in the sheet)",
+        help="Import a single trip UUID",
+    )
+    group.add_argument(
+        "--all",
+        action="store_true",
+        help="Import all trips from wetravel_trips",
     )
     parser.add_argument(
         "--sheet-id",
@@ -501,4 +535,17 @@ if __name__ == "__main__":
         help="Override the spreadsheet ID (default: TRIP_CONTENT_SHEET_ID from .env)",
     )
     args = parser.parse_args()
-    asyncio.run(main(args.trip_uuid, args.sheet_id))
+
+    async def _run():
+        if args.all:
+            conn = await asyncpg.connect(PG_URL)
+            try:
+                uuids = await fetch_all_trip_uuids(conn)
+            finally:
+                await conn.close()
+            print(f"Found {len(uuids)} trips: {uuids}")
+        else:
+            uuids = [args.trip_uuid]
+        await main(uuids, args.sheet_id)
+
+    asyncio.run(_run())
