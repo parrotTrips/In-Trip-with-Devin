@@ -1,9 +1,12 @@
 """
 Create a single Google Sheets file with all trips' content in a Google Drive folder.
 
-The spreadsheet has two tabs:
-  - Pre-Trip  : pre-trip phases for all trips (trip_uuid as first column)
-  - Roteiro   : day-by-day itinerary for all trips (trip_uuid as first column)
+The spreadsheet has five tabs:
+  - Viagens   : reference list of all trips (trip_uuid, name, dates) — not imported
+  - Fases     : pre-trip phases for all trips (one row per phase)
+  - Checklist : checklist items per phase (one row per item)
+  - Links     : links per phase (one row per link)
+  - Roteiro   : day-by-day itinerary for all trips (one row per activity)
 
 Usage (recommended — your own Google account):
   gcloud auth application-default login
@@ -364,13 +367,13 @@ async def main(folder_id: str, use_adc: bool, clean_old: bool) -> None:
         spreadsheet_id = existing_names[SHEET_NAME]
         print(f"\n⏭  Spreadsheet already exists — skipping creation.")
         print(f"   To repopulate it, delete it from Drive and re-run this script.")
-        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
     else:
         print(f"\n✅ Creating: {SHEET_NAME}...")
         spreadsheet_id = create_spreadsheet(sheets_svc, drive_svc, folder_id, SHEET_NAME)
         populate_spreadsheet(sheets_svc, spreadsheet_id, trips)
-        url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
-        print(f"   {url}")
+
+    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+    print(f"   {url}")
 
     print(f"\nDone. Sheet ID: {spreadsheet_id}")
     print(f"Add to backend/.env:  TRIP_CONTENT_SHEET_ID={spreadsheet_id}")
