@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid as _uuid
+from datetime import UTC, datetime as _datetime
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -17,6 +18,28 @@ from app.db.models.trip import (
 )
 from app.db.models.progress import TravelerPhaseProgress
 from app.db.models.user import User
+
+
+def compute_in_trip_phase_completions(
+    phases: list[dict], now: _datetime
+) -> dict[str, bool]:
+    """Return {phase_id: bool} for in-trip phases only.
+    A phase is complete if starts_at is set and starts_at <= now.
+    Pre-trip phases are not included."""
+    result: dict[str, bool] = {}
+    for phase in phases:
+        if phase["phase_type"] != "in-trip":
+            continue
+        starts_at = phase["starts_at"]
+        if starts_at is None:
+            result[phase["id"]] = False
+        else:
+            if isinstance(starts_at, str):
+                starts_at = _datetime.fromisoformat(starts_at)
+            if starts_at.tzinfo is None:
+                starts_at = starts_at.replace(tzinfo=UTC)
+            result[phase["id"]] = starts_at <= now
+    return result
 
 
 async def _get_trip_uuid(user_id: str, session: AsyncSession) -> str:
