@@ -1,0 +1,30 @@
+# Local virtual environments
+env/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets and local config
+.env
+.env.production
+secrets/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Local databases
+*.db
+*.sqlite
+
+# IDE files
+.idea/
+.vscode/
+*.swp
