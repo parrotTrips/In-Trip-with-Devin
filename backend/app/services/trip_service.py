@@ -230,21 +230,23 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
     date_completions = compute_in_trip_phase_completions(phase_dicts, now)
 
     progress_result = await session.execute(
-        select(TravelerPhaseProgress, TripPhase)
-        .join(TripPhase, TripPhase.id == TravelerPhaseProgress.trip_phase_id)
+        select(TravelerPhaseProgress)
         .where(
             TravelerPhaseProgress.trip_traveler_id.in_(tt_ids),
             TravelerPhaseProgress.is_completed.is_(True),
         )
     )
     db_completed_ids: dict[_uuid.UUID, set[str]] = {}
-    for prog, phase in progress_result.all():
+    for prog in progress_result.scalars():
         db_completed_ids.setdefault(prog.trip_traveler_id, set()).add(str(prog.trip_phase_id))
 
     def _current_phase_id(tt_id: _uuid.UUID) -> str | None:
         if not phases_ordered:
             return None
         tt_db_done = db_completed_ids.get(tt_id, set())
+        # Pre-trip phases complete via DB only; in-trip phases complete by date.
+        # If the trip has started but the traveler never finished pre-trip,
+        # they remain on the last incomplete pre-trip phase by design.
         for sort_order, pid in phases_ordered:
             is_done = (pid in tt_db_done) or date_completions.get(pid, False)
             if not is_done:
