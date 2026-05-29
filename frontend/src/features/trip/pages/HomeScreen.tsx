@@ -68,9 +68,18 @@ export default function HomeScreen() {
 
   const currentUserPhaseId = travelers.find(t => t.id === user?.userId)?.current_phase_id ?? null;
   const parrotPhaseId = computeParrotPhaseId(phases);
-  const currentUserIdx = phases.findIndex(p => p.id === currentUserPhaseId);
-  const parrotIdx = phases.findIndex(p => p.id === parrotPhaseId);
-  const totalPhases = phases.length;
+
+  const tripStarted = tripInfo
+    ? new Date(tripInfo.start_date + 'T00:00:00') <= new Date()
+    : false;
+
+  const progressPhases = tripStarted
+    ? phases.filter(p => p.phase_type === 'in-trip')
+    : phases.filter(p => p.phase_type === 'pre-trip');
+
+  const currentUserIdx = progressPhases.findIndex(p => p.id === currentUserPhaseId);
+  const parrotIdx = progressPhases.findIndex(p => p.id === parrotPhaseId);
+  const totalPhases = progressPhases.length;
 
   const displayTitle = tripInfo?.title ?? 'Sua Viagem';
   const displayDates = tripInfo
