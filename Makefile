@@ -4,7 +4,8 @@ GCP_ACCOUNT    = angelo@parrottrips.com
 GCP_REGION     = southamerica-east1
 SERVICE_NAME   = parrot-trips-backend
 IMAGE_REPO     = $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/parrot-trips/backend
-FIREBASE_PROJECT = $(GCP_PROJECT)
+GCS_BUCKET       = parrot-trips-frontend
+FRONTEND_URL     = https://storage.googleapis.com/$(GCS_BUCKET)
 
 # Image tag: uses short git commit hash by default
 IMAGE_TAG      ?= $(shell git rev-parse --short HEAD)
@@ -56,7 +57,7 @@ cloud-run-deploy:
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
 .PHONY: deploy-frontend
-deploy-frontend: frontend-build firebase-deploy
+deploy-frontend: frontend-build gcs-upload
 
 .PHONY: frontend-build
 frontend-build:
@@ -69,10 +70,13 @@ frontend-build:
 	fi
 	cd frontend && npm run build
 
-.PHONY: firebase-deploy
-firebase-deploy:
-	@echo "Deploying to Firebase Hosting..."
-	cd frontend && firebase deploy --only hosting --project=$(FIREBASE_PROJECT)
+.PHONY: gcs-upload
+gcs-upload:
+	@echo "Uploading frontend to Cloud Storage..."
+	gcloud storage cp -r frontend/dist/* gs://$(GCS_BUCKET)/ \
+		--account=$(GCP_ACCOUNT) \
+		--project=$(GCP_PROJECT)
+	@echo "Frontend URL: $(FRONTEND_URL)"
 
 # ── Operação ──────────────────────────────────────────────────────────────────
 .PHONY: logs
@@ -100,7 +104,7 @@ open:
 		--account=$(GCP_ACCOUNT) \
 		--project=$(GCP_PROJECT) \
 		--format="value(status.url)" 2>/dev/null); \
-	FRONTEND="https://$(GCP_PROJECT).web.app"; \
+	FRONTEND="$(FRONTEND_URL)"; \
 	echo "Backend:  $$BACKEND"; \
 	echo "Frontend: $$FRONTEND"; \
 	open $$BACKEND/health 2>/dev/null || xdg-open $$BACKEND/health 2>/dev/null || true; \
