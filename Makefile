@@ -61,6 +61,12 @@ deploy-frontend: frontend-build firebase-deploy
 .PHONY: frontend-build
 frontend-build:
 	@echo "Building frontend..."
+	@if [ ! -f frontend/.env.production ]; then \
+		echo "ERROR: frontend/.env.production not found."; \
+		echo "Copy frontend/.env.production.example and set VITE_API_URL to the Cloud Run backend URL."; \
+		echo "Tip: run 'make backend-url' to get the URL."; \
+		exit 1; \
+	fi
 	cd frontend && npm run build
 
 .PHONY: firebase-deploy
@@ -71,10 +77,13 @@ firebase-deploy:
 # ── Operação ──────────────────────────────────────────────────────────────────
 .PHONY: logs
 logs:
-	gcloud run services logs tail $(SERVICE_NAME) \
-		--region=$(GCP_REGION) \
+	gcloud logging read \
+		"resource.type=cloud_run_revision AND resource.labels.service_name=$(SERVICE_NAME)" \
+		--project=$(GCP_PROJECT) \
 		--account=$(GCP_ACCOUNT) \
-		--project=$(GCP_PROJECT)
+		--format="value(textPayload)" \
+		--freshness=1h \
+		--order=asc
 
 .PHONY: backend-url
 backend-url:
