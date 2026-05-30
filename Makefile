@@ -5,7 +5,7 @@ GCP_REGION     = southamerica-east1
 SERVICE_NAME   = parrot-trips-backend
 IMAGE_REPO     = $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/parrot-trips/backend
 GCS_BUCKET       = parrot-trips-frontend
-FRONTEND_URL     = https://storage.googleapis.com/$(GCS_BUCKET)
+FRONTEND_URL     = https://storage.googleapis.com/$(GCS_BUCKET)/index.html?v=$(IMAGE_TAG)
 
 # Image tag: uses short git commit hash by default
 IMAGE_TAG      ?= $(shell git rev-parse --short HEAD)
@@ -72,10 +72,20 @@ frontend-build:
 
 .PHONY: gcs-upload
 gcs-upload:
-	@echo "Uploading frontend to Cloud Storage..."
-	gcloud storage cp -r frontend/dist/* gs://$(GCS_BUCKET)/ \
+	@echo "Uploading frontend assets (long cache)..."
+	gcloud storage cp -r frontend/dist/assets gs://$(GCS_BUCKET)/ \
+		--cache-control="public, max-age=31536000, immutable" \
 		--account=$(GCP_ACCOUNT) \
 		--project=$(GCP_PROJECT)
+	@echo "Uploading index.html (no cache)..."
+	gcloud storage cp frontend/dist/index.html gs://$(GCS_BUCKET)/index.html \
+		--cache-control="no-cache, no-store, must-revalidate" \
+		--account=$(GCP_ACCOUNT) \
+		--project=$(GCP_PROJECT)
+	@echo "Uploading remaining files..."
+	gcloud storage cp frontend/dist/vite.svg gs://$(GCS_BUCKET)/ \
+		--account=$(GCP_ACCOUNT) \
+		--project=$(GCP_PROJECT) 2>/dev/null || true
 	@echo "Frontend URL: $(FRONTEND_URL)"
 
 # ── Operação ──────────────────────────────────────────────────────────────────
