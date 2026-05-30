@@ -24,7 +24,7 @@ deploy-backend: docker-build docker-push cloud-run-deploy
 .PHONY: docker-build
 docker-build:
 	@echo "Building Docker image $(IMAGE)..."
-	docker build -t $(IMAGE) backend/
+	docker build --platform linux/amd64 -t $(IMAGE) backend/
 
 .PHONY: docker-push
 docker-push:
@@ -44,7 +44,7 @@ cloud-run-deploy:
 		--region=$(GCP_REGION) \
 		--platform=managed \
 		--allow-unauthenticated \
-		--env-vars-file=backend/.env.production \
+		--set-env-vars="^|^$(shell grep -v '^[[:space:]]*#' backend/.env.production | grep -v '^[[:space:]]*$$' | tr '\n' '|' | sed 's/|$$//')" \
 		--account=$(GCP_ACCOUNT) \
 		--project=$(GCP_PROJECT)
 	@echo "Backend URL:"
