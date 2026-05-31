@@ -10,15 +10,9 @@ import {
   Check,
   DollarSign,
   ImagePlus,
-  CheckCircle2,
-  Circle,
 } from 'lucide-react';
-import { useAuth } from '../../../app/providers/auth-context';
-import { useTripContext } from '../../../app/providers/trip-context';
 import {
   getMyTripPhaseDetail,
-  getPhaseCompletions,
-  updatePhaseCompletion,
   type Activity,
   type TripPhaseDetail,
 } from '../services/trip-api';
@@ -126,13 +120,10 @@ export default function DayDetails() {
   const { dayId } = useParams<{ dayId: string }>();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuth();
-  const { tripInfo, refetch } = useTripContext();
 
   const [phase, setPhase] = useState<TripPhaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isCompleted, setIsCompleted] = useState(false);
 
   useEffect(() => {
     if (!dayId) return;
@@ -143,25 +134,6 @@ export default function DayDetails() {
       .catch(e => setError(e instanceof Error ? e.message : 'Erro ao carregar dia'))
       .finally(() => setLoading(false));
   }, [dayId]);
-
-  useEffect(() => {
-    if (!phase || !user || !dayId || !tripInfo) return;
-    getPhaseCompletions(tripInfo.wetravel_trip_uuid, user.userId)
-      .then(data => setIsCompleted(data.completions[dayId] ?? false))
-      .catch(() => {});
-  }, [phase, user, dayId, tripInfo]);
-
-  const handleToggleCompleted = async () => {
-    if (!user || !dayId || !tripInfo) return;
-    const newVal = !isCompleted;
-    setIsCompleted(newVal);
-    try {
-      await updatePhaseCompletion(user.userId, tripInfo.wetravel_trip_uuid, dayId, newVal);
-      refetch();
-    } catch {
-      setIsCompleted(!newVal);
-    }
-  };
 
   if (loading) {
     return (
@@ -207,22 +179,6 @@ export default function DayDetails() {
           </div>
         </div>
 
-        <div className="px-4 pb-5">
-          <button
-            onClick={handleToggleCompleted}
-            className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-              isCompleted
-                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                : 'bg-white/15 text-white border border-white/30 hover:bg-white/25'
-            }`}
-          >
-            {isCompleted ? (
-              <><CheckCircle2 size={18} /> Day Completed!</>
-            ) : (
-              <><Circle size={18} /> Mark Day as Completed</>
-            )}
-          </button>
-        </div>
       </div>
 
       <div className="px-4 pt-6">
