@@ -184,14 +184,16 @@ make logs
 
 ## Troubleshooting
 
-### Docker push com 403
+### Token expirado (erro 403 no docker push ou gcs upload)
 
-O token do gcloud expirou. Reautenticar:
+O token do gcloud expira com frequência. Sempre que o deploy falhar com 403 ou "Reauthentication required", rodar:
 
 ```bash
 gcloud auth login angelo@parrottrips.com
 gcloud auth configure-docker southamerica-east1-docker.pkg.dev --account=angelo@parrottrips.com
 ```
+
+Depois repetir o comando de deploy normalmente.
 
 ### Cloud Run falhou ao criar revisão
 

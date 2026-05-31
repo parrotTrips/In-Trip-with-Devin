@@ -149,11 +149,12 @@ Pode compartilhar pelo WhatsApp, email ou mostrar o QR code da URL.
 
 Pontos a destacar durante a navegação:
 
-- **HomeScreen** — barra de progresso, game board com todas as fases
+- **HomeScreen** — barra de progresso (só fases pré-viagem antes da partida), game board com todas as fases
 - **Fase pré-viagem** — título, descrição, checklist interativo, links úteis
 - **Marcar um item do checklist** — barra avança em tempo real
-- **Roteiro** — dias da viagem, atividades com tipo (inclusa, opcional, logística)
+- **Roteiro** — dias da viagem, atividades com tipo (inclusa, opcional, logística) — progresso avança automaticamente pela data
 - **Viajantes** — avatares dos outros participantes e onde cada um está no caminho
+- **Perfil** — seletor de data de nascimento com dropdowns de Dia/Mês/Ano, botão Sign Out no final da tela
 
 ---
 
