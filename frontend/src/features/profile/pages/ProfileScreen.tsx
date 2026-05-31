@@ -124,6 +124,21 @@ function TextAreaField({ label, value, onChange, placeholder }: {
   );
 }
 
+const DOB_MONTHS = [
+  { value: '01', label: 'January' },
+  { value: '02', label: 'February' },
+  { value: '03', label: 'March' },
+  { value: '04', label: 'April' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'June' },
+  { value: '07', label: 'July' },
+  { value: '08', label: 'August' },
+  { value: '09', label: 'September' },
+  { value: '10', label: 'October' },
+  { value: '11', label: 'November' },
+  { value: '12', label: 'December' },
+];
+
 function DateSelectField({ label, value, onChange }: {
   label: string;
   value: string;
@@ -131,20 +146,6 @@ function DateSelectField({ label, value, onChange }: {
 }) {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 1929 }, (_, i) => currentYear - i);
-  const months = [
-    { value: '01', label: 'January' },
-    { value: '02', label: 'February' },
-    { value: '03', label: 'March' },
-    { value: '04', label: 'April' },
-    { value: '05', label: 'May' },
-    { value: '06', label: 'June' },
-    { value: '07', label: 'July' },
-    { value: '08', label: 'August' },
-    { value: '09', label: 'September' },
-    { value: '10', label: 'October' },
-    { value: '11', label: 'November' },
-    { value: '12', label: 'December' },
-  ];
 
   const parts = value ? value.split('-') : ['', '', ''];
   const selectedYear = parts[0] ?? '';
@@ -157,12 +158,11 @@ function DateSelectField({ label, value, onChange }: {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const handleChange = (year: string, month: string, day: string) => {
-    if (year && month && day) {
-      const paddedDay = day.padStart(2, '0');
-      onChange(`${year}-${month}-${paddedDay}`);
-    } else {
-      onChange('');
-    }
+    if (!year || !month || !day) { onChange(''); return; }
+    // Clamp day if the new month/year has fewer days (e.g. switching from Jan 31 to Feb)
+    const maxDays = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const clampedDay = Math.min(parseInt(day), maxDays);
+    onChange(`${year}-${month}-${String(clampedDay).padStart(2, '0')}`);
   };
 
   const selectClass = "px-2 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-white";
@@ -172,6 +172,7 @@ function DateSelectField({ label, value, onChange }: {
       <label className="text-xs font-medium text-gray-500">{label}</label>
       <div className="grid grid-cols-3 gap-2">
         <select
+          aria-label="Day"
           value={selectedDay}
           onChange={e => handleChange(selectedYear, selectedMonth, e.target.value)}
           className={selectClass}
@@ -182,16 +183,18 @@ function DateSelectField({ label, value, onChange }: {
           ))}
         </select>
         <select
+          aria-label="Month"
           value={selectedMonth}
           onChange={e => handleChange(selectedYear, e.target.value, selectedDay)}
           className={selectClass}
         >
           <option value="">Month</option>
-          {months.map(m => (
+          {DOB_MONTHS.map(m => (
             <option key={m.value} value={m.value}>{m.label}</option>
           ))}
         </select>
         <select
+          aria-label="Year"
           value={selectedYear}
           onChange={e => handleChange(e.target.value, selectedMonth, selectedDay)}
           className={selectClass}
