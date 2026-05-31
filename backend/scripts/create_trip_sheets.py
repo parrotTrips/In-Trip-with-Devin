@@ -66,34 +66,34 @@ ROTEIRO_HEADER = [
 def _fases_example_rows(trip_uuid: str) -> list[list[str]]:
     u = trip_uuid
     return [
-        [u, "1", "visa",        "Visto",              "Requisitos de entrada para o Brasil",  "passport",  "Verifique os requisitos de visto para sua nacionalidade.", "Cidadãos americanos precisam de eVisa para o Brasil. Solicite com antecedência."],
-        [u, "2", "vaccination", "Vacinas",             "Requisitos de saúde para viagem",      "syringe",   "Vacinas obrigatórias e recomendadas para o Brasil.",       "Febre amarela é fortemente recomendada. Consulte o CDC."],
-        [u, "3", "packing",     "Como Arrumar a Mala", "O que levar na viagem",                "luggage",   "Dicas de bagagem para o Brasil.",                         "Clima quente e úmido. Leve roupas leves, protetor solar e adaptador (Tipo N)."],
-        [u, "4", "documents",   "Documentos",          "Documentos de viagem necessários",     "file-text", "Todos os documentos essenciais para a viagem.",           "Mantenha cópias digitais e impressas. Passaporte com 6+ meses de validade."],
+        [u, "1", "visa",        "Visa",          "Entry requirements for Brazil",       "passport",  "Check visa requirements for your nationality.",              "US citizens need an eVisa for Brazil. Apply well in advance at the official portal."],
+        [u, "2", "vaccination", "Vaccinations",  "Health requirements for travel",      "syringe",   "Required and recommended vaccines for Brazil.",              "Yellow fever is strongly recommended. Check the CDC for updated recommendations."],
+        [u, "3", "packing",     "Packing",       "What to bring on the trip",           "luggage",   "Packing tips for Brazil.",                                   "Hot and humid climate. Pack light clothes, sunscreen and a power adapter (Type N)."],
+        [u, "4", "documents",   "Documents",     "Travel documents you will need",      "file-text", "All essential documents for your trip.",                     "Keep digital and printed copies. Passport must be valid for 6+ months beyond travel dates."],
     ]
 
 
 def _checklist_example_rows(trip_uuid: str) -> list[list[str]]:
     u = trip_uuid
     return [
-        [u, "visa",        "1", "Verificar se sua nacionalidade requer visto",    "true"],
-        [u, "visa",        "2", "Solicitar eVisa no portal oficial (se aplicável)", "true"],
-        [u, "vaccination", "1", "Tomar vacina de febre amarela",                  "true"],
-        [u, "vaccination", "2", "Obter carteira de vacinação internacional",       "false"],
-        [u, "packing",     "1", "Roupas leves e respiráveis",                     "false"],
-        [u, "packing",     "2", "Protetor solar FPS 50+",                         "false"],
-        [u, "documents",   "1", "Passaporte válido (6+ meses de validade)",       "true"],
-        [u, "documents",   "2", "Aprovação de visto impressa",                    "true"],
+        [u, "visa",        "1", "Check if your nationality requires a visa for Brazil", "true"],
+        [u, "visa",        "2", "Apply for eVisa on the official portal (if required)",  "true"],
+        [u, "vaccination", "1", "Get yellow fever vaccine",                              "true"],
+        [u, "vaccination", "2", "Obtain international vaccination certificate",          "false"],
+        [u, "packing",     "1", "Pack light and breathable clothing",                   "false"],
+        [u, "packing",     "2", "Pack sunscreen SPF 50+",                               "false"],
+        [u, "documents",   "1", "Valid passport (6+ months validity)",                  "true"],
+        [u, "documents",   "2", "Printed visa approval (if applicable)",                "true"],
     ]
 
 
 def _links_example_rows(trip_uuid: str) -> list[list[str]]:
     u = trip_uuid
     return [
-        [u, "visa",        "1", "Portal eVisa Brasil", "https://www.gov.br/mre/pt-br/assuntos/portal-consular/vistos"],
-        [u, "vaccination", "1", "CDC — Brasil",        "https://wwwnc.cdc.gov/travel/destinations/traveler/none/brazil"],
-        [u, "packing",     "1", "Guia de tomadas do Brasil", "https://www.power-plugs-sockets.com/brazil/"],
-        [u, "documents",   "1", "Guia de seguro viagem",     "https://www.gov.br/turismo/pt-br"],
+        [u, "visa",        "1", "Brazil eVisa Portal",          "https://www.gov.br/mre/pt-br/assuntos/portal-consular/vistos"],
+        [u, "vaccination", "1", "CDC — Brazil Travel Health",   "https://wwwnc.cdc.gov/travel/destinations/traveler/none/brazil"],
+        [u, "packing",     "1", "Brazil Power Plug Guide",      "https://www.power-plugs-sockets.com/brazil/"],
+        [u, "documents",   "1", "Travel Insurance Guide",       "https://www.gov.br/turismo/pt-br"],
     ]
 
 
@@ -101,12 +101,12 @@ def _roteiro_example_row(trip_uuid: str, trip: dict) -> list[str]:
     sd = trip["start_date"]
     date_str = (sd.strftime("%Y-%m-%d") if hasattr(sd, "strftime") else str(sd)[:10]) if sd else "YYYY-MM-DD"
     return [
-        trip_uuid, "1", date_str, "Day 1 — Chegada", "Chegada", "plane-landing",
-        "Transfer do aeroporto e check-in no hotel",
-        "Bem-vindos! Você será recebido no aeroporto e levado ao hotel. À noite, Welcome Happy Hour.",
-        "Transfer do Aeroporto", "logistics", "", "",
-        "Recepção no aeroporto conforme formulário de pré-viagem.",
-        "Procurar placa com o nome da Parrot Trips na área de desembarque.", "",
+        trip_uuid, "1", date_str, "Day 1 — Arrival", "Arrival", "plane-landing",
+        "Airport transfer and hotel check-in",
+        "Welcome! You will be greeted at the airport and taken to the hotel. Tonight: Welcome Happy Hour.",
+        "Airport Transfer", "logistics", "", "",
+        "Reception at the airport as per your pre-trip form.",
+        "Look for the Parrot Trips sign in the arrivals area.", "",
     ]
 
 
