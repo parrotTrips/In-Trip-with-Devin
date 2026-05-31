@@ -1,14 +1,14 @@
 interface Props {
   totalPhases: number;
-  currentPhaseOrder: number;
-  parrotPhaseOrder: number;
+  completedCount: number;
+  parrotCompletedCount: number;
 }
 
-export default function ProgressBar({ totalPhases, currentPhaseOrder, parrotPhaseOrder }: Props) {
+export default function ProgressBar({ totalPhases, completedCount, parrotCompletedCount }: Props) {
   if (totalPhases === 0) return null;
 
-  const userProgress = Math.round(((currentPhaseOrder + 1) / totalPhases) * 100);
-  const parrotProgress = Math.round(((parrotPhaseOrder + 1) / totalPhases) * 100);
+  const userProgress = Math.round((completedCount / totalPhases) * 100);
+  const parrotProgress = Math.round((parrotCompletedCount / totalPhases) * 100);
   const isBehind = userProgress < parrotProgress;
 
   return (
