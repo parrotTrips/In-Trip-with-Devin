@@ -85,6 +85,17 @@ trip_phases
 
 Durante o período pré-viagem, o viajante vai marcando as tarefas conforme se prepara.
 
+### Como a barra de progresso funciona no pré-trip
+
+A barra representa **quantas fases foram completadas** sobre o total de fases pré-viagem:
+
+- Começa em **0%** quando nenhuma fase foi marcada como completa
+- Avança conforme o viajante marca fases como completas
+- **Regressa** se o viajante desmarcar uma fase já concluída
+- Chega a **100%** quando todas as fases pré-viagem estão marcadas
+
+O passarinho (ideal pace) acompanha o próprio viajante durante o pré-trip — ele representa onde o viajante deveria estar, e no pré-trip isso é exatamente onde ele já está.
+
 ```mermaid
 flowchart TD
     A([Viajante abre o app]) --> B[App busca fases da viagem GET /me/trip/phases]
@@ -116,6 +127,15 @@ flowchart TD
     G --> H[Barra avanca automaticamente conforme os dias passam]
     H --> I([Viajante acompanha o progresso da viagem])
 ```
+
+### Como a barra de progresso funciona no in-trip
+
+Durante a viagem, a barra representa **quantos dias já começaram** sobre o total de dias do roteiro:
+
+- Calculado automaticamente em tempo real — sem nenhuma ação manual
+- Avança conforme os dias passam
+- O passarinho e a barra do viajante andam juntos (ambos são date-driven)
+- Não há como "desmarcar" um dia — o avanço é irreversível por natureza
 
 ### Como o avanço automático funciona
 
