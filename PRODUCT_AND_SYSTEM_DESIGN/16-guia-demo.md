@@ -54,7 +54,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 # Frontend carregando?
 curl -s -o /dev/null -w "%{http_code}\n" \
-  https://storage.googleapis.com/parrot-trips-frontend/index.html?v=0ac2ee8
+  https://storage.googleapis.com/parrot-trips-frontend/index.html?v=aa14855
 # Esperado: 200
 ```
 
@@ -123,7 +123,7 @@ Import complete!
 **4. Abrir o app e mostrar o conteúdo aparecendo**
 
 ```bash
-open https://storage.googleapis.com/parrot-trips-frontend/index.html?v=0ac2ee8
+open https://storage.googleapis.com/parrot-trips-frontend/index.html?v=aa14855
 ```
 
 ---
@@ -133,7 +133,7 @@ open https://storage.googleapis.com/parrot-trips-frontend/index.html?v=0ac2ee8
 **1. O convidado acessa o link**
 
 ```
-https://storage.googleapis.com/parrot-trips-frontend/index.html?v=0ac2ee8
+https://storage.googleapis.com/parrot-trips-frontend/index.html?v=aa14855
 ```
 
 Pode compartilhar pelo WhatsApp, email ou mostrar o QR code da URL.
@@ -195,7 +195,7 @@ make logs
 
 | O quê | URL |
 |---|---|
-| App (frontend) | `https://storage.googleapis.com/parrot-trips-frontend/index.html?v=0ac2ee8` |
+| App (frontend) | `https://storage.googleapis.com/parrot-trips-frontend/index.html?v=aa14855` |
 | Backend (API) | `https://parrot-trips-backend-428743191336.southamerica-east1.run.app` |
 | Planilha de conteúdo | [Google Drive — pasta de viagens](https://drive.google.com/drive/folders/1mqUSDMygVJ-rAFlHQJEyRjTpDPx9MilP) |
 | Supabase | Dashboard do projeto no Supabase |
