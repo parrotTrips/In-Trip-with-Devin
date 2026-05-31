@@ -77,9 +77,20 @@ export default function HomeScreen() {
     ? phases.filter(p => p.phase_type === 'in-trip')
     : phases.filter(p => p.phase_type === 'pre-trip');
 
-  const currentUserIdx = progressPhases.findIndex(p => p.id === currentUserPhaseId);
-  const parrotIdx = progressPhases.findIndex(p => p.id === parrotPhaseId);
   const totalPhases = progressPhases.length;
+
+  // completedCount = number of phases completed before the current one.
+  // findIndex returns the index of the FIRST incomplete phase (= count of completed phases).
+  // -1 means currentUserPhaseId is not in progressPhases (e.g. all pre-trip done →
+  // currentUserPhaseId points to an in-trip day) → treat as all complete.
+  const rawUserIdx = progressPhases.findIndex(p => p.id === currentUserPhaseId);
+  const completedCount = rawUserIdx === -1 ? totalPhases : rawUserIdx;
+
+  // Parrot: in pre-trip mode follows the user; in in-trip counts phases already started by date.
+  const now = new Date();
+  const parrotCompletedCount = tripStarted
+    ? progressPhases.filter(p => p.starts_at && new Date(p.starts_at) <= now).length
+    : completedCount;
 
   const displayTitle = tripInfo?.title ?? 'Sua Viagem';
   const displayDates = tripInfo
@@ -139,8 +150,8 @@ export default function HomeScreen() {
           <div className="relative z-10 mt-1">
             <ProgressBar
               totalPhases={totalPhases}
-              currentPhaseOrder={currentUserIdx}
-              parrotPhaseOrder={parrotIdx}
+              completedCount={completedCount}
+              parrotCompletedCount={parrotCompletedCount}
             />
           </div>
         </div>
@@ -177,7 +188,7 @@ export default function HomeScreen() {
               const isCurrentUser = phase.id === currentUserPhaseId;
               const isParrotHere = phase.id === parrotPhaseId;
               const phaseProgressIdx = progressPhases.findIndex(p => p.id === phase.id);
-              const isPast = phaseProgressIdx >= 0 && currentUserIdx >= 0 && phaseProgressIdx < currentUserIdx;
+              const isPast = phaseProgressIdx >= 0 && phaseProgressIdx < completedCount;
               const isCurrent = phase.id === currentUserPhaseId;
               const isPreTrip = phase.phase_type === 'pre-trip';
               const travelersHere = travelers.filter(t => t.current_phase_id === phase.id);
