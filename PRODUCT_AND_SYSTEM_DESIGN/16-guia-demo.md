@@ -72,7 +72,7 @@ make deploy-backend
 **1. Mostrar o banco vazio**
 
 ```bash
-cd backend
+cd /Users/masfz/Programacao/parrot_trips/In-Trip-with-Devin/backend
 poetry run python scripts/reset_trip_content.py --trip-uuid TEST-2026-FULL --dry-run
 ```
 
@@ -97,6 +97,8 @@ Mostrar que a primeira coluna em todas as abas é o `trip_uuid` — isso é o qu
 ```bash
 poetry run python scripts/import_trip_content.py --trip-uuid TEST-2026-FULL
 ```
+
+> Todos os comandos `poetry run` precisam ser executados de dentro da pasta `backend/`.
 
 Output esperado:
 ```
@@ -157,6 +159,11 @@ Pontos a destacar durante a navegação:
 
 ## Comandos de referência rápida
 
+> Todos os comandos `poetry run` precisam ser executados de dentro da pasta `backend/`:
+> ```bash
+> cd /Users/masfz/Programacao/parrot_trips/In-Trip-with-Devin/backend
+> ```
+
 ```bash
 # Limpar conteúdo da viagem de teste (sem apagar a viagem)
 poetry run python scripts/reset_trip_content.py --trip-uuid TEST-2026-FULL
@@ -176,6 +183,8 @@ poetry run python scripts/add_test_user.py \
   --remove
 
 # Ver logs do backend em tempo real (para mostrar requests chegando)
+# Rodar da raiz do repositório:
+cd /Users/masfz/Programacao/parrot_trips/In-Trip-with-Devin
 make logs
 ```
 
