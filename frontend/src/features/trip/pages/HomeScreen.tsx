@@ -81,16 +81,22 @@ export default function HomeScreen() {
 
   // completedCount = number of phases completed before the current one.
   // findIndex returns the index of the FIRST incomplete phase (= count of completed phases).
-  // -1 means currentUserPhaseId is not in progressPhases (e.g. all pre-trip done →
-  // currentUserPhaseId points to an in-trip day) → treat as all complete.
-  const rawUserIdx = progressPhases.findIndex(p => p.id === currentUserPhaseId);
+  // null → user has no phase assigned yet → 0 completed.
+  // -1  → currentUserPhaseId not in progressPhases (e.g. all pre-trip done, pointer is an
+  //        in-trip day) OR all in-trip phases started (backend returns last phase) → all complete.
+  const rawUserIdx = currentUserPhaseId === null
+    ? 0
+    : progressPhases.findIndex(p => p.id === currentUserPhaseId);
   const completedCount = rawUserIdx === -1 ? totalPhases : rawUserIdx;
 
-  // Parrot: in pre-trip mode follows the user; in in-trip counts phases already started by date.
+  // In-trip: both user and parrot progress are date-driven (automatic).
+  // Pre-trip: parrot mirrors user (user drives their own pace).
   const now = new Date();
-  const parrotCompletedCount = tripStarted
+  const dateBasedCount = tripStarted
     ? progressPhases.filter(p => p.starts_at && new Date(p.starts_at) <= now).length
-    : completedCount;
+    : 0;
+  const userCompletedCount = tripStarted ? dateBasedCount : completedCount;
+  const parrotCompletedCount = tripStarted ? dateBasedCount : completedCount;
 
   const displayTitle = tripInfo?.title ?? 'Sua Viagem';
   const displayDates = tripInfo
@@ -150,7 +156,7 @@ export default function HomeScreen() {
           <div className="relative z-10 mt-1">
             <ProgressBar
               totalPhases={totalPhases}
-              completedCount={completedCount}
+              completedCount={userCompletedCount}
               parrotCompletedCount={parrotCompletedCount}
             />
           </div>
@@ -188,7 +194,7 @@ export default function HomeScreen() {
               const isCurrentUser = phase.id === currentUserPhaseId;
               const isParrotHere = phase.id === parrotPhaseId;
               const phaseProgressIdx = progressPhases.findIndex(p => p.id === phase.id);
-              const isPast = phaseProgressIdx >= 0 && phaseProgressIdx < completedCount;
+              const isPast = phaseProgressIdx >= 0 && currentUserPhaseId !== null && phaseProgressIdx < completedCount;
               const isCurrent = phase.id === currentUserPhaseId;
               const isPreTrip = phase.phase_type === 'pre-trip';
               const travelersHere = travelers.filter(t => t.current_phase_id === phase.id);
