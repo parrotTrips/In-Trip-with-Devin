@@ -1,4 +1,4 @@
-import { ArrowLeft, User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink } from 'lucide-react';
+import { ArrowLeft, User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../app/providers/auth-context';
@@ -126,7 +126,7 @@ function TextAreaField({ label, value, onChange, placeholder }: {
 
 export default function ProfileScreen() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { tripInfo } = useTripContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -429,7 +429,7 @@ export default function ProfileScreen() {
 
       {/* Save button - fixed at bottom */}
       <div className="fixed bottom-16 left-0 right-0 px-4 pb-4 z-40">
-        <div className="max-w-lg mx-auto">
+        <div className="max-w-lg mx-auto space-y-2">
           <button
             onClick={handleSave}
             disabled={saving}
@@ -462,6 +462,14 @@ export default function ProfileScreen() {
                 Save Profile
               </>
             )}
+          </button>
+
+          <button
+            onClick={logout}
+            className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-red-500 bg-red-50 hover:bg-red-100 transition-colors"
+          >
+            <LogOut size={18} />
+            Sign Out
           </button>
         </div>
       </div>
