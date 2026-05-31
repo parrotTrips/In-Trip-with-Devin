@@ -40,10 +40,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = (userId: string, phone: string, name: string | null, token: string, role: UserRole) => {
-    setUser({ userId, phone, name, token, role });
+    const newUser = { userId, phone, name, token, role };
+    localStorage.setItem('parrot_user', JSON.stringify(newUser));
+    setUser(newUser);
   };
 
   const logout = () => {
+    localStorage.removeItem('parrot_user');
     setUser(null);
   };
 
