@@ -89,8 +89,8 @@ async def add_user(phone: str, name: str, trip_uuid: str, dry_run: bool) -> None
             if not existing_user:
                 row = await conn.fetchrow(
                     """
-                    INSERT INTO users (phone, full_name, status, role)
-                    VALUES ($1, $2, 'active', 'traveler')
+                    INSERT INTO users (id, phone, full_name, status, role)
+                    VALUES (gen_random_uuid(), $1, $2, 'active', 'traveler')
                     RETURNING id
                     """,
                     phone, name,
@@ -100,8 +100,8 @@ async def add_user(phone: str, name: str, trip_uuid: str, dry_run: bool) -> None
 
             await conn.execute(
                 """
-                INSERT INTO trip_travelers (wetravel_trip_uuid, user_id)
-                VALUES ($1, $2)
+                INSERT INTO trip_travelers (id, wetravel_trip_uuid, user_id)
+                VALUES (gen_random_uuid(), $1, $2)
                 """,
                 trip_uuid, user_id,
             )
