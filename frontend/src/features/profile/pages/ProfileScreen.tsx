@@ -124,6 +124,88 @@ function TextAreaField({ label, value, onChange, placeholder }: {
   );
 }
 
+function DateSelectField({ label, value, onChange }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: currentYear - 1929 }, (_, i) => currentYear - i);
+  const months = [
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+  ];
+
+  const parts = value ? value.split('-') : ['', '', ''];
+  const selectedYear = parts[0] ?? '';
+  const selectedMonth = parts[1] ?? '';
+  const selectedDay = parts[2] ?? '';
+
+  const daysInMonth = selectedYear && selectedMonth
+    ? new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate()
+    : 31;
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const handleChange = (year: string, month: string, day: string) => {
+    if (year && month && day) {
+      const paddedDay = day.padStart(2, '0');
+      onChange(`${year}-${month}-${paddedDay}`);
+    } else {
+      onChange('');
+    }
+  };
+
+  const selectClass = "px-2 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-white";
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-gray-500">{label}</label>
+      <div className="grid grid-cols-3 gap-2">
+        <select
+          value={selectedDay}
+          onChange={e => handleChange(selectedYear, selectedMonth, e.target.value)}
+          className={selectClass}
+        >
+          <option value="">Day</option>
+          {days.map(d => (
+            <option key={d} value={String(d).padStart(2, '0')}>{d}</option>
+          ))}
+        </select>
+        <select
+          value={selectedMonth}
+          onChange={e => handleChange(selectedYear, e.target.value, selectedDay)}
+          className={selectClass}
+        >
+          <option value="">Month</option>
+          {months.map(m => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
+        <select
+          value={selectedYear}
+          onChange={e => handleChange(e.target.value, selectedMonth, selectedDay)}
+          className={selectClass}
+        >
+          <option value="">Year</option>
+          {years.map(y => (
+            <option key={y} value={String(y)}>{y}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfileScreen() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -282,7 +364,7 @@ export default function ProfileScreen() {
             <InputField label="Preferred Name" value={form.preferred_name} onChange={v => setField('preferred_name', v)} placeholder="How you'd like to be called" />
             <InputField label="Email" value={form.email} onChange={v => setField('email', v)} type="email" placeholder="your@email.com" />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Date of Birth" value={form.dob} onChange={v => setField('dob', v)} type="date" />
+              <DateSelectField label="Date of Birth" value={form.dob} onChange={v => setField('dob', v)} />
               <SelectField label="Gender" value={form.gender} onChange={v => setField('gender', v)} options={[
                 { value: 'male', label: 'Male' },
                 { value: 'female', label: 'Female' },
