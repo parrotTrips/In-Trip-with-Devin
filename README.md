@@ -1,314 +1,371 @@
-# Parrot Trips - App de Experiencia Durante a Viagem
+# Parrot Trips — In-Trip App
 
-Aplicativo web da Parrot Trips para acompanhar uma viagem em grupo no Brasil. Ele combina autenticacao por WhatsApp, mapa de progresso da viagem, checklists por fase, comentarios colaborativos, notificacoes, perfil do viajante e missoes gamificadas.
+Aplicativo web da Parrot Trips para acompanhar uma viagem em grupo. Permite que viajantes se autentiquem via WhatsApp, acompanhem o roteiro, completem checklists pré-viagem e vejam o progresso da viagem em tempo real.
 
-Este repositorio tem dois blocos principais:
+---
 
-- `frontend/`: interface do app em React + Vite
-- `backend/`: API em FastAPI com persistencia em SQLite
+## URLs de Produção
 
-## Visao Geral
+| O quê | URL |
+|---|---|
+| **App (frontend)** | `https://storage.googleapis.com/parrot-trips-frontend/index.html?v=b411468` |
+| **Backend (API)** | `https://parrot-trips-backend-428743191336.southamerica-east1.run.app` |
+| **Planilha de conteúdo** | [Google Drive — Parrot Trips Conteúdo de Viagens](https://drive.google.com/drive/folders/1mqUSDMygVJ-rAFlHQJEyRjTpDPx9MilP) |
 
-O app foi pensado para funcionar como um companion app da viagem. Em vez de ser apenas um painel administrativo, ele acompanha o viajante ao longo da experiencia.
+---
 
-Na pratica, a pessoa entra no app, se autentica, visualiza onde esta na jornada, abre detalhes de cada fase, marca itens como concluidos, comenta em fases e dias da viagem, consulta notificacoes e participa de desafios e missoes.
+## Arquitetura
 
-Boa parte da experiencia gira em torno de uma linha do tempo visual da trip. O backend guarda o estado dinamico de cada viajante, enquanto o frontend monta a navegacao e a apresentacao dessas informacoes.
+```
+WeTravel (externo)          Google Sheets               GCP
+     │                           │                        │
+     │  wetravel_trips       Planilha única          Cloud Run
+     │  trip_travelers       (Viagens, Fases,        (backend)
+     │                        Checklist, Links,           │
+     ▼                         Roteiro)              Cloud Storage
+  Supabase ◄── scripts Python ◄─┘                    (frontend)
+(PostgreSQL)
+```
 
-## Demo
+### Stack
 
-- Frontend: `https://parrottrips-app-ke2ylzmt.devinapps.com`
-- Backend API: `https://app-rxxkezkz.fly.dev`
-- Docs da API: `https://app-rxxkezkz.fly.dev/docs`
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS |
+| Backend | Python 3.13 + FastAPI + SQLAlchemy async |
+| Banco | Supabase (PostgreSQL) |
+| Auth | WhatsApp OTP + JWT |
+| Deploy | GCP Cloud Run (backend) + GCP Cloud Storage (frontend) |
+| Conteúdo | Google Sheets → scripts Python → Supabase |
 
-## O Que o App Faz
+---
 
-- login por numero de telefone com OTP via WhatsApp
-- mapa principal da viagem com fases pre-trip e in-trip
-- tela de detalhes de fase com checklist e comentarios
-- tela de detalhes de dia com roteiro, atividades e album
-- perfil do viajante com dados da experiencia
-- notificacoes e avisos
-- missoes e leaderboard
-- documentos, recomendacoes, contatos de emergencia e compartilhamento
+## Estrutura do Repositório
+
+```
+/
+├── Makefile                        # Comandos de deploy raiz
+├── roadmap.md                      # Roadmap do projeto
+├── backend/
+│   ├── app/
+│   │   ├── core/                   # Configurações (JWT, env vars)
+│   │   ├── db/                     # Models SQLAlchemy + sessão
+│   │   ├── middleware/             # JWT auth middleware
+│   │   ├── routers/                # Endpoints HTTP
+│   │   │   ├── admin.py            # /admin — operações de gestão
+│   │   │   ├── auth.py             # /auth — OTP + JWT
+│   │   │   ├── checklist.py        # /checklist — progresso
+│   │   │   ├── profile.py          # /profile — perfil do viajante
+│   │   │   ├── trip.py             # /me/trip — viagem e fases
+│   │   │   └── users.py            # /users
+│   │   └── services/               # Regras de negócio
+│   │       ├── admin_service.py    # Import/reset via API
+│   │       ├── checklist_service.py
+│   │       ├── trip_service.py     # Fases + progresso date-driven
+│   │       └── ...
+│   ├── scripts/                    # Scripts de operação manual
+│   │   ├── add_test_user.py        # Adicionar viajante de teste
+│   │   ├── create_trip_sheets.py   # Criar planilha no Drive
+│   │   ├── import_trip_content.py  # Planilha → Supabase
+│   │   ├── reset_trip_content.py   # Apagar conteúdo do banco
+│   │   └── reset_traveler_progress.py  # Zerar progresso
+│   ├── Dockerfile                  # Imagem de produção
+│   ├── .env                        # Variáveis locais (não commitado)
+│   └── .env.production             # Variáveis de produção (não commitado)
+├── frontend/
+│   ├── src/
+│   │   ├── app/                    # Router, providers (Auth, Trip)
+│   │   ├── features/               # Telas por domínio
+│   │   │   ├── auth/               # LoginScreen
+│   │   │   ├── profile/            # ProfileScreen
+│   │   │   └── trip/               # HomeScreen, PhaseDetails, DayDetails
+│   │   └── shared/                 # ProgressBar, BottomNav, TopBar, API client
+│   ├── .env.production             # VITE_API_URL (não commitado)
+│   └── firebase.json               # (não utilizado — deploy via GCS)
+├── google-apps-script/
+│   ├── Code.gs                     # Menu admin para Google Sheets
+│   └── README.md                   # Instruções de instalação
+└── PRODUCT_AND_SYSTEM_DESIGN/      # Documentação de produto
+    ├── 11-guia-preenchimento-dados-viagem.md
+    ├── 13-insercao-conteudo-viagem-google-sheets.md
+    ├── 14-fluxo-planilhas-supabase-app.md
+    ├── 15-deploy-gcp.md
+    └── 16-guia-demo.md
+```
+
+---
 
 ## Como Rodar Localmente
 
-### Pre-requisitos
+### Pré-requisitos
 
-- Node.js 18 ou superior
-- Python 3.12 ou superior
-- Poetry instalado
+- Python 3.13 + Poetry
+- Node.js 18+
+- Acesso ao Supabase (DATABASE_URL no `.env`)
 
-### 1. Subir o backend
+### Backend
 
 ```bash
 cd backend
 poetry install
-cp .env.example .env
-poetry run fastapi dev app/main.py
+poetry run uvicorn app.main:app --port 8000 --reload
+# ou: make dev (a partir da pasta backend/)
 ```
 
-Backend local padrao: `http://localhost:8000`
-
-### 2. Configurar o frontend
+### Frontend
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env
-```
-
-Se quiser usar o backend local, ajuste `frontend/.env` para:
-
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-### 3. Subir o frontend
-
-```bash
-cd frontend
+echo "VITE_API_URL=http://localhost:8000" > .env
 npm run dev
 ```
 
-Frontend local padrao: `http://localhost:5173`
+---
 
-## Como Testar a Aplicacao
+## Deploy
 
-Existem dois jeitos principais de testar o app localmente.
-
-### Fluxo real com OTP
-
-Esse modo reproduz melhor o comportamento real do produto.
-
-1. suba o backend
-2. suba o frontend
-3. abra o app no navegador
-4. informe um telefone valido
-5. solicite o codigo OTP
-6. valide o codigo para entrar no app
-
-Esse caminho depende do backend e, se voce quiser entrega real por WhatsApp, tambem depende das credenciais da Meta configuradas no `.env` do backend.
-
-### Fluxo rapido para desenvolvimento, sem OTP
-
-Se a sua meta for apenas navegar no app como se fosse um viajante, existe um bypass de login disponivel somente em desenvolvimento.
-
-Rode o frontend assim:
+Todos os comandos rodam da **raiz do repositório**.
 
 ```bash
-cd frontend
-VITE_DEV_AUTO_LOGIN=true npm run dev
+make deploy-backend    # Build Docker + push para Artifact Registry + deploy Cloud Run
+make deploy-frontend   # Build React + upload para Cloud Storage
+make deploy            # Os dois juntos
+make logs              # Logs do Cloud Run em tempo real
+make backend-url       # Imprime a URL do backend
 ```
 
-Com isso, o app entra direto em uma sessao autenticada quando nao existir `parrot_user` salvo no navegador.
+**Pré-requisitos para deploy:**
+- `gcloud` autenticado: `gcloud auth login angelo@parrottrips.com`
+- `backend/.env.production` preenchido (copiar de `backend/.env.production.example`)
+- `frontend/.env.production` com `VITE_API_URL=<url do cloud run>`
 
-Voce tambem pode definir um usuario fake especifico:
-
+Se o deploy falhar com 403 ou "Reauthentication required":
 ```bash
-cd frontend
-VITE_DEV_AUTO_LOGIN=true \
-VITE_DEV_USER_ID=7 \
-VITE_DEV_USER_PHONE=+5511999999999 \
-VITE_DEV_USER_NAME="Viajante Teste" \
-npm run dev
+gcloud auth login angelo@parrottrips.com
+gcloud auth configure-docker southamerica-east1-docker.pkg.dev --account=angelo@parrottrips.com
 ```
 
-Esse atalho:
+**GCP Project:** `jogo-da-vida-497700` | **Region:** `southamerica-east1` | **Account:** `angelo@parrottrips.com`
 
-- so funciona em ambiente de desenvolvimento
-- nao muda o comportamento de producao
-- nao substitui uma sessao real ja salva no `localStorage`
+---
 
-Se quiser voltar ao fluxo normal de login, basta parar de usar a flag `VITE_DEV_AUTO_LOGIN` e recarregar o app.
+## Banco de Dados (Supabase)
 
-## Variaveis de Ambiente
+### Tabelas principais
 
-### Frontend
-
-Arquivo: `frontend/.env`
-
-| Variavel | Para que serve | Exemplo |
-|---|---|---|
-| `VITE_API_URL` | URL da API usada pelo frontend | `http://localhost:8000` |
-| `VITE_DEV_AUTO_LOGIN` | ativa o auto-login em desenvolvimento | `true` |
-| `VITE_DEV_USER_ID` | id do usuario fake de dev | `7` |
-| `VITE_DEV_USER_PHONE` | telefone do usuario fake de dev | `+5511999999999` |
-| `VITE_DEV_USER_NAME` | nome exibido do usuario fake de dev | `Viajante Teste` |
-
-### Backend
-
-Arquivo: `backend/.env`
-
-| Variavel | Para que serve |
+| Tabela | Função |
 |---|---|
-| `WHATSAPP_PHONE_NUMBER_ID` | identificador do numero na Meta |
-| `WHATSAPP_BUSINESS_ACCOUNT_ID` | identificador da conta WhatsApp Business |
-| `WHATSAPP_ACCESS_TOKEN` | token de acesso da API da Meta |
-| `WHATSAPP_TEMPLATE_NAME` | nome do template de autenticacao |
-| `DATABASE_PATH` | caminho do arquivo SQLite |
+| `wetravel_trips` | Viagens importadas do WeTravel (uuid, title, start_date, end_date) |
+| `users` | Viajantes e staff (phone, full_name, role) |
+| `otp_codes` | Códigos OTP temporários para login |
+| `trip_travelers` | Vínculo user ↔ viagem |
+| `traveler_profiles` | Dados detalhados do viajante (passaporte, restrições, etc.) |
+| `trip_phases` | Fases pré-trip e dias in-trip (phase_type, starts_at, sort_order) |
+| `trip_phase_checklist_items` | Itens de checklist por fase |
+| `trip_phase_links` | Links úteis por fase |
+| `trip_activities` | Atividades por dia (tipo, horário, duração, preço) |
+| `traveler_checklist_progress` | Progresso do checklist por viajante |
+| `traveler_phase_progress` | Fases marcadas como completas por viajante |
 
-## Fluxo Em Alto Nivel de Como o Sistema Funciona
+### Origem dos dados
 
-### 1. Entrada no app
+- **WeTravel:** `wetravel_trips` e `trip_travelers` — importados automaticamente
+- **Google Sheets → scripts:** `trip_phases`, `trip_phase_checklist_items`, `trip_phase_links`, `trip_activities`
+- **App (em tempo real):** `traveler_checklist_progress`, `traveler_phase_progress`
 
-O frontend inicia a aplicacao e decide se o usuario esta logado ou nao.
+---
 
-- se existir uma sessao salva, ele entra direto no app
-- se estiver em desenvolvimento com auto-login ligado, ele cria uma sessao fake
-- se nao houver sessao, ele mostra a tela de login
+## Autenticação
 
-### 2. Login
+Fluxo completo:
 
-No fluxo normal, a pessoa informa o telefone e pede um codigo OTP.
+1. Usuário digita o número de WhatsApp no app
+2. Backend gera OTP, salva em `otp_codes` e envia via WhatsApp Business API
+3. Usuário digita o código recebido
+4. Backend valida, cria/atualiza o `user` no Supabase, retorna JWT (validade: 14 dias)
+5. Frontend salva o JWT no `localStorage` e o inclui em todas as requests via `Authorization: Bearer`
 
-O frontend envia esse telefone para o backend. O backend gera o codigo, guarda no banco e tenta enviar via WhatsApp. Depois disso, o usuario informa o codigo recebido e o backend valida a autenticacao. Quando a validacao passa, o frontend salva a sessao localmente e o app passa a funcionar como usuario autenticado.
+Rotas públicas (sem JWT): `/auth/*`, `/admin/*`, `/healthz`
 
-### 3. Navegacao principal
+---
 
-Depois de logado, o usuario cai no mapa principal da viagem.
+## Conteúdo das Viagens — Fluxo Completo
 
-Essa tela funciona como a visao central da experiencia. Ela mostra:
+### Planilha única no Google Drive
 
-- as fases da viagem
-- onde o viajante esta
-- o ritmo ideal sugerido pelo mascote
-- o caminho entre momentos pre-trip e in-trip
+Uma planilha centralizada `"Parrot Trips — Conteúdo de Viagens"` com 5 abas:
 
-Desse mapa saem os acessos para os detalhes de cada fase e para os dias da viagem.
+| Aba | Conteúdo | Importada? |
+|---|---|---|
+| **Viagens** | Lista de trip_uuid, nome e datas (sincronizado via Sync Trips) | Não — só referência |
+| **Fases** | Uma linha por fase pré-trip por viagem | Sim |
+| **Checklist** | Um item por linha | Sim |
+| **Links** | Um link por linha | Sim |
+| **Roteiro** | Uma linha por atividade de cada dia | Sim |
 
-### 4. Fases e dias
+Cada aba tem `trip_uuid` como primeira coluna.
 
-As telas de fase e de dia sao o coracao da experiencia operacional.
+### Menu Apps Script na planilha
 
-Nas fases, o viajante encontra instrucoes, checklist, progresso e comentarios.
+Após instalar `google-apps-script/Code.gs` na planilha (`Extensions → Apps Script`), o menu **🦜 Parrot Trips** aparece com:
 
-Nos dias da viagem, ele encontra a agenda, atividades, informacoes praticas, comentarios e elementos visuais da experiencia daquele momento.
+| Item | O que faz |
+|---|---|
+| 🔄 Sync Trips from Supabase | Atualiza a aba Viagens com viagens ativas do banco |
+| Import Trip Content → Supabase | Lê Fases/Checklist/Links/Roteiro e importa para o banco |
+| Reset Trip Content | Apaga fases, atividades e checklist do banco para uma viagem |
+| Reset Traveler Progress | Zera a barra de progresso de todos os viajantes |
 
-Essas telas misturam duas fontes:
-
-- conteudo da trip, que hoje ainda esta em boa parte organizado no frontend
-- estado dinamico do usuario, que vem do backend
-
-### 5. Estado do viajante
-
-O backend guarda o que muda de pessoa para pessoa. Por exemplo:
-
-- progresso de checklist
-- conclusao de fases
-- comentarios
-- perfil
-- notificacoes
-- progresso nas missoes
-
-Isso permite que a experiencia nao seja apenas estatica. Dois viajantes podem olhar a mesma viagem, mas com estados diferentes.
-
-### 6. Missoes, notificacoes e perfil
-
-Fora do mapa principal, o app tem areas de apoio importantes:
-
-- missoes: camada de engajamento e pontuacao
-- notificacoes: comunicacao operacional e avisos
-- perfil: dados do viajante e informacoes complementares da experiencia
-
-Essas partes ajudam a transformar o app em uma ferramenta de acompanhamento continuo, e nao apenas uma tela de consulta.
-
-## Estrutura Principal do Repositorio
-
-### Frontend
-
-O frontend esta organizado para separar composicao global, features e elementos compartilhados.
-
-```text
-frontend/src/
-  app/        ponto de entrada da aplicacao, router e providers
-  features/   telas e servicos agrupados por dominio
-  shared/     componentes e cliente base de API
-  test/       setup de testes e mocks
-```
-
-Em alto nivel:
-
-- `app/` cuida da entrada da aplicacao e da autenticacao local
-- `features/` concentra as telas e chamadas de API por area do produto
-- `shared/` guarda o que e reutilizado entre varias partes do app
-
-### Backend
-
-O backend esta modularizado por responsabilidade.
-
-```text
-backend/app/
-  core/      configuracoes gerais
-  db/        acesso e inicializacao do banco
-  routers/   endpoints HTTP
-  schemas/   modelos de dados
-  services/  regras de negocio
-```
-
-Em alto nivel:
-
-- `routers/` recebem as requisicoes
-- `services/` executam a logica principal
-- `schemas/` definem os formatos de entrada e saida
-- `db/` cuida da persistencia
-
-## Comandos Uteis
-
-### Frontend
-
-```bash
-cd frontend
-npm run dev
-npm run test -- --run
-npm run lint
-npm run build
-```
-
-### Backend
+### Scripts Python (linha de comando)
 
 ```bash
 cd backend
-poetry install
-poetry run fastapi dev app/main.py
+
+# Criar a planilha no Drive (primeira vez)
+poetry run python scripts/create_trip_sheets.py --folder-id <ID> --use-adc
+
+# Importar uma viagem (ou todas)
+poetry run python scripts/import_trip_content.py --trip-uuid TEST-2026-FULL
+poetry run python scripts/import_trip_content.py --all
+
+# Zerar progresso dos viajantes (~1 semana antes da partida)
+poetry run python scripts/reset_traveler_progress.py --trip-uuid TEST-2026-FULL
+
+# Apagar conteúdo do banco para uma viagem
+poetry run python scripts/reset_trip_content.py --trip-uuid TEST-2026-FULL
 ```
 
-## Endpoints Principais da API
+---
 
-| Metodo | Endpoint | Uso principal |
+## Barra de Progresso
+
+### Modo pré-trip (antes da data de início)
+
+- Conta fases pré-trip completadas pelo viajante
+- Começa em 0%, avança ao marcar fases, **regressa ao desmarcar**
+- O passarinho (ideal pace) acompanha o viajante
+
+### Modo in-trip (a partir da data de início)
+
+- Calculado automaticamente: `fases cujo starts_at <= agora`
+- Avança sozinho conforme os dias passam — sem ação manual
+- Passarinho e viajante andam juntos (ambos date-driven)
+
+### Transição
+
+A equipe roda `reset_traveler_progress.py` ~1 semana antes da partida. O app detecta automaticamente qual modo exibir baseado na `start_date` da viagem.
+
+---
+
+## API Admin (sem autenticação)
+
+Endpoints para uso interno via Apps Script ou curl:
+
+```bash
+BACKEND=https://parrot-trips-backend-428743191336.southamerica-east1.run.app
+
+# Listar viagens ativas
+GET $BACKEND/admin/trips
+
+# Importar conteúdo de uma viagem da planilha
+POST $BACKEND/admin/trips/import        {"trip_uuid": "..."}
+
+# Apagar conteúdo do banco para uma viagem
+POST $BACKEND/admin/trips/reset-content {"trip_uuid": "..."}
+
+# Zerar progresso dos viajantes
+POST $BACKEND/admin/trips/reset-progress {"trip_uuid": "..."}
+```
+
+---
+
+## Endpoints da API (autenticados via JWT)
+
+| Método | Endpoint | Uso |
 |---|---|---|
-| `GET` | `/healthz` | health check |
-| `POST` | `/auth/request-otp` | solicitar OTP |
-| `POST` | `/auth/verify-otp` | validar OTP e entrar |
-| `GET` | `/users/{user_id}` | consultar usuario |
-| `PUT` | `/users/{user_id}` | atualizar usuario |
-| `GET` | `/profile/{user_id}` | consultar perfil |
-| `PUT` | `/profile/{user_id}` | atualizar perfil |
-| `POST` | `/checklist/update` | atualizar checklist |
-| `GET` | `/checklist/{trip_id}/{user_id}` | ler progresso do checklist |
-| `POST` | `/phases/complete` | marcar fase como concluida |
-| `GET` | `/phases/{trip_id}/{user_id}` | ler fases concluidas |
-| `GET` | `/missions/{trip_id}` | listar missoes |
+| `POST` | `/auth/request-otp` | Solicitar OTP via WhatsApp |
+| `POST` | `/auth/verify-otp` | Validar OTP e receber JWT |
+| `GET` | `/me/trip` | Dados da viagem do usuário |
+| `GET` | `/me/trip/phases` | Fases + checklist + links |
+| `GET` | `/me/trip/phases/{id}` | Fase específica com atividades |
+| `GET` | `/me/trip/travelers` | Viajantes com posição atual |
+| `GET` | `/profile/{user_id}` | Perfil completo |
+| `PUT` | `/profile/{user_id}` | Atualizar perfil |
+| `POST` | `/checklist/update` | Marcar/desmarcar item de checklist |
+| `GET` | `/checklist/{trip_id}/{user_id}` | Progresso do checklist |
+| `POST` | `/phases/complete` | Marcar/desmarcar fase como completa |
+| `GET` | `/phases/{trip_id}/{user_id}` | Fases completadas |
 
-## Viagem Atual no Projeto
+---
 
-O conteudo atual do app representa uma experiencia de viagem da Parrot Trips no Brasil, com foco em Rio de Janeiro e Ilha Grande.
+## Viagem de Teste
 
-Mesmo quando a camada visual da trip esta no frontend, o backend ainda e responsavel por guardar o estado que muda durante o uso real da aplicacao.
+Para desenvolvimento e demos:
 
-## Resumo Final
+| Campo | Valor |
+|---|---|
+| `trip_uuid` | `TEST-2026-FULL` |
+| Nome | Viagem de Teste — Full Coverage |
+| Data início | 2026-07-01 |
 
-Se voce quer testar rapido:
+### Cadastrar um viajante de teste
 
-1. suba o backend em `localhost:8000`
-2. aponte o frontend para esse backend
-3. rode o frontend com `VITE_DEV_AUTO_LOGIN=true`
-4. abra `http://localhost:5173`
+```bash
+cd backend
+poetry run python scripts/add_test_user.py \
+  --phone +5511999999999 \
+  --name "Nome" \
+  --trip-uuid TEST-2026-FULL
 
-Se voce quer validar o fluxo real:
+# Remover depois da demo:
+poetry run python scripts/add_test_user.py --phone +5511999999999 --remove
+```
 
-1. rode backend e frontend
-2. entre pelo login
-3. solicite o OTP
-4. autentique e navegue pelo mapa, fases, dias, perfil, notificacoes e missoes
+**Viajantes atuais na viagem de teste:**
+- Marcelo Angelo (+5512991296651)
+- Vitor Sanches (+5511997666680)
+- Becker (+5511981121225)
+- Bia (+5511997220065)
+- Bela (+5534992526835)
+- Karen (+5511973653160)
+- Jaqueline (+5512991479500)
+
+---
+
+## Variáveis de Ambiente
+
+### `backend/.env` (local) e `backend/.env.production` (produção)
+
+```
+DATABASE_URL=postgresql+asyncpg://...
+JWT_SECRET=...
+WHATSAPP_PHONE_NUMBER_ID=...
+WHATSAPP_BUSINESS_ACCOUNT_ID=...
+WHATSAPP_ACCESS_TOKEN=...
+WHATSAPP_TEMPLATE_NAME=intripauth
+WHATSAPP_TEMPLATE_LANGUAGE=en
+SUPABASE_ANON_KEY=...
+TRIP_CONTENT_SHEET_ID=1N1B66s1-K4DDf2_863frmhnpF6LRZB_ww60uax0gKZM
+GCP_SERVICE_ACCOUNT_JSON=secrets/gcp-service-account.json
+```
+
+### `frontend/.env.production`
+
+```
+VITE_API_URL=https://parrot-trips-backend-428743191336.southamerica-east1.run.app
+```
+
+---
+
+## Documentação Adicional
+
+Toda a documentação de produto e sistema está em `PRODUCT_AND_SYSTEM_DESIGN/`:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `11-guia-preenchimento-dados-viagem.md` | Como preencher a planilha de conteúdo |
+| `13-insercao-conteudo-viagem-google-sheets.md` | Estrutura da planilha e scripts |
+| `14-fluxo-planilhas-supabase-app.md` | Fluxo completo planilha → Supabase → app com diagramas |
+| `15-deploy-gcp.md` | Guia operacional de deploy na GCP |
+| `16-guia-demo.md` | Como preparar e conduzir uma demo |
