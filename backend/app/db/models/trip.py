@@ -88,3 +88,10 @@ class TripActivity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     practical_info: Mapped[str | None] = mapped_column(Text)
     amount_brl: Mapped[float | None] = mapped_column(Numeric(12, 2))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class TripSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "trip_settings"
+
+    trip_uuid: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    mode: Mapped[str] = mapped_column(Text, nullable=False, default="pre-trip")
