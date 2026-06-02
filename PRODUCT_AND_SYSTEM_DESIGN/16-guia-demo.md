@@ -1,17 +1,17 @@
 # Guia de Demo — Parrot Trips
 
-Como preparar e conduzir uma demonstração do aplicativo para colegas ou stakeholders, mostrando tanto o lado técnico (planilha → Supabase) quanto o lado do viajante (autenticação e navegação no app).
+Demonstração do aplicativo para colegas, mostrando tanto o lado técnico (planilha → Supabase) quanto o lado do viajante (autenticação e navegação no app).
 
 ---
 
 ## O que a demo mostra
 
-**Lado técnico (você conduz):**
+**Lado técnico:**
 - Como o conteúdo de uma viagem é estruturado em uma planilha Google Sheets
 - Como um script importa esse conteúdo para o banco de dados (Supabase)
 - O dado aparecendo em tempo real no aplicativo após o import
 
-**Lado do viajante (seu convidado experimenta):**
+**Lado do viajante:**
 - Acesso ao app pelo browser (sem instalação)
 - Autenticação via WhatsApp OTP
 - Navegação pelas fases pré-viagem, checklist e roteiro
@@ -91,6 +91,16 @@ Abrir a [planilha no Google Sheets](https://drive.google.com/drive/folders/1mqUS
 - **Roteiro** — dias e atividades
 
 Mostrar que a primeira coluna em todas as abas é o `trip_uuid` — isso é o que vincula o conteúdo à viagem certa.
+
+**Como cada aba funciona:**
+
+- **Fases** — cada linha é uma fase completa. Nova linha = nova fase.
+- **Checklist** — cada linha é um item. A coluna `fase` vincula o item a uma fase; nova linha = novo item nessa fase.
+- **Links** — idêntico ao Checklist: cada linha é um link vinculado a uma fase via coluna `fase`.
+- **Roteiro** — a coluna `dia` é a chave de agrupamento:
+  - mesma UUID + mesmo número em `dia` → nova atividade dentro do dia existente
+  - mesma UUID + número novo em `dia` → novo dia no app (com suas atividades)
+  - os campos `dia_titulo`, `dia_subtitulo`, etc. só são lidos da **primeira linha** de cada dia; nas linhas seguintes do mesmo dia esses campos são ignorados.
 
 **3. Rodar o import**
 
