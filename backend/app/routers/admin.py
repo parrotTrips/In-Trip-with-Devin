@@ -1,5 +1,7 @@
 """Admin HTTP routes — no JWT required, protected by network/sheet access only."""
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -49,5 +51,20 @@ async def reset_progress(body: TripUUIDRequest):
     """Delete all traveler checklist and phase progress for a trip."""
     try:
         return await admin_reset_progress(body.trip_uuid)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+class SetModeRequest(BaseModel):
+    trip_uuid: str
+    mode: Literal["pre-trip", "in-trip"]
+
+
+@router.post("/trips/set-mode")
+async def set_trip_mode(body: SetModeRequest):
+    """Manually set trip mode to 'pre-trip' or 'in-trip'."""
+    try:
+        from app.services.admin_service import admin_set_mode
+        return await admin_set_mode(body.trip_uuid, body.mode)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
