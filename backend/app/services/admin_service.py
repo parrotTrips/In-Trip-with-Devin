@@ -31,10 +31,18 @@ async def _get_connection() -> asyncpg.Connection:
     return await asyncpg.connect(PG_URL)
 
 
+def _build_sheets_client_adc():
+    """Build a Sheets client using Application Default Credentials (works in Cloud Run)."""
+    import google.auth
+    from googleapiclient.discovery import build as gapi_build
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    creds, _ = google.auth.default(scopes=SCOPES)
+    return gapi_build("sheets", "v4", credentials=creds)
+
+
 async def admin_import_trip(trip_uuid: str) -> dict:
     """Import trip content from Google Sheets into Supabase."""
     from scripts.import_trip_content import (
-        build_sheets_client,
         filter_rows_by_trip,
         parse_checklist_tab,
         parse_fases_tab,
@@ -47,7 +55,7 @@ async def admin_import_trip(trip_uuid: str) -> dict:
     if not TRIP_CONTENT_SHEET_ID:
         raise ValueError("TRIP_CONTENT_SHEET_ID is not set")
 
-    sheets_svc = build_sheets_client()
+    sheets_svc = _build_sheets_client_adc()
 
     fases_rows = filter_rows_by_trip(read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Fases"), trip_uuid)
     pre_trip_phases = parse_fases_tab(fases_rows)
