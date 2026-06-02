@@ -114,7 +114,7 @@ async def _resolve_trip_traveler(
     return user, trip_traveler
 
 
-def _parse_optional_date(value: str | None, field_name: str = "date") -> date | None:
+def _parse_optional_date(value: str | None, field_name: str) -> date | None:
     if not value:
         return None
     try:
@@ -138,7 +138,7 @@ def _encode_yes_no(value: bool | None) -> str | None:
     return "yes" if value else "no"
 
 
-def _decode_yes_no(value: str | None, field_name: str = "field") -> bool | None:
+def _decode_yes_no(value: str | None, field_name: str) -> bool | None:
     if value is None:
         return None
     if value == "yes":
@@ -257,6 +257,8 @@ async def update_profile(
         profile = TravelerProfile(trip_traveler_id=trip_traveler.id)
         session.add(profile)
 
+    # updated_fields tracks fields assigned in-memory; session.commit() is called at the end.
+    # If commit raises, the exception propagates and this list is never returned.
     updated_fields: list[str] = []
 
     if "preferred_name" in update_data:
