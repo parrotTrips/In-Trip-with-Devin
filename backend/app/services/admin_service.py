@@ -51,8 +51,8 @@ async def admin_list_trips() -> dict:
             {
                 "trip_uuid": r["trip_uuid"],
                 "title": r["title"] or "",
-                "start_date": r["start_date"].isoformat() if r["start_date"] else "",
-                "end_date": r["end_date"].isoformat() if r["end_date"] else "",
+                "start_date": str(r["start_date"])[:10] if r["start_date"] else "",
+                "end_date": str(r["end_date"])[:10] if r["end_date"] else "",
             }
             for r in rows
         ]
