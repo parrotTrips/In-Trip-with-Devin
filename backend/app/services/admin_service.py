@@ -39,7 +39,7 @@ async def admin_list_trips() -> dict:
             """
             SELECT trip_uuid, title, start_date, end_date
             FROM wetravel_trips
-            WHERE end_date IS NULL OR end_date >= CURRENT_DATE
+            WHERE end_date IS NULL OR end_date::date >= CURRENT_DATE
             ORDER BY start_date NULLS LAST
             """
         )
