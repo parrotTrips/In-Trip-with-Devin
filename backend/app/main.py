@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.session import dispose_engine
 from app.middleware.auth import JWTAuthMiddleware
+from app.routers.admin import router as admin_router
 from app.routers.auth import router as auth_router
 from app.routers.checklist import router as checklist_router
 from app.routers.health import router as health_router
@@ -32,6 +33,7 @@ app.add_middleware(JWTAuthMiddleware)
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(users_router)
 app.include_router(profile_router)
 app.include_router(trip_router)

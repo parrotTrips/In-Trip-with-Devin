@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 from app.core.config import JWT_ALGORITHM, JWT_SECRET
 
 _PUBLIC_PATHS = {"/healthz"}
-_PUBLIC_PREFIXES = ("/auth",)
+_PUBLIC_PREFIXES = ("/auth", "/admin")
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
