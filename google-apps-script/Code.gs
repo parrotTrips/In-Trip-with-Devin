@@ -13,6 +13,8 @@ function onOpen() {
     .addSeparator()
     .addItem("Reset Trip Content (apaga fases e atividades)", "resetContent")
     .addItem("Reset Traveler Progress (zera barra de progresso)", "resetProgress")
+    .addSeparator()
+    .addItem("Set Trip Mode (Pre-Trip / In-Trip)", "setTripMode")
     .addToUi();
 }
 
@@ -35,12 +37,13 @@ function getTripList() {
   return trips;
 }
 
-function callBackend(endpoint, trip_uuid) {
+function callBackend(endpoint, trip_uuid, customBody) {
   var url = BACKEND_URL + endpoint;
+  var body = customBody ? customBody : { trip_uuid: trip_uuid };
   var options = {
     method: "post",
     contentType: "application/json",
-    payload: JSON.stringify({ trip_uuid: trip_uuid }),
+    payload: JSON.stringify(body),
     muteHttpExceptions: true,
   };
   var response = UrlFetchApp.fetch(url, options);
@@ -143,8 +146,8 @@ function resetContent() {
 function resetProgress() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
-    "⚠️ Reset Traveler Progress",
-    "This will RESET the progress bar of all travelers for the chosen trip. Continue?",
+    "⚠️ Reset Traveler Progress → Switch to In-Trip",
+    "This will:\n• Reset the progress bar of all travelers\n• Switch the trip mode to IN-TRIP\n\nAfter this, the progress bar advances automatically as trip days pass.\n\nContinue?",
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
@@ -152,6 +155,35 @@ function resetProgress() {
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/reset-progress", trip_uuid));
+  } catch (e) {
+    ui.alert("❌ Error: " + e.message);
+  }
+}
+
+function setTripMode() {
+  var ui = SpreadsheetApp.getUi();
+  var trips = getTripList();
+  if (!trips || trips.length === 0) return;
+  var list = trips.map(function(t, i) {
+    return (i + 1) + ". " + t.name + " (" + t.date + ")\n   → " + t.uuid;
+  }).join("\n\n");
+  var response = ui.prompt(
+    "🦜 Set Trip Mode",
+    "Enter trip_uuid and mode separated by a space.\nModes: pre-trip | in-trip\n\nExample: TEST-2026-FULL pre-trip\n\n" + list,
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+  var parts = response.getResponseText().trim().split(/\s+/);
+  if (parts.length < 2) { ui.alert("Invalid input. Format: trip_uuid mode"); return; }
+  var trip_uuid = parts[0];
+  var mode = parts[1];
+  if (mode !== "pre-trip" && mode !== "in-trip") {
+    ui.alert("Invalid mode '" + mode + "'. Use 'pre-trip' or 'in-trip'.");
+    return;
+  }
+  try {
+    var result = callBackend("/admin/trips/set-mode", null, { trip_uuid: trip_uuid, mode: mode });
+    showResult(result);
   } catch (e) {
     ui.alert("❌ Error: " + e.message);
   }
