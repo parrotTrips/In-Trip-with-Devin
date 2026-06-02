@@ -7,6 +7,7 @@ export interface TripInfo {
   start_date: string;
   end_date: string;
   url: string | null;
+  trip_mode: 'pre-trip' | 'in-trip';
 }
 
 export interface ChecklistItem {
