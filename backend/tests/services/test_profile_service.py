@@ -13,6 +13,21 @@ TEST_TRIP_A = "test_profile_trip_A"
 TEST_TRIP_B = "test_profile_trip_B"
 
 
+async def seed_profile_context(session_factory, *, phone="+5511999000000"):
+    import uuid as _uuid_module
+    trip_uuid = f"test_trip_{str(_uuid_module.uuid4())[:8]}"
+    async with session_factory() as session:
+        from app.db.models.user import User
+        from app.db.models.trip import TripTraveler
+        user = User(phone=phone, full_name="Test User", status="active")
+        session.add(user)
+        await session.flush()
+        tt = TripTraveler(wetravel_trip_uuid=trip_uuid, user_id=user.id)
+        session.add(tt)
+        await session.commit()
+        return {"user": user, "trip_uuid": trip_uuid}
+
+
 async def seed_trip_assignment(
     session_factory,
     *,
@@ -78,7 +93,8 @@ def test_update_profile_creates_profile_through_trip_traveler(session_factory):
                 )
             )
 
-        assert update_response == {"message": "Profile updated"}
+        assert update_response["message"] == "Profile updated"
+        assert set(update_response["updated_fields"]) == {"preferred_name", "email"}
         assert profile_row is not None
         assert profile_row.preferred_name == "Carol"
         assert profile_response["name"] == "Carol"
@@ -147,3 +163,50 @@ def test_update_profile_rejects_unsupported_orphan_fields(session_factory):
         assert profile_response["profile"] is None
 
     asyncio.run(run_test())
+
+
+@pytest.mark.asyncio
+async def test_update_profile_rejects_invalid_date_format(session_factory):
+    """Invalid dob format returns 422, not 500."""
+    ctx = await seed_profile_context(session_factory, phone="+5511000000010")
+    async with session_factory() as session:
+        with pytest.raises(HTTPException) as exc_info:
+            await update_profile(
+                str(ctx["user"].id),
+                ctx["trip_uuid"],
+                {"dob": "not-a-date"},
+                session,
+            )
+    assert exc_info.value.status_code == 422
+    assert "dob" in str(exc_info.value.detail).lower()
+
+
+@pytest.mark.asyncio
+async def test_update_profile_rejects_invalid_yes_no_value(session_factory):
+    """Invalid yes/no value returns 422 with field name in detail."""
+    ctx = await seed_profile_context(session_factory, phone="+5511000000011")
+    async with session_factory() as session:
+        with pytest.raises(HTTPException) as exc_info:
+            await update_profile(
+                str(ctx["user"].id),
+                ctx["trip_uuid"],
+                {"dietary_restrictions_yn": "maybe"},
+                session,
+            )
+    assert exc_info.value.status_code == 422
+    assert "dietary_restrictions_yn" in str(exc_info.value.detail).lower()
+
+
+@pytest.mark.asyncio
+async def test_update_profile_success_response_includes_updated_fields(session_factory):
+    """Success response includes list of fields that were updated."""
+    ctx = await seed_profile_context(session_factory, phone="+5511000000012")
+    async with session_factory() as session:
+        result = await update_profile(
+            str(ctx["user"].id),
+            ctx["trip_uuid"],
+            {"preferred_name": "Lara", "gender": "female"},
+            session,
+        )
+    assert result["message"] == "Profile updated"
+    assert set(result["updated_fields"]) == {"preferred_name", "gender"}
