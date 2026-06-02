@@ -7,6 +7,8 @@ var BACKEND_URL = "https://parrot-trips-backend-428743191336.southamerica-east1.
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🦜 Parrot Trips")
+    .addItem("🔄 Sync Trips from Supabase", "syncTrips")
+    .addSeparator()
     .addItem("Import Trip Content → Supabase", "importTrip")
     .addSeparator()
     .addItem("Reset Trip Content (apaga fases e atividades)", "resetContent")
@@ -75,6 +77,41 @@ function promptForTrip(title) {
 }
 
 // ── Menu actions ──────────────────────────────────────────────────────────────
+
+function syncTrips() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var response = UrlFetchApp.fetch(BACKEND_URL + "/admin/trips", { muteHttpExceptions: true });
+    var code = response.getResponseCode();
+    if (code < 200 || code >= 300) {
+      throw new Error("Backend error " + code + ": " + response.getContentText());
+    }
+    var data = JSON.parse(response.getContentText());
+    var trips = data.trips;
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Viagens");
+    if (!sheet) {
+      sheet = ss.insertSheet("Viagens");
+    }
+
+    // Rewrite the Viagens tab with fresh data
+    sheet.clearContents();
+    var header = [["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim"]];
+    var rows = trips.map(function(t) {
+      return [t.trip_uuid, t.title, t.start_date, t.end_date];
+    });
+    sheet.getRange(1, 1, 1, 4).setValues(header);
+    sheet.getRange(1, 1, 1, 4).setFontWeight("bold");
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+    }
+
+    ui.alert("✅ Synced " + trips.length + " active trip(s) to the Viagens tab.");
+  } catch (e) {
+    ui.alert("❌ Sync failed: " + e.message);
+  }
+}
 
 function importTrip() {
   var trip_uuid = promptForTrip("🦜 Import Trip Content → Supabase");

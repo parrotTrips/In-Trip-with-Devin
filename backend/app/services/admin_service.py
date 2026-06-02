@@ -31,6 +31,34 @@ async def _get_connection() -> asyncpg.Connection:
     return await asyncpg.connect(PG_URL)
 
 
+async def admin_list_trips() -> dict:
+    """Return all active trips (end_date >= today or end_date is null) ordered by start_date."""
+    conn = await _get_connection()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT trip_uuid, title, start_date, end_date
+            FROM wetravel_trips
+            WHERE end_date IS NULL OR end_date >= CURRENT_DATE
+            ORDER BY start_date NULLS LAST
+            """
+        )
+    finally:
+        await conn.close()
+
+    return {
+        "trips": [
+            {
+                "trip_uuid": r["trip_uuid"],
+                "title": r["title"] or "",
+                "start_date": r["start_date"].isoformat() if r["start_date"] else "",
+                "end_date": r["end_date"].isoformat() if r["end_date"] else "",
+            }
+            for r in rows
+        ]
+    }
+
+
 def _build_sheets_client_adc():
     """Build a Sheets client using Application Default Credentials (works in Cloud Run)."""
     import google.auth

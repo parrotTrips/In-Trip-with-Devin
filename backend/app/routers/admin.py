@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.services.admin_service import (
     admin_import_trip,
+    admin_list_trips,
     admin_reset_content,
     admin_reset_progress,
 )
@@ -14,6 +15,15 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 class TripUUIDRequest(BaseModel):
     trip_uuid: str
+
+
+@router.get("/trips")
+async def list_trips():
+    """Return all active trips (end_date >= today) from wetravel_trips."""
+    try:
+        return await admin_list_trips()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/trips/import")
