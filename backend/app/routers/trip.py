@@ -44,14 +44,18 @@ async def get_my_trip(
     if not row:
         return {"trip": None}
 
+    from app.services.trip_service import _get_trip_mode
+    trip_uuid = row["wetravel_trip_uuid"]
+    trip_mode = await _get_trip_mode(trip_uuid, session)
     return {
         "trip": {
-            "wetravel_trip_uuid": row["wetravel_trip_uuid"],
+            "wetravel_trip_uuid": trip_uuid,
             "title": row["title"],
             "destination": row["destination"],
             "start_date": row["start_date"],
             "end_date": row["end_date"],
             "url": row["url"],
+            "trip_mode": trip_mode,
         }
     }
 

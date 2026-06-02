@@ -20,6 +20,17 @@ from app.db.models.progress import TravelerPhaseProgress
 from app.db.models.user import User
 
 
+async def _get_trip_mode(trip_uuid: str, session: AsyncSession) -> str:
+    """Return the current mode for a trip. Defaults to 'pre-trip' if no record exists."""
+    from sqlalchemy import text as _text
+    result = await session.execute(
+        _text("SELECT mode FROM trip_settings WHERE trip_uuid = :uuid"),
+        {"uuid": trip_uuid},
+    )
+    row = result.mappings().first()
+    return row["mode"] if row else "pre-trip"
+
+
 def compute_in_trip_phase_completions(
     phases: list[dict], now: _datetime
 ) -> dict[str, bool]:
@@ -70,7 +81,8 @@ async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
     phases = phases_result.scalars().all()
 
     if not phases:
-        return {"wetravel_trip_uuid": trip_uuid, "phases": []}
+        trip_mode = await _get_trip_mode(trip_uuid, session)
+        return {"wetravel_trip_uuid": trip_uuid, "trip_mode": trip_mode, "phases": []}
 
     phase_ids = [p.id for p in phases]
 
@@ -102,8 +114,10 @@ async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
             "sort_order": link.sort_order,
         })
 
+    trip_mode = await _get_trip_mode(trip_uuid, session)
     return {
         "wetravel_trip_uuid": trip_uuid,
+        "trip_mode": trip_mode,
         "phases": [
             {
                 "id": str(p.id),
