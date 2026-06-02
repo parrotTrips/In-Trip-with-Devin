@@ -42,7 +42,8 @@ def test_profile_routes_read_and_update_profile(seeded_client, session_factory):
     assert initial_response.status_code == 200
     assert initial_response.json()["profile"] is None
     assert update_response.status_code == 200
-    assert update_response.json() == {"message": "Profile updated"}
+    assert update_response.json()["message"] == "Profile updated"
+    assert set(update_response.json()["updated_fields"]) == {"preferred_name", "email"}
     assert updated_response.status_code == 200
     assert updated_response.json()["wetravel_trip_uuid"] == trip_uuid
     assert updated_response.json()["name"] == "Eva"
