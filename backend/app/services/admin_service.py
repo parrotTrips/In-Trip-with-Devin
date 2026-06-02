@@ -31,6 +31,25 @@ async def _get_connection() -> asyncpg.Connection:
     return await asyncpg.connect(PG_URL)
 
 
+async def admin_set_mode(trip_uuid: str, mode: str) -> dict:
+    """Set the trip mode ('pre-trip' or 'in-trip') in trip_settings."""
+    if mode not in ("pre-trip", "in-trip"):
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'pre-trip' or 'in-trip'.")
+    conn = await _get_connection()
+    try:
+        await conn.execute(
+            """
+            INSERT INTO trip_settings (trip_uuid, mode)
+            VALUES ($1, $2)
+            ON CONFLICT (trip_uuid) DO UPDATE SET mode = $2, updated_at = now()
+            """,
+            trip_uuid, mode,
+        )
+    finally:
+        await conn.close()
+    return {"status": "ok", "trip_uuid": trip_uuid, "mode": mode}
+
+
 async def admin_list_trips() -> dict:
     """Return all active trips (end_date >= today or end_date is null) ordered by start_date."""
     conn = await _get_connection()
@@ -183,9 +202,24 @@ async def admin_reset_progress(trip_uuid: str) -> dict:
     finally:
         await conn.close()
 
+    # Switch trip to in-trip mode
+    conn2 = await _get_connection()
+    try:
+        await conn2.execute(
+            """
+            INSERT INTO trip_settings (trip_uuid, mode)
+            VALUES ($1, 'in-trip')
+            ON CONFLICT (trip_uuid) DO UPDATE SET mode = 'in-trip', updated_at = now()
+            """,
+            trip_uuid,
+        )
+    finally:
+        await conn2.close()
+
     return {
         "status": "ok",
         "trip_uuid": trip_uuid,
+        "mode": "in-trip",
         "deleted_checklist_progress": deleted_checklist,
         "deleted_phase_progress": deleted_phase,
     }
