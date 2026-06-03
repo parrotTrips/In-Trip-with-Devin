@@ -35,3 +35,6 @@ __pycache__/
 # Production environment variables (secrets — never commit)
 backend/.env.production
 frontend/.env.production
+
+# Local Netlify folder
+.netlify

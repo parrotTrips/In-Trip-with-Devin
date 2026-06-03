@@ -22,7 +22,7 @@ Banco de dados
 
 **URLs de produção:**
 - Backend: `https://parrot-trips-backend-428743191336.southamerica-east1.run.app`
-- Frontend: `https://storage.googleapis.com/parrot-trips-frontend/index.html?v=1ee0b83`
+- Frontend: `https://parrot-trips-app.netlify.app`
 
 ---
 
