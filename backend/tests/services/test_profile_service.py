@@ -136,31 +136,26 @@ def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(sessio
     asyncio.run(run_test())
 
 
-def test_update_profile_rejects_unsupported_orphan_fields(session_factory):
+def test_update_profile_ignores_unsupported_orphan_fields(session_factory):
+    """Read-only WeTravel fields are silently ignored, not rejected with 400."""
     async def run_test():
         seeded = await seed_trip_assignment(session_factory)
 
         async with session_factory() as session:
-            with pytest.raises(HTTPException) as exc_info:
-                await update_profile(
-                    seeded["user_id"],
-                    seeded["wetravel_trip_uuid"],
-                    {
-                        "transfer_platform": "wise",
-                        "proof_of_transfer": "https://example.com/proof.png",
-                    },
-                    session,
-                )
-
-            profile_response = await get_profile(
-                seeded["user_id"], seeded["wetravel_trip_uuid"], session
+            result = await update_profile(
+                seeded["user_id"],
+                seeded["wetravel_trip_uuid"],
+                {
+                    "transfer_platform": "wise",
+                    "proof_of_transfer": "https://example.com/proof.png",
+                    "preferred_name": "Ana",  # this one IS supported
+                },
+                session,
             )
 
-        assert exc_info.value.status_code == 400
-        assert exc_info.value.detail == {
-            "unsupported_fields": ["proof_of_transfer", "transfer_platform"]
-        }
-        assert profile_response["profile"] is None
+        # Unsupported fields are ignored, supported field is saved
+        assert result["message"] == "Profile updated"
+        assert result["updated_fields"] == ["preferred_name"]
 
     asyncio.run(run_test())
 

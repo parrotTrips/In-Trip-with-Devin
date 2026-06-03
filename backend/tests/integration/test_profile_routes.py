@@ -70,7 +70,8 @@ def test_trip_travelers_route_scopes_roommate_selection_to_the_trip(
     assert "+5511990000002" in traveler_phones
 
 
-def test_profile_route_rejects_unsupported_orphan_fields(seeded_client, session_factory):
+def test_profile_route_ignores_unsupported_orphan_fields(seeded_client, session_factory):
+    """Read-only WeTravel fields are silently ignored, not rejected with 400."""
     user_id, token = create_user(seeded_client, phone="+5511990000003")
     headers = {"Authorization": f"Bearer {token}"}
     trip_uuid = asyncio.run(seed_trip_assignment(session_factory, user_id=user_id))
@@ -80,13 +81,11 @@ def test_profile_route_rejects_unsupported_orphan_fields(seeded_client, session_
         json={
             "transfer_platform": "wise",
             "arrival_date": "2026-02-01",
+            "preferred_name": "Test",  # supported field mixed in
         },
         headers=headers,
     )
 
-    assert response.status_code == 400
-    assert response.json() == {
-        "detail": {
-            "unsupported_fields": ["arrival_date", "transfer_platform"]
-        }
-    }
+    assert response.status_code == 200
+    assert response.json()["message"] == "Profile updated"
+    assert response.json()["updated_fields"] == ["preferred_name"]

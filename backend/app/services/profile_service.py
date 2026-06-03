@@ -240,12 +240,9 @@ async def update_profile(
     if not update_data:
         return {"message": "No fields to update"}
 
-    unsupported_fields = sorted(set(update_data) - SUPPORTED_UPDATE_FIELDS)
-    if unsupported_fields:
-        raise HTTPException(
-            status_code=400,
-            detail={"unsupported_fields": unsupported_fields},
-        )
+    # Silently ignore read-only or unknown fields (e.g. WeTravel-managed fields
+    # like transfer_platform, package_option sent by the frontend form).
+    update_data = {k: v for k, v in update_data.items() if k in SUPPORTED_UPDATE_FIELDS}
 
     profile = await session.scalar(
         select(TravelerProfile).where(
