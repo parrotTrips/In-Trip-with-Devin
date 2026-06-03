@@ -129,7 +129,7 @@ help:
 	@echo "  Deploy:"
 	@echo "    make deploy              — backend + frontend juntos"
 	@echo "    make deploy-backend      — só o backend (Cloud Run)"
-	@echo "    make deploy-frontend     — só o frontend (Firebase Hosting)"
+	@echo "    make deploy-frontend     — só o frontend (Netlify)"
 	@echo ""
 	@echo "  Operação:"
 	@echo "    make logs                — tail dos logs do Cloud Run"

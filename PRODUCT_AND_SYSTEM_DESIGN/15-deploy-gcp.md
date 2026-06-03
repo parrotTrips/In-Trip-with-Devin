@@ -1,6 +1,6 @@
-# Deploy na GCP — Guia Operacional
+# Deploy — Guia Operacional
 
-Documentação de infraestrutura e procedimentos de deploy do aplicativo Parrot Trips na Google Cloud Platform.
+Documentação de infraestrutura e procedimentos de deploy do aplicativo Parrot Trips.
 
 ---
 
@@ -14,7 +14,9 @@ Backend (FastAPI)
        └── Artifact Registry: southamerica-east1-docker.pkg.dev/jogo-da-vida-497700/parrot-trips/backend
 
 Frontend (React)
-  └── Cloud Storage: gs://parrot-trips-frontend (público)
+  └── Netlify: parrot-trips-app
+       └── Site: https://parrot-trips-app.netlify.app
+       └── SPA routing: redirect /* → /index.html (via netlify.toml)
 
 Banco de dados
   └── Supabase (PostgreSQL) — externo, não muda
@@ -28,12 +30,18 @@ Banco de dados
 
 ## Pré-requisitos para rodar deploys
 
+### Backend
 1. `gcloud` CLI instalado e autenticado com `angelo@parrottrips.com`
 2. Docker rodando localmente
 3. `backend/.env.production` criado (ver seção abaixo)
-4. `frontend/.env.production` criado (ver seção abaixo)
 
-### Verificar autenticação
+### Frontend
+1. `netlify-cli` instalado: `npm install -g netlify-cli`
+2. Autenticado no Netlify: `netlify login`
+3. `frontend/.env.production` com `VITE_API_URL` (ver seção abaixo)
+4. Site `parrot-trips-app` já criado (feito uma vez — não precisa repetir)
+
+### Verificar autenticação GCP (para backend)
 
 ```bash
 gcloud auth list
@@ -133,17 +141,19 @@ make deploy-backend IMAGE_TAG=v1.2.3
 ### `make deploy-frontend`
 
 1. **`frontend-build`** — Roda `npm run build` na pasta `frontend/` usando o `VITE_API_URL` de `frontend/.env.production`
-2. **`gcs-upload`** — Faz upload dos arquivos de `frontend/dist/` para o bucket `gs://parrot-trips-frontend`
+2. **`netlify-deploy`** — Faz deploy do `dist/` para o Netlify via CLI (`netlify deploy --prod`)
+
+O `netlify.toml` na pasta `frontend/` configura o redirect `/* → /index.html` que permite recarregar qualquer rota sem erro 404.
 
 ---
 
-## Serviços GCP utilizados
+## Serviços utilizados
 
 | Serviço | Para quê | Como acessar |
 |---|---|---|
-| Cloud Run | Roda o backend FastAPI | Console GCP → Cloud Run → parrot-trips-backend |
-| Artifact Registry | Armazena imagens Docker | `southamerica-east1-docker.pkg.dev/jogo-da-vida-497700/parrot-trips/` |
-| Cloud Storage | Serve o frontend estático | Console GCP → Cloud Storage → parrot-trips-frontend |
+| GCP Cloud Run | Roda o backend FastAPI | Console GCP → Cloud Run → parrot-trips-backend |
+| GCP Artifact Registry | Armazena imagens Docker | `southamerica-east1-docker.pkg.dev/jogo-da-vida-497700/parrot-trips/` |
+| Netlify | Serve o frontend React (SPA) | app.netlify.com → parrot-trips-app |
 
 ---
 

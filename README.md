@@ -35,7 +35,7 @@ WeTravel (externo)          Google Sheets               GCP
 | Backend | Python 3.13 + FastAPI + SQLAlchemy async |
 | Banco | Supabase (PostgreSQL) |
 | Auth | WhatsApp OTP + JWT |
-| Deploy | GCP Cloud Run (backend) + GCP Cloud Storage (frontend) |
+| Deploy | GCP Cloud Run (backend) + Netlify (frontend) |
 | Conteúdo | Google Sheets → scripts Python → Supabase |
 
 ---
@@ -80,8 +80,9 @@ WeTravel (externo)          Google Sheets               GCP
 │   │   │   ├── profile/            # ProfileScreen
 │   │   │   └── trip/               # HomeScreen, PhaseDetails, DayDetails
 │   │   └── shared/                 # ProgressBar, BottomNav, TopBar, API client
+│   ├── netlify.toml                # Configuração Netlify (SPA redirect)
 │   ├── .env.production             # VITE_API_URL (não commitado)
-│   └── firebase.json               # (não utilizado — deploy via GCS)
+│   └── firebase.json               # (não utilizado — legado)
 ├── google-apps-script/
 │   ├── Code.gs                     # Menu admin para Google Sheets
 │   └── README.md                   # Instruções de instalação
@@ -129,16 +130,21 @@ Todos os comandos rodam da **raiz do repositório**.
 
 ```bash
 make deploy-backend    # Build Docker + push para Artifact Registry + deploy Cloud Run
-make deploy-frontend   # Build React + upload para Cloud Storage
+make deploy-frontend   # Build React + deploy Netlify
 make deploy            # Os dois juntos
 make logs              # Logs do Cloud Run em tempo real
 make backend-url       # Imprime a URL do backend
 ```
 
-**Pré-requisitos para deploy:**
+**Pré-requisitos para deploy do backend:**
 - `gcloud` autenticado: `gcloud auth login angelo@parrottrips.com`
 - `backend/.env.production` preenchido (copiar de `backend/.env.production.example`)
 - `frontend/.env.production` com `VITE_API_URL=<url do cloud run>`
+
+**Pré-requisitos para deploy do frontend:**
+- `netlify-cli` instalado: `npm install -g netlify-cli`
+- Autenticado: `netlify login`
+- Site `parrot-trips-app` já criado no Netlify (feito uma vez)
 
 Se o deploy falhar com 403 ou "Reauthentication required":
 ```bash
