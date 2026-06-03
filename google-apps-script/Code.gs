@@ -11,10 +11,10 @@ function onOpen() {
     .addSeparator()
     .addItem("Import Trip Content → Supabase", "importTrip")
     .addSeparator()
-    .addItem("Reset Trip Content (apaga fases e atividades)", "resetContent")
-    .addItem("Reset Trip → Pre-Trip (zera tudo)", "resetProgress")
+    .addItem("🚀 Iniciar Viagem → In-Trip", "startTrip")
+    .addItem("🔁 Reset Trip → Pre-Trip (testes)", "resetTrip")
     .addSeparator()
-    .addItem("Set Trip Mode (Pre-Trip / In-Trip)", "setTripMode")
+    .addItem("Reset Trip Content (apaga fases e atividades)", "resetContent")
     .addToUi();
 }
 
@@ -98,7 +98,6 @@ function syncTrips() {
       sheet = ss.insertSheet("Viagens");
     }
 
-    // Rewrite the Viagens tab with fresh data
     sheet.clearContents();
     var header = [["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim"]];
     var rows = trips.map(function(t) {
@@ -126,6 +125,40 @@ function importTrip() {
   }
 }
 
+function startTrip() {
+  var ui = SpreadsheetApp.getUi();
+  var confirm = ui.alert(
+    "🚀 Iniciar Viagem → In-Trip",
+    "This will:\n• Clear phase progress (barra zera)\n• Preserve checklist completions\n• Switch trip mode to IN-TRIP\n\nUse this on the real trip start day.\n\nContinue?",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+  var trip_uuid = promptForTrip("🦜 Iniciar Viagem — choose trip");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/start-trip", trip_uuid));
+  } catch (e) {
+    ui.alert("❌ Error: " + e.message);
+  }
+}
+
+function resetTrip() {
+  var ui = SpreadsheetApp.getUi();
+  var confirm = ui.alert(
+    "🔁 Reset Trip → Pre-Trip",
+    "This will:\n• Clear ALL checklist completions\n• Clear ALL phase progress\n• Set trip mode back to PRE-TRIP\n\nThe trip returns to its launch state. Use for testing only.\n\nContinue?",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+  var trip_uuid = promptForTrip("🦜 Reset Trip → Pre-Trip — choose trip");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/reset-trip", trip_uuid));
+  } catch (e) {
+    ui.alert("❌ Error: " + e.message);
+  }
+}
+
 function resetContent() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
@@ -138,52 +171,6 @@ function resetContent() {
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/reset-content", trip_uuid));
-  } catch (e) {
-    ui.alert("❌ Error: " + e.message);
-  }
-}
-
-function resetProgress() {
-  var ui = SpreadsheetApp.getUi();
-  var confirm = ui.alert(
-    "⚠️ Reset Trip → Pre-Trip",
-    "This will:\n• Clear ALL checklist completions\n• Clear ALL phase progress\n• Set trip mode back to PRE-TRIP\n\nThe trip returns to its launch state as if no traveler has touched anything.\n\nContinue?",
-    ui.ButtonSet.YES_NO
-  );
-  if (confirm !== ui.Button.YES) return;
-  var trip_uuid = promptForTrip("🦜 Reset Trip → Pre-Trip — choose trip");
-  if (!trip_uuid) return;
-  try {
-    showResult(callBackend("/admin/trips/reset-progress", trip_uuid));
-  } catch (e) {
-    ui.alert("❌ Error: " + e.message);
-  }
-}
-
-function setTripMode() {
-  var ui = SpreadsheetApp.getUi();
-  var trips = getTripList();
-  if (!trips || trips.length === 0) return;
-  var list = trips.map(function(t, i) {
-    return (i + 1) + ". " + t.name + " (" + t.date + ")\n   → " + t.uuid;
-  }).join("\n\n");
-  var response = ui.prompt(
-    "🦜 Set Trip Mode",
-    "Enter trip_uuid and mode separated by a space.\nModes: pre-trip | in-trip\n\nExample: TEST-2026-FULL pre-trip\n\n" + list,
-    ui.ButtonSet.OK_CANCEL
-  );
-  if (response.getSelectedButton() !== ui.Button.OK) return;
-  var parts = response.getResponseText().trim().split(/\s+/);
-  if (parts.length < 2) { ui.alert("Invalid input. Format: trip_uuid mode"); return; }
-  var trip_uuid = parts[0];
-  var mode = parts[1];
-  if (mode !== "pre-trip" && mode !== "in-trip") {
-    ui.alert("Invalid mode '" + mode + "'. Use 'pre-trip' or 'in-trip'.");
-    return;
-  }
-  try {
-    var result = callBackend("/admin/trips/set-mode", null, { trip_uuid: trip_uuid, mode: mode });
-    showResult(result);
   } catch (e) {
     ui.alert("❌ Error: " + e.message);
   }

@@ -1,7 +1,5 @@
 """Admin HTTP routes — no JWT required, protected by network/sheet access only."""
 
-from typing import Literal
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -9,7 +7,8 @@ from app.services.admin_service import (
     admin_import_trip,
     admin_list_trips,
     admin_reset_content,
-    admin_reset_progress,
+    admin_reset_trip,
+    admin_start_trip,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -46,25 +45,19 @@ async def reset_content(body: TripUUIDRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/trips/reset-progress")
-async def reset_progress(body: TripUUIDRequest):
-    """Delete all traveler checklist and phase progress for a trip."""
+@router.post("/trips/start-trip")
+async def start_trip(body: TripUUIDRequest):
+    """Start the trip: clear phase progress, preserve checklist, switch to in-trip."""
     try:
-        return await admin_reset_progress(body.trip_uuid)
+        return await admin_start_trip(body.trip_uuid)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-class SetModeRequest(BaseModel):
-    trip_uuid: str
-    mode: Literal["pre-trip", "in-trip"]
-
-
-@router.post("/trips/set-mode")
-async def set_trip_mode(body: SetModeRequest):
-    """Manually set trip mode to 'pre-trip' or 'in-trip'."""
+@router.post("/trips/reset-trip")
+async def reset_trip(body: TripUUIDRequest):
+    """Full reset to pre-trip: clears ALL progress (checklist + phase). For testing."""
     try:
-        from app.services.admin_service import admin_set_mode
-        return await admin_set_mode(body.trip_uuid, body.mode)
+        return await admin_reset_trip(body.trip_uuid)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
