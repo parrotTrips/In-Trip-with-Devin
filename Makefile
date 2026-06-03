@@ -4,7 +4,6 @@ GCP_ACCOUNT    = angelo@parrottrips.com
 GCP_REGION     = southamerica-east1
 SERVICE_NAME   = parrot-trips-backend
 IMAGE_REPO     = $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/parrot-trips/backend
-GCS_BUCKET       = parrot-trips-frontend
 NETLIFY_SITE     = parrot-trips-app-286
 FRONTEND_URL     = https://$(NETLIFY_SITE).netlify.app
 

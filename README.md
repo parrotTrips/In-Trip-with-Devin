@@ -144,7 +144,7 @@ make backend-url       # Imprime a URL do backend
 **Pré-requisitos para deploy do frontend:**
 - `netlify-cli` instalado: `npm install -g netlify-cli`
 - Autenticado: `netlify login`
-- Site `parrot-trips-app` já criado no Netlify (feito uma vez)
+- Site `parrot-trips-app-286` já criado no Netlify (feito uma vez)
 
 Se o deploy falhar com 403 ou "Reauthentication required":
 ```bash
