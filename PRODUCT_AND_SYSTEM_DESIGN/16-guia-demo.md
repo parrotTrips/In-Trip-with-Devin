@@ -201,6 +201,67 @@ make logs
 
 ---
 
+## Simulação da viagem (pre-trip → in-trip)
+
+Sequência completa para demonstrar o avanço da barra de progresso em tempo real.
+
+> Todos os comandos `poetry run` precisam ser executados de dentro de `backend/`:
+> ```bash
+> cd /Users/masfz/Programacao/parrot_trips/In-Trip-with-Devin/backend
+> ```
+
+### Passo 1 — Resetar para pre-trip
+
+```bash
+# Zera progresso dos viajantes E muda o modo para in-trip (via planilha é mais visual)
+# OU via terminal:
+poetry run python scripts/reset_traveler_progress.py --trip-uuid TEST-2026-FULL
+
+# Volta para modo pre-trip manualmente:
+curl -s -X POST "https://parrot-trips-backend-428743191336.southamerica-east1.run.app/admin/trips/set-mode" \
+  -H "Content-Type: application/json" \
+  -d '{"trip_uuid": "TEST-2026-FULL", "mode": "pre-trip"}'
+```
+
+Abrir o app — deve aparecer **"📋 Pre-Trip"** com barra em **0%**.
+
+### Passo 2 — Ativar in-trip via planilha
+
+Na planilha Google Sheets: **🦜 Parrot Trips → Reset Traveler Progress → confirmar**
+
+O app muda para **"🗺 In-Trip"** com barra em **0%** (nenhum dia iniciado ainda).
+
+### Passo 3 — Simular os dias
+
+Após cada comando, **recarregar o app** para ver a barra atualizar.
+
+```bash
+# Dia 1 — barra em 14% (1/7)
+poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --day 1
+
+# Dia 3 — barra em 43% (3/7)
+poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --day 3
+
+# Dia 5 — barra em 71% (5/7)
+poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --day 5
+
+# Dia 7 — barra em 100% (último dia — fica assim para sempre)
+poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --day 7
+```
+
+### Passo 4 — Resetar após a demo
+
+```bash
+# Volta para pre-trip e restaura datas originais
+poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --reset
+
+curl -s -X POST "https://parrot-trips-backend-428743191336.southamerica-east1.run.app/admin/trips/set-mode" \
+  -H "Content-Type: application/json" \
+  -d '{"trip_uuid": "TEST-2026-FULL", "mode": "pre-trip"}'
+```
+
+---
+
 ## URLs
 
 | O quê | URL |
