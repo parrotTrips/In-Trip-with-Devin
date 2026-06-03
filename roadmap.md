@@ -36,6 +36,15 @@
 
 ---
 
+## ⚙️ Infraestrutura / operação
+
+| Item | Prioridade | Descrição |
+|---|---|---|
+| Seleção da viagem ativa por data | 🔴 Alta | Hoje o app carrega sempre a viagem mais antiga do usuário. Precisa carregar a viagem atual (end_date >= hoje), para que um staff/viajante que participou de múltiplas viagens caia sempre na viagem certa |
+| Limpeza de viagens encerradas | 🟡 Média | Script ou processo para arquivar/remover dados de viagens antigas do banco — evita acúmulo e confusão. O menu da planilha já filtra por end_date >= hoje, mas os dados permanecem no banco |
+
+---
+
 ## 💡 Futuro
 
 | Item | Descrição |
