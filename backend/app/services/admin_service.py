@@ -180,11 +180,10 @@ async def admin_reset_content(trip_uuid: str) -> dict:
 
 
 async def admin_reset_progress(trip_uuid: str) -> dict:
-    """Reset traveler phase progress and switch trip to in-trip mode.
+    """Clear all traveler progress (checklist + phase) and set trip mode to pre-trip.
 
-    Checklist item completions are preserved — travelers keep what they ticked
-    during pre-trip. Only the phase-level completion markers are cleared so the
-    progress bar starts fresh for the in-trip journey.
+    Use this to bring a trip back to its launch state — as if no traveler has
+    touched anything yet. Safe to run repeatedly for testing.
     """
     conn = await _get_connection()
     try:
@@ -196,16 +195,19 @@ async def admin_reset_progress(trip_uuid: str) -> dict:
 
         tt_ids = [str(r["id"]) for r in tt_rows]
         async with conn.transaction():
+            deleted_checklist = await conn.fetchval(
+                "WITH d AS (DELETE FROM traveler_checklist_progress WHERE trip_traveler_id = ANY($1::uuid[]) RETURNING 1) SELECT COUNT(*) FROM d",
+                tt_ids,
+            )
             deleted_phase = await conn.fetchval(
                 "WITH d AS (DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[]) RETURNING 1) SELECT COUNT(*) FROM d",
                 tt_ids,
             )
-            # Switch to in-trip mode
             await conn.execute(
                 """
                 INSERT INTO trip_settings (trip_uuid, mode)
-                VALUES ($1, 'in-trip')
-                ON CONFLICT (trip_uuid) DO UPDATE SET mode = 'in-trip', updated_at = now()
+                VALUES ($1, 'pre-trip')
+                ON CONFLICT (trip_uuid) DO UPDATE SET mode = 'pre-trip', updated_at = now()
                 """,
                 trip_uuid,
             )
@@ -215,6 +217,7 @@ async def admin_reset_progress(trip_uuid: str) -> dict:
     return {
         "status": "ok",
         "trip_uuid": trip_uuid,
-        "mode": "in-trip",
+        "mode": "pre-trip",
+        "deleted_checklist_progress": deleted_checklist,
         "deleted_phase_progress": deleted_phase,
     }

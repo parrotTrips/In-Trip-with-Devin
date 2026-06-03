@@ -12,7 +12,7 @@ function onOpen() {
     .addItem("Import Trip Content → Supabase", "importTrip")
     .addSeparator()
     .addItem("Reset Trip Content (apaga fases e atividades)", "resetContent")
-    .addItem("Reset Traveler Progress (zera barra de progresso)", "resetProgress")
+    .addItem("Reset Trip → Pre-Trip (zera tudo)", "resetProgress")
     .addSeparator()
     .addItem("Set Trip Mode (Pre-Trip / In-Trip)", "setTripMode")
     .addToUi();
@@ -146,12 +146,12 @@ function resetContent() {
 function resetProgress() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
-    "⚠️ Reset Traveler Progress → Switch to In-Trip",
-    "This will:\n• Clear phase completion markers (resets the progress bar)\n• Keep checklist item completions intact\n• Switch the trip mode to IN-TRIP\n\nAfter this, the progress bar advances automatically as trip days pass.\n\nContinue?",
+    "⚠️ Reset Trip → Pre-Trip",
+    "This will:\n• Clear ALL checklist completions\n• Clear ALL phase progress\n• Set trip mode back to PRE-TRIP\n\nThe trip returns to its launch state as if no traveler has touched anything.\n\nContinue?",
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
-  var trip_uuid = promptForTrip("🦜 Reset Traveler Progress — choose trip");
+  var trip_uuid = promptForTrip("🦜 Reset Trip → Pre-Trip — choose trip");
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/reset-progress", trip_uuid));
