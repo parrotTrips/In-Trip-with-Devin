@@ -147,7 +147,7 @@ function resetProgress() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
     "⚠️ Reset Traveler Progress → Switch to In-Trip",
-    "This will:\n• Reset the progress bar of all travelers\n• Switch the trip mode to IN-TRIP\n\nAfter this, the progress bar advances automatically as trip days pass.\n\nContinue?",
+    "This will:\n• Clear phase completion markers (resets the progress bar)\n• Keep checklist item completions intact\n• Switch the trip mode to IN-TRIP\n\nAfter this, the progress bar advances automatically as trip days pass.\n\nContinue?",
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;

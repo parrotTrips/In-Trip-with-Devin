@@ -180,7 +180,12 @@ async def admin_reset_content(trip_uuid: str) -> dict:
 
 
 async def admin_reset_progress(trip_uuid: str) -> dict:
-    """Delete all traveler progress (checklist + phase) for the given trip."""
+    """Reset traveler phase progress and switch trip to in-trip mode.
+
+    Checklist item completions are preserved — travelers keep what they ticked
+    during pre-trip. Only the phase-level completion markers are cleared so the
+    progress bar starts fresh for the in-trip journey.
+    """
     conn = await _get_connection()
     try:
         tt_rows = await conn.fetch(
@@ -191,35 +196,25 @@ async def admin_reset_progress(trip_uuid: str) -> dict:
 
         tt_ids = [str(r["id"]) for r in tt_rows]
         async with conn.transaction():
-            deleted_checklist = await conn.fetchval(
-                "WITH d AS (DELETE FROM traveler_checklist_progress WHERE trip_traveler_id = ANY($1::uuid[]) RETURNING 1) SELECT COUNT(*) FROM d",
-                tt_ids,
-            )
             deleted_phase = await conn.fetchval(
                 "WITH d AS (DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[]) RETURNING 1) SELECT COUNT(*) FROM d",
                 tt_ids,
             )
+            # Switch to in-trip mode
+            await conn.execute(
+                """
+                INSERT INTO trip_settings (trip_uuid, mode)
+                VALUES ($1, 'in-trip')
+                ON CONFLICT (trip_uuid) DO UPDATE SET mode = 'in-trip', updated_at = now()
+                """,
+                trip_uuid,
+            )
     finally:
         await conn.close()
-
-    # Switch trip to in-trip mode
-    conn2 = await _get_connection()
-    try:
-        await conn2.execute(
-            """
-            INSERT INTO trip_settings (trip_uuid, mode)
-            VALUES ($1, 'in-trip')
-            ON CONFLICT (trip_uuid) DO UPDATE SET mode = 'in-trip', updated_at = now()
-            """,
-            trip_uuid,
-        )
-    finally:
-        await conn2.close()
 
     return {
         "status": "ok",
         "trip_uuid": trip_uuid,
         "mode": "in-trip",
-        "deleted_checklist_progress": deleted_checklist,
         "deleted_phase_progress": deleted_phase,
     }

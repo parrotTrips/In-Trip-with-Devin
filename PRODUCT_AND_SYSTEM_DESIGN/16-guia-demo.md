@@ -249,15 +249,15 @@ poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --day 
 poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --day 7
 ```
 
-### Passo 4 — Resetar após a demo
+### Passo 4 — Resetar após a demo (full reset para pre-trip)
 
 ```bash
-# Volta para pre-trip e restaura datas originais
-poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --reset
+# Zera tudo: checklist + phase progress + datas + modo pre-trip
+# Use este quando quiser recomeçar do zero como se fosse a primeira vez
+poetry run python scripts/reset_test_trip.py --trip-uuid TEST-2026-FULL
 
-curl -s -X POST "https://parrot-trips-backend-428743191336.southamerica-east1.run.app/admin/trips/set-mode" \
-  -H "Content-Type: application/json" \
-  -d '{"trip_uuid": "TEST-2026-FULL", "mode": "pre-trip"}'
+# Para ver o que vai acontecer sem executar:
+poetry run python scripts/reset_test_trip.py --trip-uuid TEST-2026-FULL --dry-run
 ```
 
 ---
