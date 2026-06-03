@@ -30,8 +30,8 @@
 
 | Item | Prioridade | Descrição |
 |---|---|---|
-| Cadastrar equipe Parrot na viagem de teste | 🔴 Alta | Staff da Parrot entra na viagem TEST-2026-FULL como role=staff |
-| Validar fluxo completo (pré-trip → in-trip) | 🔴 Alta | Equipe percorre toda a jornada: cadastro, checklist, ideal pace, simulação dos dias |
+| Cadastrar equipe Parrot como viajantes | 🔴 Alta | Membros da Parrot entram na TEST-2026-FULL como role=traveler e percorrem a jornada completa: cadastro, checklist, ideal pace, simulação dos dias |
+| Cadastrar equipe Parrot como staff | 🔴 Alta | Membros da Parrot entram na mesma viagem como role=staff e validam a visão de staff, o switch staff ↔ viajante e o controle de presença |
 | Coletar feedback de UX | 🟡 Média | Identificar pontos de atrito antes de abrir para viajantes reais |
 
 ---
