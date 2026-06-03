@@ -15,7 +15,7 @@ Backend (FastAPI)
 
 Frontend (React)
   └── Netlify: parrot-trips-app
-       └── Site: https://parrot-trips-app.netlify.app
+       └── Site: https://parrot-trips-app-286.netlify.app
        └── SPA routing: redirect /* → /index.html (via netlify.toml)
 
 Banco de dados
@@ -24,7 +24,7 @@ Banco de dados
 
 **URLs de produção:**
 - Backend: `https://parrot-trips-backend-428743191336.southamerica-east1.run.app`
-- Frontend: `https://parrot-trips-app.netlify.app`
+- Frontend: `https://parrot-trips-app-286.netlify.app`
 
 ---
 

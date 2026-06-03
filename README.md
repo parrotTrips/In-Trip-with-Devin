@@ -8,7 +8,7 @@ Aplicativo web da Parrot Trips para acompanhar uma viagem em grupo. Permite que 
 
 | O quê | URL |
 |---|---|
-| **App (frontend)** | `https://parrot-trips-app.netlify.app` |
+| **App (frontend)** | `https://parrot-trips-app-286.netlify.app` |
 | **Backend (API)** | `https://parrot-trips-backend-428743191336.southamerica-east1.run.app` |
 | **Planilha de conteúdo** | [Google Drive — Parrot Trips Conteúdo de Viagens](https://drive.google.com/drive/folders/1mqUSDMygVJ-rAFlHQJEyRjTpDPx9MilP) |
 

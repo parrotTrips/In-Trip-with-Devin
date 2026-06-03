@@ -54,7 +54,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 # Frontend carregando?
 curl -s -o /dev/null -w "%{http_code}\n" \
-  https://parrot-trips-app.netlify.app
+  https://parrot-trips-app-286.netlify.app
 # Esperado: 200
 ```
 
@@ -133,7 +133,7 @@ Import complete!
 **4. Abrir o app e mostrar o conteúdo aparecendo**
 
 ```bash
-open https://parrot-trips-app.netlify.app
+open https://parrot-trips-app-286.netlify.app
 ```
 
 ---
@@ -143,7 +143,7 @@ open https://parrot-trips-app.netlify.app
 **1. O convidado acessa o link**
 
 ```
-https://parrot-trips-app.netlify.app
+https://parrot-trips-app-286.netlify.app
 ```
 
 Pode compartilhar pelo WhatsApp, email ou mostrar o QR code da URL.
@@ -205,7 +205,7 @@ make logs
 
 | O quê | URL |
 |---|---|
-| App (frontend) | `https://parrot-trips-app.netlify.app` |
+| App (frontend) | `https://parrot-trips-app-286.netlify.app` |
 | Backend (API) | `https://parrot-trips-backend-428743191336.southamerica-east1.run.app` |
 | Planilha de conteúdo | [Google Drive — pasta de viagens](https://drive.google.com/drive/folders/1mqUSDMygVJ-rAFlHQJEyRjTpDPx9MilP) |
 | Supabase | Dashboard do projeto no Supabase |
