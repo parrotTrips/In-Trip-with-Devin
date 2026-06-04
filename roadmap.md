@@ -8,9 +8,10 @@
 
 | Item | Prioridade | Descrição |
 |---|---|---|
-| Seleção da viagem ativa por data | 🔴 Alta | Bug real: o app carrega sempre a viagem mais antiga do usuário. Corrigir `GET /me/trip` para carregar a viagem com `end_date >= hoje` |
+| Seleção da viagem ativa por data | 🔴 Alta | Crítico para o staff app: o app carrega sempre a viagem mais antiga do usuário. Corrigir `GET /me/trip` para carregar a viagem com `end_date >= hoje`. Staff que guia outubro e novembro precisa disso |
 | Campo Ideal Pace no pre-trip | 🔴 Alta | Viajante registra seu ritmo preferido durante o pré-trip. Backend + frontend |
-| Verificar conta WhatsApp Business | 🔴 Alta | Confirmar titularidade da conta que envia os OTPs — sem isso ninguém consegue logar |
+| Service Agreement — inserção por viajante | 🔴 Alta | Backend e banco já existem, frontend já exibe o link. Falta: forma de popular a URL por viajante (campo na planilha ou tela de admin) |
+| ~~Verificar conta WhatsApp Business~~ | ✅ Resolvido | Perfil da conta ajustado no Meta Business Manager |
 
 ### Fase 2 — Teste interno como viajante
 
