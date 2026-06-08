@@ -100,7 +100,7 @@ export default function LoginScreen() {
         </div>
 
         {/* Login Card */}
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5 relative">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5 relative overflow-hidden">
           {step === 'phone' ? (
             <>
               <h2 className="text-lg font-bold text-gray-800 font-[Fredoka] text-center mb-1">
@@ -110,11 +110,11 @@ export default function LoginScreen() {
                 Enter your phone number to receive a verification code via WhatsApp
               </p>
 
-              <div className="flex gap-2 mb-4">
+              <div className="flex gap-2 mb-4 w-full">
                 <select
                   value={countryCode}
                   onChange={e => setCountryCode(e.target.value)}
-                  className="w-24 py-3 px-2 bg-gray-50 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-emerald-300"
+                  className="w-20 flex-shrink-0 py-3 px-2 bg-gray-50 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 outline-none focus:ring-2 focus:ring-emerald-300"
                 >
                   <option value="+1">🇺🇸 +1</option>
                   <option value="+44">🇬🇧 +44</option>
@@ -132,7 +132,7 @@ export default function LoginScreen() {
                   value={phone}
                   onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
                   placeholder="Phone number"
-                  className="flex-1 py-3 px-4 bg-gray-50 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-emerald-300"
+                  className="flex-1 min-w-0 py-3 px-4 bg-gray-50 rounded-xl border border-gray-200 text-sm outline-none focus:ring-2 focus:ring-emerald-300"
                   maxLength={15}
                 />
               </div>
