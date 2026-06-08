@@ -48,13 +48,10 @@ export default function LoginScreen() {
     newCode[index] = value;
     setCode(newCode);
 
-    // Auto-focus next input
     if (value && index < 5) {
-      const next = document.getElementById(`code-${index + 1}`);
-      next?.focus();
+      document.getElementById(`code-${index + 1}`)?.focus();
     }
 
-    // Auto-submit when all digits entered
     if (value && index === 5 && newCode.every(c => c)) {
       handleVerifyCode(newCode.join(''));
     }
@@ -70,25 +67,40 @@ export default function LoginScreen() {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!digits) return;
+    const newCode = [...code];
+    digits.split('').forEach((d, i) => { newCode[i] = d; });
+    setCode(newCode);
+    // Focus last filled input
+    const lastIndex = Math.min(digits.length - 1, 5);
+    document.getElementById(`code-${lastIndex}`)?.focus();
+    if (digits.length === 6) {
+      handleVerifyCode(digits);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-700 via-emerald-600 to-teal-700 flex flex-col">
+    <div className="min-h-dvh bg-gradient-to-b from-emerald-700 via-emerald-600 to-teal-700 flex flex-col">
       {/* Decorative top elements */}
-      <div className="absolute top-0 left-0 right-0 h-96 overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-96 overflow-hidden pointer-events-none">
         <div className="absolute top-10 -left-10 w-40 h-40 bg-emerald-500/30 rounded-full blur-3xl" />
         <div className="absolute top-20 right-0 w-32 h-32 bg-teal-400/30 rounded-full blur-3xl" />
         <div className="absolute top-40 left-1/3 w-24 h-24 bg-yellow-400/20 rounded-full blur-2xl" />
       </div>
 
-      <div className="relative flex-1 flex flex-col items-center justify-center px-6">
+      <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-8 safe-top safe-bottom">
         {/* Mascot & Brand */}
-        <div className="text-center mb-8">
-          <ParrotMascot size={80} className="mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-white font-[Fredoka]">Parrot Trips</h1>
-          <p className="text-emerald-100 text-sm mt-2">Your Brazilian Adventure Awaits!</p>
+        <div className="text-center mb-6">
+          <ParrotMascot size={64} className="mx-auto mb-3" />
+          <h1 className="text-2xl font-bold text-white font-[Fredoka]">Parrot Trips</h1>
+          <p className="text-emerald-100 text-xs mt-1">Your Brazilian Adventure Awaits!</p>
         </div>
 
         {/* Login Card */}
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 relative">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5 relative">
           {step === 'phone' ? (
             <>
               <h2 className="text-lg font-bold text-gray-800 font-[Fredoka] text-center mb-1">
@@ -162,18 +174,20 @@ export default function LoginScreen() {
                 </p>
               )}
 
-              <div className="flex gap-2 justify-center mb-6">
+              <div className="flex gap-1.5 justify-center mb-6">
                 {code.map((digit, i) => (
                   <input
                     key={i}
                     id={`code-${i}`}
                     type="text"
                     inputMode="numeric"
+                    autoComplete="one-time-code"
                     maxLength={1}
                     value={digit}
                     onChange={e => handleCodeChange(i, e.target.value)}
                     onKeyDown={e => handleCodeKeyDown(i, e)}
-                    className="w-11 h-14 text-center text-xl font-bold bg-gray-50 rounded-xl border-2 border-gray-200 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                    onPaste={handlePaste}
+                    className="w-10 h-12 text-center text-xl font-bold bg-gray-50 rounded-xl border-2 border-gray-200 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
                   />
                 ))}
               </div>
