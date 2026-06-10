@@ -12,7 +12,7 @@ Correções e funcionalidades que precisam estar prontas antes de qualquer teste
 |---|---|---|
 | Seleção da viagem ativa por data | ✅ Feito | `GET /me/trip` filtra `end_date >= hoje` — staff com múltiplas viagens cai sempre na correta |
 | Service Agreement por viagem | ✅ Feito | Campo em `wetravel_trips`, exposto no `GET /me/trip`, populado via planilha (aba Viagens) |
-| Campo Ideal Pace no pre-trip | ⏳ Pendente decisão | Ver `19-decisoes-pendentes.md` — perguntas de design em aberto antes de implementar |
+| Campo Ideal Pace no pre-trip | ✅ Feito | Parrot no card correto vindo do banco, coluna `ideal_pace` na aba Fases da planilha |
 
 ---
 
