@@ -142,6 +142,7 @@ class PreTripPhase:
     icon: str
     short_description: str
     detailed_description: str
+    is_ideal_pace: bool = False
     checklist: list[ChecklistItem] = field(default_factory=list)
     links: list[PhaseLink] = field(default_factory=list)
 
@@ -176,8 +177,16 @@ class InTripDay:
 
 def parse_fases_tab(rows: list[list[str]]) -> list[PreTripPhase]:
     """Parse Fases tab (already filtered by trip_uuid). Each row is one complete phase.
-    Columns: trip_uuid, ordem, fase, titulo, subtitulo, icone, descricao_curta, descricao_completa
+    Columns: trip_uuid, ordem, fase, titulo, subtitulo, icone, descricao_curta, descricao_completa[, ideal_pace]
     Returns phases sorted by ordem."""
+    if not rows:
+        return []
+    header = [h.strip().lower() for h in rows[0]]
+    try:
+        ideal_pace_col = header.index("ideal_pace")
+    except ValueError:
+        ideal_pace_col = -1
+
     phases: list[tuple[int, PreTripPhase]] = []
     for row in rows[1:]:  # skip header
         if len(row) < 8:
@@ -191,6 +200,9 @@ def parse_fases_tab(rows: list[list[str]]) -> list[PreTripPhase]:
             ordem = int(ordem_str)
         except ValueError:
             continue
+        is_ideal = False
+        if ideal_pace_col >= 0 and ideal_pace_col < len(row):
+            is_ideal = row[ideal_pace_col].strip().lower() in ("x", "sim", "yes", "true", "1")
         phases.append((ordem, PreTripPhase(
             fase=fase,
             title=titulo,
@@ -198,6 +210,7 @@ def parse_fases_tab(rows: list[list[str]]) -> list[PreTripPhase]:
             icon=icone,
             short_description=descricao_curta,
             detailed_description=descricao_completa,
+            is_ideal_pace=is_ideal,
         )))
     return [p for _, p in sorted(phases, key=lambda x: x[0])]
 
@@ -386,6 +399,7 @@ async def write_to_db(
 
         # 2. Insert pre-trip phases — order comes from the spreadsheet
         sort_order = 0
+        ideal_pace_phase_id: str | None = None
         for phase in pre_trip_phases:
             phase_id = str(uuid.uuid4())
             await conn.execute(
@@ -400,6 +414,8 @@ async def write_to_db(
                 phase.icon, phase.short_description, phase.detailed_description,
                 sort_order, False, True,
             )
+            if phase.is_ideal_pace:
+                ideal_pace_phase_id = phase_id
             sort_order += 1
             for item in phase.checklist:
                 await conn.execute(
@@ -453,6 +469,17 @@ async def write_to_db(
                     act.duration_minutes, act.short_description,
                     act.practical_info or None, act.amount_brl, act.sort_order,
                 )
+
+        # 4. Save ideal_pace_phase_id in trip_settings (preserve mode if already set)
+        await conn.execute(
+            """
+            INSERT INTO trip_settings (trip_uuid, mode, ideal_pace_phase_id)
+            VALUES ($1, 'pre-trip', $2)
+            ON CONFLICT (trip_uuid) DO UPDATE
+                SET ideal_pace_phase_id = $2, updated_at = now()
+            """,
+            trip_uuid, ideal_pace_phase_id,
+        )
 
 
 async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet_id: str) -> dict:

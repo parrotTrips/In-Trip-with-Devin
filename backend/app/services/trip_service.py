@@ -20,15 +20,22 @@ from app.db.models.progress import TravelerPhaseProgress
 from app.db.models.user import User
 
 
-async def _get_trip_mode(trip_uuid: str, session: AsyncSession) -> str:
-    """Return the current mode for a trip. Defaults to 'pre-trip' if no record exists."""
+async def _get_trip_settings(trip_uuid: str, session: AsyncSession) -> dict:
+    """Return mode and ideal_pace_phase_id for a trip. Defaults to pre-trip/None."""
     from sqlalchemy import text as _text
     result = await session.execute(
-        _text("SELECT mode FROM trip_settings WHERE trip_uuid = :uuid"),
+        _text("SELECT mode, ideal_pace_phase_id FROM trip_settings WHERE trip_uuid = :uuid"),
         {"uuid": trip_uuid},
     )
     row = result.mappings().first()
-    return row["mode"] if row else "pre-trip"
+    if row:
+        return {"mode": row["mode"], "ideal_pace_phase_id": row["ideal_pace_phase_id"]}
+    return {"mode": "pre-trip", "ideal_pace_phase_id": None}
+
+
+async def _get_trip_mode(trip_uuid: str, session: AsyncSession) -> str:
+    settings = await _get_trip_settings(trip_uuid, session)
+    return settings["mode"]
 
 
 def compute_in_trip_phase_completions(
@@ -114,10 +121,11 @@ async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
             "sort_order": link.sort_order,
         })
 
-    trip_mode = await _get_trip_mode(trip_uuid, session)
+    settings = await _get_trip_settings(trip_uuid, session)
     return {
         "wetravel_trip_uuid": trip_uuid,
-        "trip_mode": trip_mode,
+        "trip_mode": settings["mode"],
+        "ideal_pace_phase_id": settings["ideal_pace_phase_id"],
         "phases": [
             {
                 "id": str(p.id),

@@ -46,28 +46,13 @@ function formatDateRange(start: string, end: string): string {
   return `${s.toLocaleDateString('en-US', monthDay)} — ${e.toLocaleDateString('en-US', { ...monthDay, year: 'numeric' })}`;
 }
 
-function computeParrotPhaseId(phases: TripPhase[]): string | null {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const inTripPhases = phases.filter(p => p.phase_type === 'in-trip' && p.starts_at);
-  if (!inTripPhases.length) return null;
-  // Fase do dia mais próximo de hoje (sem ultrapassar ou o primeiro)
-  let parrot = inTripPhases[0];
-  for (const phase of inTripPhases) {
-    const phaseDate = new Date(phase.starts_at!);
-    phaseDate.setHours(0, 0, 0, 0);
-    if (phaseDate <= today) parrot = phase;
-  }
-  return parrot.id;
-}
 
 export default function HomeScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { tripInfo, phases, travelers, loading, error } = useTripContext();
+  const { tripInfo, phases, travelers, idealPacePhaseId, loading, error } = useTripContext();
 
   const currentUserPhaseId = travelers.find(t => t.id === user?.userId)?.current_phase_id ?? null;
-  const parrotPhaseId = computeParrotPhaseId(phases);
 
   const isInTrip = tripInfo?.trip_mode === 'in-trip';
 
@@ -87,15 +72,11 @@ export default function HomeScreen() {
     : progressPhases.findIndex(p => p.id === currentUserPhaseId);
   const completedCount = rawUserIdx === -1 ? totalPhases : rawUserIdx;
 
-  // In-trip: both user and parrot progress are date-driven (automatic).
-  // Pre-trip: parrot mirrors user (user drives their own pace).
   const now = new Date();
   const dateBasedCount = isInTrip
     ? progressPhases.filter(p => p.starts_at && new Date(p.starts_at) <= now).length
     : 0;
-  // Cap at totalPhases so bar stays at 100% after the last day passes
   const userCompletedCount = isInTrip ? Math.min(dateBasedCount, totalPhases) : completedCount;
-  const parrotCompletedCount = isInTrip ? Math.min(dateBasedCount, totalPhases) : completedCount;
 
   const displayTitle = tripInfo?.title ?? 'Sua Viagem';
   const displayDates = tripInfo
@@ -161,25 +142,8 @@ export default function HomeScreen() {
             <ProgressBar
               totalPhases={totalPhases}
               completedCount={userCompletedCount}
-              parrotCompletedCount={parrotCompletedCount}
             />
           </div>
-        </div>
-      </div>
-
-      {/* Phase Labels */}
-      <div className="flex justify-center gap-6 py-3 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-blue-500" />
-          <span className="text-xs font-medium text-gray-500">Pre-Trip</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-emerald-500" />
-          <span className="text-xs font-medium text-gray-500">In-Trip</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs">🦜</span>
-          <span className="text-xs font-medium text-gray-500">Ideal pace</span>
         </div>
       </div>
 
@@ -196,7 +160,7 @@ export default function HomeScreen() {
             {phases.map((phase, index) => {
               const isLeft = index % 2 === 0;
               const isCurrentUser = phase.id === currentUserPhaseId;
-              const isParrotHere = phase.id === parrotPhaseId;
+              const isParrotHere = !isInTrip && !!idealPacePhaseId && phase.id === idealPacePhaseId;
               const phaseProgressIdx = progressPhases.findIndex(p => p.id === phase.id);
               const isPast = isInTrip
                 ? (phaseProgressIdx >= 0 && phaseProgressIdx < userCompletedCount)

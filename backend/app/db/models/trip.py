@@ -95,3 +95,4 @@ class TripSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     trip_uuid: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     mode: Mapped[str] = mapped_column(Text, nullable=False, default="pre-trip")
+    ideal_pace_phase_id: Mapped[str | None] = mapped_column(Text)

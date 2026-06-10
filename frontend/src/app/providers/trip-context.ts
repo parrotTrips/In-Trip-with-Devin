@@ -5,6 +5,7 @@ export interface TripContextType {
   tripInfo: TripInfo | null;
   phases: TripPhase[];
   travelers: TripTraveler[];
+  idealPacePhaseId: string | null;
   loading: boolean;
   error: string | null;
   refetch: () => void;
@@ -14,6 +15,7 @@ export const TripContext = createContext<TripContextType>({
   tripInfo: null,
   phases: [],
   travelers: [],
+  idealPacePhaseId: null,
   loading: false,
   error: null,
   refetch: () => {},
