@@ -30,10 +30,12 @@ async def get_my_trip(
                 wt.destination,
                 wt.start_date,
                 wt.end_date,
-                wt.url
+                wt.url,
+                wt.service_agreement_url
             FROM trip_travelers tt
             JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
             WHERE tt.user_id = CAST(:user_id AS uuid)
+              AND (wt.end_date IS NULL OR wt.end_date >= CURRENT_DATE)
             ORDER BY wt.start_date ASC
             LIMIT 1
         """),
@@ -55,6 +57,7 @@ async def get_my_trip(
             "start_date": row["start_date"],
             "end_date": row["end_date"],
             "url": row["url"],
+            "service_agreement_url": row["service_agreement_url"],
             "trip_mode": trip_mode,
         }
     }

@@ -244,7 +244,6 @@ export default function ProfileScreen() {
     intl_flights_help_details: '',
     travel_insurance_help_yn: '',
     unforgettable_trip_details: '',
-    service_agreement_url: '',
   });
 
   const setField = (key: string, value: string) => {
@@ -476,10 +475,10 @@ export default function ProfileScreen() {
           </div>
         </CollapsibleSection>
 
-        {/* ── Section 3: Service Agreement (non-editable) ── */}
+        {/* ── Section 3: Service Agreement (per-trip, read-only) ── */}
         <CollapsibleSection title="Service Agreement" icon={<FileText size={18} />} emoji="📄" defaultOpen={false}>
           <div className="pt-3 space-y-3">
-            {form.service_agreement_url ? (
+            {tripInfo?.service_agreement_url ? (
               <div className="space-y-3">
                 <div className="bg-emerald-50 rounded-xl p-4 flex items-center gap-3">
                   <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
@@ -491,7 +490,7 @@ export default function ProfileScreen() {
                   </div>
                 </div>
                 <a
-                  href={form.service_agreement_url}
+                  href={tripInfo.service_agreement_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-colors"

@@ -88,6 +88,25 @@ def read_tab(sheets_svc, sheet_id: str, tab_name: str) -> list[list[str]]:
     return resp.get("values", [])
 
 
+def parse_service_agreement_url(viagens_rows: list[list[str]], trip_uuid: str) -> str | None:
+    """Read service_agreement_url for a trip from the Viagens tab.
+    Expected columns: trip_uuid, nome_da_viagem, data_inicio, data_fim, service_agreement_url
+    """
+    if not viagens_rows or len(viagens_rows) < 2:
+        return None
+    header = [h.strip().lower() for h in viagens_rows[0]]
+    try:
+        uuid_col = header.index("trip_uuid")
+        url_col = header.index("service_agreement_url")
+    except ValueError:
+        return None
+    for row in viagens_rows[1:]:
+        if len(row) > uuid_col and row[uuid_col].strip() == trip_uuid:
+            url = row[url_col].strip() if len(row) > url_col else ""
+            return url or None
+    return None
+
+
 def filter_rows_by_trip(rows: list[list[str]], trip_uuid: str) -> list[list[str]]:
     """Keep header row and data rows whose first column matches trip_uuid."""
     if not rows:
@@ -438,6 +457,9 @@ async def write_to_db(
 
 async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet_id: str) -> dict:
     """Import a single trip. Returns a summary dict. Sheets tabs are read once and filtered."""
+    viagens_rows = read_tab(sheets_svc, sheet_id, "Viagens")
+    service_agreement_url = parse_service_agreement_url(viagens_rows, trip_uuid)
+
     fases_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Fases"), trip_uuid)
     pre_trip_phases = parse_fases_tab(fases_rows)
 
@@ -454,6 +476,13 @@ async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet
         return {"skipped": True}
 
     await write_to_db(conn, trip_uuid, pre_trip_phases, in_trip_days)
+
+    # Update service_agreement_url on the trip record
+    await conn.execute(
+        "UPDATE wetravel_trips SET service_agreement_url = $1 WHERE trip_uuid = $2",
+        service_agreement_url, trip_uuid,
+    )
+
     return {
         "skipped": False,
         "phases": len(pre_trip_phases),
@@ -461,6 +490,7 @@ async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet
         "links": sum(len(p.links) for p in pre_trip_phases),
         "days": len(in_trip_days),
         "activities": sum(len(d.activities) for d in in_trip_days),
+        "service_agreement_url": service_agreement_url or "(none)",
     }
 
 

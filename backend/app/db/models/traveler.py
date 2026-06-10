@@ -40,4 +40,3 @@ class TravelerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     flight_help_details: Mapped[str | None] = mapped_column(Text)
     needs_travel_insurance_help_flag: Mapped[bool | None] = mapped_column(Boolean)
     unforgettable_trip_details: Mapped[str | None] = mapped_column(Text)
-    service_agreement_url: Mapped[str | None] = mapped_column(Text)

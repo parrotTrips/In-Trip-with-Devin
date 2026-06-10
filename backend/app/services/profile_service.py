@@ -48,7 +48,6 @@ PROFILE_FIELD_DEFAULTS = {
     "departure_date": None,
     "departure_time": None,
     "departure_flight": None,
-    "service_agreement_url": None,
 }
 
 SUPPORTED_UPDATE_FIELDS = {
@@ -216,7 +215,6 @@ async def get_profile(
         profile_dict["intl_flights_help_details"] = profile.flight_help_details
         profile_dict["travel_insurance_help_yn"] = _encode_yes_no(profile.needs_travel_insurance_help_flag)
         profile_dict["unforgettable_trip_details"] = profile.unforgettable_trip_details
-        profile_dict["service_agreement_url"] = profile.service_agreement_url
 
     return {
         "user_id": user_id,
