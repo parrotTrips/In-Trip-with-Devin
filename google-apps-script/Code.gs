@@ -98,15 +98,32 @@ function syncTrips() {
       sheet = ss.insertSheet("Viagens");
     }
 
+    // Preserve existing service_agreement_url values before clearing
+    var existingAgreements = {};
+    var existingData = sheet.getDataRange().getValues();
+    if (existingData.length > 1) {
+      var existingHeader = existingData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+      var uuidCol = existingHeader.indexOf("trip_uuid");
+      var agreementCol = existingHeader.indexOf("service_agreement_url");
+      if (uuidCol >= 0 && agreementCol >= 0) {
+        for (var i = 1; i < existingData.length; i++) {
+          var row = existingData[i];
+          if (row[uuidCol] && row[agreementCol]) {
+            existingAgreements[String(row[uuidCol]).trim()] = String(row[agreementCol]).trim();
+          }
+        }
+      }
+    }
+
     sheet.clearContents();
-    var header = [["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim"]];
+    var header = [["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim", "service_agreement_url"]];
     var rows = trips.map(function(t) {
-      return [t.trip_uuid, t.title, t.start_date, t.end_date];
+      return [t.trip_uuid, t.title, t.start_date, t.end_date, existingAgreements[t.trip_uuid] || ""];
     });
-    sheet.getRange(1, 1, 1, 4).setValues(header);
-    sheet.getRange(1, 1, 1, 4).setFontWeight("bold");
+    sheet.getRange(1, 1, 1, 5).setValues(header);
+    sheet.getRange(1, 1, 1, 5).setFontWeight("bold");
     if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+      sheet.getRange(2, 1, rows.length, 5).setValues(rows);
     }
 
     ui.alert("✅ Synced " + trips.length + " active trip(s) to the Viagens tab.");
