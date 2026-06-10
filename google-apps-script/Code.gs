@@ -15,6 +15,8 @@ function onOpen() {
     .addItem("🔁 Reset Trip → Pre-Trip (testes)", "resetTrip")
     .addSeparator()
     .addItem("Reset Trip Content (apaga fases e atividades)", "resetContent")
+    .addSeparator()
+    .addItem("🔧 Setup Sheet Headers (primeira vez)", "setupSheetHeaders")
     .addToUi();
 }
 
@@ -174,6 +176,85 @@ function resetTrip() {
   } catch (e) {
     ui.alert("❌ Error: " + e.message);
   }
+}
+
+function setupSheetHeaders() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var TABS = [
+    {
+      name: "Viagens",
+      headers: ["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim", "service_agreement_url"],
+      note: "service_agreement_url → URL do PDF do contrato para cada viagem"
+    },
+    {
+      name: "Fases",
+      headers: ["trip_uuid", "ordem", "fase", "titulo", "subtitulo", "icone", "descricao_curta", "descricao_completa", "ideal_pace"],
+      note: "ideal_pace → marque 'x' na fase que os viajantes deveriam estar neste momento"
+    },
+    {
+      name: "Checklist",
+      headers: ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
+      note: "obrigatorio → 'sim' ou 'não'"
+    },
+    {
+      name: "Links",
+      headers: ["trip_uuid", "fase", "ordem", "label", "url"],
+      note: ""
+    },
+    {
+      name: "Roteiro",
+      headers: ["trip_uuid", "dia", "data", "titulo", "subtitulo", "icone", "descricao_curta", "descricao_completa", "atividade", "tipo", "horario", "duracao_min", "descricao_atividade", "info_pratica", "valor_brl"],
+      note: ""
+    }
+  ];
+
+  var created = [], updated = [], skipped = [];
+
+  TABS.forEach(function(tab) {
+    var sheet = ss.getSheetByName(tab.name);
+    if (!sheet) {
+      sheet = ss.insertSheet(tab.name);
+      var range = sheet.getRange(1, 1, 1, tab.headers.length);
+      range.setValues([tab.headers]);
+      range.setFontWeight("bold");
+      range.setBackground("#d9ead3");
+      if (tab.note) {
+        sheet.getRange(2, 1).setValue("← " + tab.note);
+        sheet.getRange(2, 1).setFontColor("#888888").setFontStyle("italic");
+      }
+      created.push(tab.name);
+    } else {
+      // Check if ideal_pace column is missing from Fases
+      var existingHeader = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+        .map(function(h) { return String(h).trim().toLowerCase(); });
+      var missing = tab.headers.filter(function(h) {
+        return existingHeader.indexOf(h.toLowerCase()) < 0;
+      });
+      if (missing.length > 0) {
+        // Append missing headers at the end
+        var nextCol = sheet.getLastColumn() + 1;
+        missing.forEach(function(h, i) {
+          var cell = sheet.getRange(1, nextCol + i);
+          cell.setValue(h);
+          cell.setFontWeight("bold");
+          cell.setBackground("#fff2cc");
+        });
+        updated.push(tab.name + " (added: " + missing.join(", ") + ")");
+      } else {
+        skipped.push(tab.name);
+      }
+    }
+  });
+
+  var msg = "";
+  if (created.length) msg += "✅ Created: " + created.join(", ") + "\n";
+  if (updated.length) msg += "🟡 Updated: " + updated.join(", ") + "\n";
+  if (skipped.length) msg += "⬜ Already OK: " + skipped.join(", ") + "\n";
+  msg += "\nNow you can fill in the content and run Import Trip Content.";
+
+  ui.alert("🔧 Sheet Setup Complete", msg, ui.ButtonSet.OK);
 }
 
 function resetContent() {
