@@ -8,11 +8,11 @@
 
 Correções e funcionalidades que precisam estar prontas antes de qualquer teste com pessoas.
 
-| Item | Descrição |
-|---|---|
-| Seleção da viagem ativa por data | Crítico para o staff: corrigir `GET /me/trip` para carregar a viagem com `end_date >= hoje`, não a mais antiga. Staff que guia duas viagens seguidas precisa disso |
-| Service Agreement por viagem | Mover `service_agreement_url` de `traveler_profiles` para `wetravel_trips`. Adicionar campo na planilha para popular a URL. Todos os viajantes da viagem veem o mesmo contrato |
-| Campo Ideal Pace no pre-trip | Viajante registra seu ritmo preferido durante o pré-trip. Decisão de design + backend + frontend |
+| Item | Status | Descrição |
+|---|---|---|
+| Seleção da viagem ativa por data | ✅ Feito | `GET /me/trip` filtra `end_date >= hoje` — staff com múltiplas viagens cai sempre na correta |
+| Service Agreement por viagem | ✅ Feito | Campo em `wetravel_trips`, exposto no `GET /me/trip`, populado via planilha (aba Viagens) |
+| Campo Ideal Pace no pre-trip | ⏳ Pendente decisão | Ver `18-ideal-pace-design.md` — perguntas de design em aberto antes de implementar |
 
 ---
 
