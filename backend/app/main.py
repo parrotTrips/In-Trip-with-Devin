@@ -10,6 +10,7 @@ from app.routers.auth import router as auth_router
 from app.routers.checklist import router as checklist_router
 from app.routers.health import router as health_router
 from app.routers.profile import router as profile_router
+from app.routers.staff import router as staff_router
 from app.routers.trip import router as trip_router
 from app.routers.users import router as users_router
 
@@ -37,4 +38,5 @@ app.include_router(admin_router)
 app.include_router(users_router)
 app.include_router(profile_router)
 app.include_router(trip_router)
+app.include_router(staff_router)
 app.include_router(checklist_router)
