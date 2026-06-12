@@ -4,10 +4,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.admin_service import (
+    admin_import_contacts,
     admin_import_trip,
     admin_list_trips,
     admin_reset_content,
     admin_reset_trip,
+    admin_set_user_role,
     admin_start_trip,
 )
 
@@ -59,5 +61,30 @@ async def reset_trip(body: TripUUIDRequest):
     """Full reset to pre-trip: clears ALL progress (checklist + phase). For testing."""
     try:
         return await admin_reset_trip(body.trip_uuid)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/trips/import-contacts")
+async def import_contacts(body: TripUUIDRequest):
+    """Import contacts from the Staff Google Sheet into trip_contacts."""
+    try:
+        return await admin_import_contacts(body.trip_uuid)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+class SetUserRoleRequest(BaseModel):
+    phone: str
+    role: str
+
+
+@router.post("/users/set-role")
+async def set_user_role(body: SetUserRoleRequest):
+    """Set a user's role (traveler or staff) by phone number."""
+    try:
+        return await admin_set_user_role(body.phone, body.role)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

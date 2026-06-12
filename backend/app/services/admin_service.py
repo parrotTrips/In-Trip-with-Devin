@@ -25,6 +25,7 @@ PG_URL = (
 )
 
 TRIP_CONTENT_SHEET_ID = os.environ.get("TRIP_CONTENT_SHEET_ID", "")
+STAFF_CONTENT_SHEET_ID = os.environ.get("STAFF_CONTENT_SHEET_ID", "")
 
 
 async def _get_connection() -> asyncpg.Connection:
@@ -259,4 +260,57 @@ async def admin_reset_trip(trip_uuid: str) -> dict:
         "mode": "pre-trip",
         "deleted_checklist_progress": deleted_checklist,
         "deleted_phase_progress": deleted_phase,
+    }
+
+
+async def admin_import_contacts(trip_uuid: str) -> dict:
+    """Import contacts from the Staff Google Sheet into trip_contacts."""
+    if not STAFF_CONTENT_SHEET_ID:
+        raise ValueError("STAFF_CONTENT_SHEET_ID is not set")
+
+    from scripts.import_staff_content import (
+        filter_rows_by_trip,
+        parse_contacts_tab,
+        read_tab,
+        write_contacts,
+    )
+
+    sheets_svc = _build_sheets_client_adc()
+    contacts_rows = filter_rows_by_trip(
+        read_tab(sheets_svc, STAFF_CONTENT_SHEET_ID, "Contatos"), trip_uuid
+    )
+    contacts = parse_contacts_tab(contacts_rows)
+
+    conn = await _get_connection()
+    try:
+        count = await write_contacts(conn, trip_uuid, contacts)
+    finally:
+        await conn.close()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "contacts_imported": count}
+
+
+async def admin_set_user_role(phone: str, role: str) -> dict:
+    """Set the role of a user identified by phone number."""
+    if role not in ("traveler", "staff"):
+        raise ValueError(f"Invalid role '{role}'. Must be 'traveler' or 'staff'.")
+
+    conn = await _get_connection()
+    try:
+        result = await conn.fetchrow(
+            "UPDATE users SET role = $1 WHERE phone = $2 RETURNING id, full_name, phone, role",
+            role, phone,
+        )
+    finally:
+        await conn.close()
+
+    if not result:
+        raise ValueError(f"No user found with phone '{phone}'")
+
+    return {
+        "status": "ok",
+        "user_id": str(result["id"]),
+        "name": result["full_name"],
+        "phone": result["phone"],
+        "role": result["role"],
     }
