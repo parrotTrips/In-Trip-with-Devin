@@ -86,9 +86,8 @@ Botão no header do Staff App que permite ao staff ver o app como um viajante ve
 
 ## Status atual
 
-- ✅ Layout hard-coded deployado em `https://parrot-trips-app-286.netlify.app` (login com `role=staff`)
-- ✅ Roteamento por role já funciona (`App.tsx`)
-- ⏳ Backend e banco de dados para check-ins e contatos
-- ⏳ Integração real do QR scanner (câmera)
-- ⏳ Switch staff ↔ viajante
-- ⏳ Aba Contatos na planilha e pipeline de import
+- ✅ Roteamento por role=staff funciona (`App.tsx`)
+- ✅ Itinerary com dados reais do banco (`GET /me/staff/trip`)
+- ✅ Switch staff ↔ viajante (banner laranja + botão no header)
+- ⏳ Contatos: tabela no banco + aba na planilha + pipeline + endpoint
+- ⏳ QR Code: câmera real + registro de check-in no banco (`traveler_activity_checkins`)
