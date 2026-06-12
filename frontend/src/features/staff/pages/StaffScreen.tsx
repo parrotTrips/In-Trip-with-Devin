@@ -1,32 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye } from 'lucide-react';
 import { useAuth } from '../../../app/providers/auth-context';
-import { getStaffTrip, type StaffDay, type StaffTrip } from '../services/staff-api';
-
-// ── Mock contacts (until backend/planilha pipeline is built) ──────────────────
-
-const MOCK_CONTACTS = [
-  {
-    category: 'Local guides',
-    contacts: [
-      { id: 'c1', name: 'Carlos Mendoza', role: 'Lead guide', phone: '+593 99 123 4567' },
-      { id: 'c2', name: 'Ana Torres', role: 'Naturalist guide', phone: '+593 99 234 5678' },
-    ],
-  },
-  {
-    category: 'Accommodation',
-    contacts: [
-      { id: 'c3', name: 'Hotel Galápagos Dreams', role: 'Front desk', phone: '+593 5 252 6000' },
-    ],
-  },
-  {
-    category: 'Emergency',
-    contacts: [
-      { id: 'c4', name: 'Local hospital', role: 'Hospital Oskar Jandl', phone: '+593 5 252 0118' },
-      { id: 'c5', name: 'Parrot Trips HQ', role: '24h emergency line', phone: '+55 11 91234-5678' },
-    ],
-  },
-];
+import { getStaffContacts, getStaffTrip, type StaffContactGroup, type StaffDay, type StaffTrip } from '../services/staff-api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -180,10 +155,37 @@ function QrScannerTab() {
   );
 }
 
-function ContactsTab() {
+function ContactsTab({ groups, loading, error }: { groups: StaffContactGroup[]; loading: boolean; error: string | null }) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48 gap-3">
+        <div className="w-7 h-7 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400 text-sm">Loading contacts...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 px-6 gap-3">
+        <p className="text-red-500 text-sm text-center">{error}</p>
+      </div>
+    );
+  }
+
+  if (groups.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-2 px-6">
+        <Phone size={32} className="text-gray-200" />
+        <p className="text-gray-400 text-sm text-center">No contacts yet.</p>
+        <p className="text-gray-300 text-xs text-center">Add contacts in the Staff Google Sheet and run the import.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 py-5 pb-24 space-y-5">
-      {MOCK_CONTACTS.map((group) => (
+      {groups.map((group) => (
         <div key={group.category} className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{group.category}</p>
@@ -193,21 +195,22 @@ function ContactsTab() {
               <div key={contact.id} className="flex items-center justify-between px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{contact.name}</p>
-                  <p className="text-xs text-gray-400">{contact.role}</p>
+                  {contact.role && <p className="text-xs text-gray-400">{contact.role}</p>}
                 </div>
-                <a
-                  href={`tel:${contact.phone}`}
-                  className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-1.5 rounded-lg"
-                >
-                  <Phone size={13} />
-                  {contact.phone}
-                </a>
+                {contact.phone && (
+                  <a
+                    href={`tel:${contact.phone}`}
+                    className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-1.5 rounded-lg"
+                  >
+                    <Phone size={13} />
+                    {contact.phone}
+                  </a>
+                )}
               </div>
             ))}
           </div>
         </div>
       ))}
-      <p className="text-center text-xs text-gray-300 pb-2">Contacts from the Google Sheet — coming soon</p>
     </div>
   );
 }
@@ -224,14 +227,21 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('itinerary');
   const [trip, setTrip] = useState<StaffTrip | null>(null);
+  const [contactGroups, setContactGroups] = useState<StaffContactGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [contactsLoading, setContactsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [contactsError, setContactsError] = useState<string | null>(null);
 
   useEffect(() => {
     getStaffTrip()
       .then(setTrip)
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load trip'))
       .finally(() => setLoading(false));
+    getStaffContacts()
+      .then(r => setContactGroups(r.contacts))
+      .catch(e => setContactsError(e instanceof Error ? e.message : 'Failed to load contacts'))
+      .finally(() => setContactsLoading(false));
   }, []);
 
   return (
@@ -266,7 +276,7 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
           <ItineraryTab days={trip?.days ?? []} loading={loading} error={error} />
         )}
         {activeTab === 'scanner' && <QrScannerTab />}
-        {activeTab === 'contacts' && <ContactsTab />}
+        {activeTab === 'contacts' && <ContactsTab groups={contactGroups} loading={contactsLoading} error={contactsError} />}
       </div>
 
       {/* Bottom nav */}

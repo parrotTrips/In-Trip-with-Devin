@@ -5,6 +5,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
+from app.db.models.staff import TripContact
 from app.db.models.trip import TripActivity, TripPhase
 
 router = APIRouter(prefix="/me/staff", tags=["staff"])
@@ -104,5 +105,40 @@ async def get_staff_trip(
                 "activities": activities_by_phase.get(p.id, []),
             }
             for p in phases
+        ],
+    }
+
+
+@router.get("/trip/contacts")
+async def get_staff_contacts(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return contacts for the active trip, grouped by category."""
+    user_id = request.state.user_id
+    trip_uuid = await _get_staff_trip_uuid(user_id, session)
+
+    contacts_result = await session.execute(
+        select(TripContact)
+        .where(TripContact.wetravel_trip_uuid == trip_uuid)
+        .order_by(TripContact.category, TripContact.sort_order)
+    )
+    contacts = contacts_result.scalars().all()
+
+    grouped: dict[str, list] = {}
+    for c in contacts:
+        grouped.setdefault(c.category, []).append({
+            "id": str(c.id),
+            "name": c.name,
+            "role": c.role,
+            "phone": c.phone,
+            "sort_order": c.sort_order,
+        })
+
+    return {
+        "wetravel_trip_uuid": trip_uuid,
+        "contacts": [
+            {"category": cat, "contacts": items}
+            for cat, items in grouped.items()
         ],
     }

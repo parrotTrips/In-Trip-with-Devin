@@ -12,6 +12,17 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
+class TripContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "trip_contacts"
+
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class TripStaff(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trip_staff"
     __table_args__ = (UniqueConstraint("wetravel_trip_uuid", "user_id"),)

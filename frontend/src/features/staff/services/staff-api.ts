@@ -33,3 +33,25 @@ export interface StaffTrip {
 export async function getStaffTrip() {
   return request<StaffTrip>('/me/staff/trip');
 }
+
+export interface StaffContact {
+  id: string;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  sort_order: number;
+}
+
+export interface StaffContactGroup {
+  category: string;
+  contacts: StaffContact[];
+}
+
+export interface StaffContactsResponse {
+  wetravel_trip_uuid: string;
+  contacts: StaffContactGroup[];
+}
+
+export async function getStaffContacts() {
+  return request<StaffContactsResponse>('/me/staff/trip/contacts');
+}
