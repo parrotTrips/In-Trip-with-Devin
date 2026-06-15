@@ -1,117 +1,134 @@
 ## Projeto: Parrot Trips — In-Trip App
 
-App web para viajantes acompanharem uma experiência de viagem. Backend FastAPI (Python), frontend React + TypeScript, banco PostgreSQL no Supabase.
+App web para viajantes e staff acompanharem uma experiência de viagem em grupo.
+Backend FastAPI (Python), frontend React + TypeScript, banco PostgreSQL no Supabase.
+
+Repositório: https://github.com/parrotTrips/In-Trip-with-Devin
+Frontend (produção): https://parrot-trips-app-286.netlify.app
+Backend (produção): https://parrot-trips-backend-428743191336.southamerica-east1.run.app
 
 ---
 
-## O que foi implementado e está funcionando
+## Documentação do projeto
 
-### Autenticação WhatsApp OTP + JWT
-- Fluxo completo: telefone → OTP via WhatsApp → JWT de 14 dias
-- Template `intripauth` (Authentication, idioma `en`) aprovado e ativo na Meta
-- Apenas telefones cadastrados na tabela `users` conseguem pedir OTP (403 para não autorizados)
-- JWT contém: `sub` (user_id), `phone`, `role`, `exp`
+Toda a documentação fica em `PRODUCT_AND_SYSTEM_DESIGN/`. Os mais importantes:
 
-### Dois tipos de usuário
-- `role = 'traveler'` → vê o mapa da jornada da viagem (tela do viajante)
-- `role = 'staff'` → vê a tela operacional de tarefas do dia (tela staff)
-- O roteamento acontece em `frontend/src/app/App.tsx` baseado no `user.role`
+| Arquivo | O que contém |
+|---------|-------------|
+| `roadmap.md` | Plano de ação faseado — estado atual e próximos passos |
+| `19-decisoes-pendentes.md` | Tópicos em aberto que precisam de decisão antes de implementar |
+| `17-staff-app-design.md` | Design do staff app — o que está pronto e o que falta |
+| `20-fluxo-staffs.md` | Fluxo completo de cadastro e operação do staff via planilha |
+| `21-rfid-nfc-controle-presenca.md` | Pesquisa sobre RFID/NFC para controle de presença de viajantes |
+| `15-deploy-gcp.md` | Guia operacional de deploy (backend GCP + frontend Netlify) |
+| `16-guia-demo.md` | Guia de simulação da viagem para demos e testes |
 
-### Usuários cadastrados no banco (Supabase)
+---
+
+## Stack atual
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS |
+| Backend | Python 3.13 + FastAPI + SQLAlchemy async |
+| Banco | Supabase (PostgreSQL) |
+| Auth | WhatsApp OTP + JWT (14 dias) |
+| Deploy backend | GCP Cloud Run |
+| Deploy frontend | Netlify (site: parrot-trips-app-286) |
+| Conteúdo | Google Sheets → scripts Python → Supabase |
+
+---
+
+## Dois tipos de usuário
+
+- `role = 'traveler'` → app do viajante (pré-trip com cards de checklist + in-trip com roteiro por dia)
+- `role = 'staff'` → staff app (itinerário in-trip, QR scanner, contatos operacionais)
+
+O roteamento acontece em `frontend/src/app/App.tsx` baseado no `user.role`.
+Staff tem um botão "Traveler view" no header para ver o app como o viajante veria.
+
+---
+
+## Usuários cadastrados (produção)
+
 | Nome | Telefone | Role |
 |------|----------|------|
-| Marcelo Angelo da Silva Filho | +5512991296651 | staff |
-| Vitor Sanches | +5511997666680 | staff |
+| Marcelo Angelo | +5512991296651 | staff |
 
-**Atenção**: após rodar a migration 20260520_0002, é necessário executar este SQL no Supabase Studio:
-```sql
-UPDATE users SET role = 'staff' WHERE phone IN ('+5512991296651', '+5511997666680');
-```
-
-### Backend (.env atual)
-```
-WHATSAPP_PHONE_NUMBER_ID=1105174586018276
-WHATSAPP_ACCESS_TOKEN=<System User token permanente — não expira>
-WHATSAPP_TEMPLATE_NAME=intripauth
-WHATSAPP_TEMPLATE_LANGUAGE=en
-WHATSAPP_BUSINESS_ACCOUNT_ID=972993528657511
-JWT_SECRET=ca596c0ef39322effb118a36f43163d52d8f735a3492bd03e40375b35e23c972
-DATABASE_URL=postgresql+asyncpg://...supabase...
-```
-
-### Banco de dados — tabelas existentes
-- `users` — id, phone, full_name, email, status, role (`traveler` | `staff`)
-- `trips` — viagens
-- `trip_travelers` — vínculo usuário ↔ viagem (para viajantes)
-- `trip_staff` — vínculo usuário ↔ viagem (para staff, com campo `function`)
-- `staff_tasks` — tarefas operacionais do staff por fase/dia da viagem
-- `trip_phases` — fases e dias da viagem
-- `trip_activities` — atividades de lazer do viajante
-- `traveler_profiles`, `traveler_products` — dados do viajante
-- `traveler_checklist_progress`, `traveler_phase_progress` — progresso
-
-### Frontend — telas existentes
-- `LoginScreen` — login WhatsApp OTP
-- `HomeScreen` — mapa da jornada do viajante (dados mockados, não conectado ao backend)
-- `PhaseDetails` — detalhes de uma fase pré-viagem (parcialmente conectado)
-- `DayDetails` — detalhes de um dia in-trip (mockado)
-- `ProfileScreen` — perfil do viajante (conectado ao backend)
-- `StaffScreen` — tela operacional do staff (mockada, estrutura visual pronta)
+Para adicionar staff: preencher aba **Staff** na planilha "Parrot Trips — Staff" e rodar
+**🦜 Parrot Staff → Import Staff → Supabase** no Google Apps Script.
 
 ---
 
-## Dev auto-login (para desenvolver sem passar pelo OTP)
+## Planilhas Google Sheets
 
-Descomente no `frontend/.env`:
-```env
-VITE_DEV_AUTO_LOGIN=true
-VITE_DEV_USER_ID=00000000-0000-0000-0000-000000000001
-VITE_DEV_USER_PHONE=+5500000000000
-VITE_DEV_USER_NAME=Viajante Teste
-VITE_DEV_USER_ROLE=traveler
-```
-Troque `VITE_DEV_USER_ROLE=traveler` por `staff` para ver a tela do staff.
+| Planilha | Finalidade | Apps Script |
+|----------|-----------|-------------|
+| Parrot Trips — Conteúdo de Viagens | Fases, checklist, roteiro dos viajantes | `Code.gs` |
+| Parrot Trips — Staff | Staff por viagem + contatos operacionais | `CodeStaff.gs` |
+
+Menu **🦜 Parrot Trips** (Code.gs):
+- Sync Trips / Import Trip Content / 🚀 Iniciar Viagem → In-Trip / 🔁 Reset Trip → Pre-Trip / 🔧 Setup Sheet Headers
+
+Menu **🦜 Parrot Staff** (CodeStaff.gs):
+- Sync Trips / Import Staff → Supabase / Import Contacts → Supabase / 🔧 Setup Sheet Headers
 
 ---
 
-## Como rodar localmente
+## Viagem de teste
+
+| Campo | Valor |
+|-------|-------|
+| trip_uuid | `TEST-2026-FULL` |
+| Fases pre-trip | 4 (Visa, Vaccinations, Packing, Documents) |
+| Dias in-trip | 7 (01–07 Jul 2026) |
+
+Para simular dias no app (muda o modo para in-trip e avança a barra):
+```bash
+cd backend
+poetry run python scripts/simulate_trip_day.py --trip-uuid TEST-2026-FULL --day 1
+```
+
+Para resetar do zero (pré-trip, tudo zerado):
+```bash
+poetry run python scripts/reset_test_trip.py --trip-uuid TEST-2026-FULL
+```
+
+---
+
+## Deploy
 
 ```bash
-# Backend
-cd backend && make dev           # uvicorn na porta 8000
+# Backend (Cloud Run)
+make deploy-backend
 
-# Frontend
-cd frontend && npm run dev       # vite na porta 5173
+# Frontend (Netlify)
+cd frontend && netlify deploy --prod --dir=dist
 
-# Teste E2E de autenticação
-cd backend && make e2e PHONE=+5512991296651
+# Ou os dois juntos da raiz:
+make deploy
 ```
 
 ---
 
-## Próximos passos (ordem sugerida)
+## Estado atual do roadmap
 
-### 1. Conectar HomeScreen ao backend (RF02 + RF03)
-A tela do viajante (`HomeScreen`) ainda usa dados mockados em `frontend/src/features/trip/data/tripData.ts`. Precisa:
-- Criar endpoint no backend: `GET /trip/active?user_id=...` → retorna a viagem ativa do viajante
-- Criar endpoint: `GET /trip/{trip_id}/phases` → retorna as fases/dias com progresso do viajante
-- Conectar o frontend a esses endpoints
+### ✅ Fase 1 — Fundação técnica (concluída)
+- Viagem ativa por data (`end_date >= hoje`) — crítico para staff com múltiplas viagens
+- Service Agreement por viagem (campo em `wetravel_trips`, populado via aba Viagens)
+- Ideal Pace — parrot no card certo vindo do banco, coluna `ideal_pace` na aba Fases
 
-### 2. Conectar StaffScreen ao backend
-A tela do staff também usa dados mockados. Precisa:
-- Criar endpoint: `GET /staff/trip/{trip_id}/tasks` → retorna as tarefas por dia
-- Conectar `StaffScreen` a esse endpoint
+### 🔧 Fase 2 — Teste interno como viajante (próxima)
+- Cadastrar equipe Parrot como `role=traveler` na TEST-2026-FULL
+- Conferir links do app
+- Decidir modelo de controle de presença (QR Code vs NFC — ver `19-decisoes-pendentes.md`)
 
-### 3. Adicionar dados de viagem no banco
-Hoje o banco tem as tabelas mas sem dados reais. Precisa inserir:
-- Uma trip de exemplo no Supabase
-- Vincular Marcelo e Vitor como `trip_staff` nessa trip
-- Inserir algumas `staff_tasks` para ver a tela do staff com dados reais
-
-### 4. Deploy
-- Backend: Railway, Render ou Fly.io
-- Frontend: Vercel ou Netlify
-- Atualizar `VITE_API_URL` no frontend para a URL de produção
+### 🔧 Fase 3 — App do staff (em progresso)
+- ✅ Acesso por role=staff
+- ✅ Tela in-trip com dados reais do backend
+- ✅ Switch staff ↔ viajante
+- ✅ Contatos operacionais (tabela `trip_contacts`, aba Contatos na planilha de staff)
+- ⏳ Controle de presença (QR Code — depende de decisão de design)
 
 ---
 
@@ -119,16 +136,17 @@ Hoje o banco tem as tabelas mas sem dados reais. Precisa inserir:
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `backend/app/services/auth_service.py` | OTP, JWT, autorização por phone |
-| `backend/app/core/config.py` | Variáveis de ambiente |
-| `backend/app/db/models/user.py` | Model User com campo role |
-| `backend/app/db/models/staff.py` | Models TripStaff e StaffTask |
-| `backend/app/db/models/trip.py` | Models Trip, TripTraveler, TripPhase, etc |
-| `backend/alembic/versions/` | Migrations do banco |
-| `frontend/src/app/App.tsx` | Roteamento por role |
-| `frontend/src/app/providers/auth-context.ts` | Tipo AuthUser com role |
-| `frontend/src/features/staff/pages/StaffScreen.tsx` | Tela staff (mockada) |
-| `frontend/src/features/trip/pages/HomeScreen.tsx` | Tela viajante (mockada) |
-| `frontend/src/features/trip/data/tripData.ts` | Dados mockados da viagem |
-| `backend/.env` | Credenciais locais (não commitado) |
-| `frontend/.env` | Config frontend + dev auto-login |
+| `backend/app/main.py` | Routers registrados |
+| `backend/app/routers/admin.py` | Endpoints admin (import, reset, set-mode) |
+| `backend/app/routers/staff.py` | Endpoints do staff app |
+| `backend/app/routers/trip.py` | Endpoints do viajante |
+| `backend/app/services/admin_service.py` | Lógica admin (import staff, contacts, reset) |
+| `backend/scripts/import_staff_content.py` | Import staff + contatos da planilha de staff |
+| `backend/scripts/import_trip_content.py` | Import conteúdo da viagem (fases, roteiro, etc.) |
+| `backend/scripts/simulate_trip_day.py` | Simulação de dias para teste |
+| `backend/scripts/reset_test_trip.py` | Reset completo da viagem de teste |
+| `frontend/src/app/App.tsx` | Roteamento por role + switch staff↔viajante |
+| `frontend/src/features/staff/pages/StaffScreen.tsx` | Staff app (3 abas: itinerary, QR, contacts) |
+| `frontend/src/features/trip/pages/HomeScreen.tsx` | Tela do viajante |
+| `google-apps-script/Code.gs` | Menu admin para planilha de viajantes |
+| `google-apps-script/CodeStaff.gs` | Menu admin para planilha de staff |
