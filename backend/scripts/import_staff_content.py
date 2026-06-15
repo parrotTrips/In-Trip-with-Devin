@@ -157,17 +157,109 @@ async def write_contacts(conn: asyncpg.Connection, trip_uuid: str, contacts: lis
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def parse_staff_tab(rows: list[list[str]]) -> list[dict]:
+    """Parse Staff tab. Returns list of staff member dicts.
+    Columns: phone, nome, funcao, trip_uuid
+    """
+    if not rows or len(rows) < 2:
+        return []
+    header = [h.strip().lower() for h in rows[0]]
+
+    def col(row: list[str], name: str) -> str:
+        try:
+            idx = header.index(name)
+            return row[idx].strip() if idx < len(row) else ""
+        except ValueError:
+            return ""
+
+    members = []
+    for row in rows[1:]:
+        if not row or not row[0].strip():
+            continue
+        phone = col(row, "phone")
+        if not phone:
+            continue
+        members.append({
+            "phone": phone,
+            "nome": col(row, "nome") or None,
+            "funcao": col(row, "funcao") or None,
+            "trip_uuid": col(row, "trip_uuid"),
+        })
+    return members
+
+
+async def write_staff(conn: asyncpg.Connection, trip_uuid: str, members: list[dict]) -> dict:
+    """Upsert staff members: create user with role=staff if not exists, link to trip."""
+    created = updated = linked = 0
+
+    async with conn.transaction():
+        for m in members:
+            phone = m["phone"]
+            name = m["nome"]
+
+            # Upsert user — create with role=staff if not exists, update name/role if exists
+            existing = await conn.fetchrow(
+                "SELECT id, full_name, role FROM users WHERE phone = $1", phone
+            )
+            if existing:
+                if existing["role"] != "staff" or (name and existing["full_name"] != name):
+                    await conn.execute(
+                        "UPDATE users SET role = 'staff', full_name = COALESCE($1, full_name), updated_at = now() WHERE phone = $2",
+                        name, phone,
+                    )
+                    updated += 1
+                user_id = existing["id"]
+            else:
+                user_id = await conn.fetchval(
+                    """
+                    INSERT INTO users (id, phone, full_name, role, created_at, updated_at)
+                    VALUES (gen_random_uuid(), $1, $2, 'staff', now(), now())
+                    RETURNING id
+                    """,
+                    phone, name,
+                )
+                created += 1
+
+            # Link to trip via trip_travelers (upsert)
+            existing_link = await conn.fetchrow(
+                "SELECT id FROM trip_travelers WHERE user_id = $1 AND wetravel_trip_uuid = $2",
+                user_id, trip_uuid,
+            )
+            if not existing_link:
+                await conn.execute(
+                    """
+                    INSERT INTO trip_travelers (id, user_id, wetravel_trip_uuid, created_at, updated_at)
+                    VALUES (gen_random_uuid(), $1, $2, now(), now())
+                    """,
+                    user_id, trip_uuid,
+                )
+                linked += 1
+
+    return {"created": created, "updated": updated, "linked": linked}
+
+
 async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet_id: str) -> dict:
     contacts_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Contatos"), trip_uuid)
     contacts = parse_contacts_tab(contacts_rows)
 
-    if not contacts:
+    staff_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Staff"), trip_uuid)
+    members = parse_staff_tab(staff_rows)
+
+    if not contacts and not members:
         return {"skipped": True, "trip_uuid": trip_uuid}
 
     async with conn.transaction():
-        count = await write_contacts(conn, trip_uuid, contacts)
+        contacts_count = await write_contacts(conn, trip_uuid, contacts)
+        staff_result = await write_staff(conn, trip_uuid, members)
 
-    return {"skipped": False, "trip_uuid": trip_uuid, "contacts": count}
+    return {
+        "skipped": False,
+        "trip_uuid": trip_uuid,
+        "contacts": contacts_count,
+        "staff_created": staff_result["created"],
+        "staff_updated": staff_result["updated"],
+        "staff_linked": staff_result["linked"],
+    }
 
 
 async def main(trip_uuids: list[str], sheet_id: str) -> None:

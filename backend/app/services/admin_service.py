@@ -290,6 +290,45 @@ async def admin_import_contacts(trip_uuid: str) -> dict:
     return {"status": "ok", "trip_uuid": trip_uuid, "contacts_imported": count}
 
 
+async def admin_import_staff(trip_uuid: str) -> dict:
+    """Import staff members from the Staff Google Sheet.
+
+    For each row in the Staff tab:
+    - Creates the user with role=staff if they don't exist yet
+    - Updates name and role if they already exist
+    - Links them to the trip via trip_travelers
+    """
+    if not STAFF_CONTENT_SHEET_ID:
+        raise ValueError("STAFF_CONTENT_SHEET_ID is not set")
+
+    from scripts.import_staff_content import (
+        filter_rows_by_trip,
+        parse_staff_tab,
+        read_tab,
+        write_staff,
+    )
+
+    sheets_svc = _build_sheets_client_adc()
+    staff_rows = filter_rows_by_trip(
+        read_tab(sheets_svc, STAFF_CONTENT_SHEET_ID, "Staff"), trip_uuid
+    )
+    members = parse_staff_tab(staff_rows)
+
+    conn = await _get_connection()
+    try:
+        result = await write_staff(conn, trip_uuid, members)
+    finally:
+        await conn.close()
+
+    return {
+        "status": "ok",
+        "trip_uuid": trip_uuid,
+        "staff_created": result["created"],
+        "staff_updated": result["updated"],
+        "staff_linked": result["linked"],
+    }
+
+
 async def admin_set_user_role(phone: str, role: str) -> dict:
     """Set the role of a user identified by phone number."""
     if role not in ("traveler", "staff"):

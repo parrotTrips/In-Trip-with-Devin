@@ -9,10 +9,8 @@ function onOpen() {
     .createMenu("🦜 Parrot Staff")
     .addItem("🔄 Sync Trips from Supabase", "syncTrips")
     .addSeparator()
+    .addItem("Import Staff → Supabase", "importStaff")
     .addItem("Import Contacts → Supabase", "importContacts")
-    .addSeparator()
-    .addItem("👤 Set Staff Role (phone → staff)", "setStaffRole")
-    .addItem("👤 Remove Staff Role (phone → traveler)", "removeStaffRole")
     .addSeparator()
     .addItem("🔧 Setup Sheet Headers (primeira vez)", "setupSheetHeaders")
     .addToUi();
@@ -110,6 +108,23 @@ function syncTrips() {
   }
 }
 
+function importStaff() {
+  var ui = SpreadsheetApp.getUi();
+  var confirm = ui.alert(
+    "Import Staff → Supabase",
+    "This will:\n• Create staff users that don't exist yet (role=staff)\n• Update name and role for existing users\n• Link each staff member to their trip\n\nData comes from the 'Staff' tab.\n\nContinue?",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+  var trip_uuid = promptForTrip("🦜 Import Staff — choose trip");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/import-staff", { trip_uuid: trip_uuid }));
+  } catch (e) {
+    ui.alert("❌ Error: " + e.message);
+  }
+}
+
 function importContacts() {
   var trip_uuid = promptForTrip("🦜 Import Contacts → Supabase");
   if (!trip_uuid) return;
@@ -117,44 +132,6 @@ function importContacts() {
     showResult(callBackend("/admin/trips/import-contacts", { trip_uuid: trip_uuid }));
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
-  }
-}
-
-function setStaffRole() {
-  var ui = SpreadsheetApp.getUi();
-  var response = ui.prompt(
-    "👤 Set Staff Role",
-    "Enter the WhatsApp phone number with country code:\nExample: +5511999999999",
-    ui.ButtonSet.OK_CANCEL
-  );
-  if (response.getSelectedButton() !== ui.Button.OK) return;
-  var phone = response.getResponseText().trim();
-  if (!phone) { ui.alert("No phone entered."); return; }
-
-  try {
-    var result = callBackend("/admin/users/set-role", { phone: phone, role: "staff" });
-    ui.alert("✅ Done!\n\n" + result.name + " (" + result.phone + ") is now role=staff.");
-  } catch (e) {
-    ui.alert("❌ Error: " + e.message);
-  }
-}
-
-function removeStaffRole() {
-  var ui = SpreadsheetApp.getUi();
-  var response = ui.prompt(
-    "👤 Remove Staff Role → traveler",
-    "Enter the WhatsApp phone number with country code:\nExample: +5511999999999",
-    ui.ButtonSet.OK_CANCEL
-  );
-  if (response.getSelectedButton() !== ui.Button.OK) return;
-  var phone = response.getResponseText().trim();
-  if (!phone) { ui.alert("No phone entered."); return; }
-
-  try {
-    var result = callBackend("/admin/users/set-role", { phone: phone, role: "traveler" });
-    ui.alert("✅ Done!\n\n" + result.name + " (" + result.phone + ") is now role=traveler.");
-  } catch (e) {
-    ui.alert("❌ Error: " + e.message);
   }
 }
 
