@@ -133,6 +133,49 @@ def parse_contacts_tab(rows: list[list[str]]) -> list[dict]:
     return contacts
 
 
+def parse_staff_tasks_tab(rows: list[list[str]]) -> list[dict]:
+    """Parse Tarefas Staff tab.
+
+    Columns: trip_uuid, dia, atividade_nome, staff_phone, titulo, descricao, sort_order
+    """
+    if not rows or len(rows) < 2:
+        return []
+    header = [h.strip().lower() for h in rows[0]]
+
+    def col(row: list[str], name: str) -> str:
+        try:
+            idx = header.index(name)
+            return row[idx].strip() if idx < len(row) else ""
+        except ValueError:
+            return ""
+
+    tasks = []
+    for row in rows[1:]:
+        if not row or not row[0].strip():
+            continue
+        title = col(row, "titulo")
+        if not title:
+            continue
+        try:
+            day = int(col(row, "dia") or "0")
+        except ValueError:
+            day = 0
+        try:
+            sort_order = int(col(row, "sort_order") or "0")
+        except ValueError:
+            sort_order = 0
+        tasks.append({
+            "trip_uuid": col(row, "trip_uuid"),
+            "dia": day,
+            "atividade_nome": col(row, "atividade_nome"),
+            "staff_phone": col(row, "staff_phone"),
+            "titulo": title,
+            "descricao": col(row, "descricao") or None,
+            "sort_order": sort_order,
+        })
+    return tasks
+
+
 # ── DB write ──────────────────────────────────────────────────────────────────
 
 async def write_contacts(conn: asyncpg.Connection, trip_uuid: str, contacts: list[dict]) -> int:
