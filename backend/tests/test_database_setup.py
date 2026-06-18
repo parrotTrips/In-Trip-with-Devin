@@ -94,6 +94,20 @@ def test_metadata_exposes_the_approved_postgres_tables():
     assert expected_tables.issubset(base_module.metadata.tables)
 
 
+def test_staff_tasks_has_trip_activity_id_foreign_key():
+    reload_module("app.db.models")
+    base_module = importlib.import_module("app.db.base")
+
+    staff_tasks = base_module.metadata.tables["staff_tasks"]
+
+    assert "trip_activity_id" in staff_tasks.c
+    fk_targets = {
+        fk.column.table.name + "." + fk.column.name
+        for fk in staff_tasks.c.trip_activity_id.foreign_keys
+    }
+    assert "trip_activities.id" in fk_targets
+
+
 def test_alembic_database_url_defaults_to_application_config(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL",
