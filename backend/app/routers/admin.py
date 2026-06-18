@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.services.admin_service import (
     admin_import_contacts,
     admin_import_staff,
+    admin_import_staff_tasks,
     admin_import_trip,
     admin_list_trips,
     admin_reset_content,
@@ -80,6 +81,15 @@ async def import_staff(body: TripUUIDRequest):
     """Import staff members from the Staff Google Sheet — creates users and links to trip."""
     try:
         return await admin_import_staff(body.trip_uuid)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/trips/import-staff-tasks")
+async def import_staff_tasks(body: TripUUIDRequest):
+    """Import staff activity tasks from the Staff Google Sheet into staff_tasks."""
+    try:
+        return await admin_import_staff_tasks(body.trip_uuid)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

@@ -329,6 +329,33 @@ async def admin_import_staff(trip_uuid: str) -> dict:
     }
 
 
+async def admin_import_staff_tasks(trip_uuid: str) -> dict:
+    """Import staff activity tasks from the Staff Google Sheet into staff_tasks."""
+    if not STAFF_CONTENT_SHEET_ID:
+        raise ValueError("STAFF_CONTENT_SHEET_ID is not set")
+
+    from scripts.import_staff_content import (
+        filter_rows_by_trip,
+        parse_staff_tasks_tab,
+        read_tab,
+        write_staff_tasks,
+    )
+
+    sheets_svc = _build_sheets_client_adc()
+    tasks_rows = filter_rows_by_trip(
+        read_tab(sheets_svc, STAFF_CONTENT_SHEET_ID, "Tarefas Staff"), trip_uuid
+    )
+    tasks = parse_staff_tasks_tab(tasks_rows)
+
+    conn = await _get_connection()
+    try:
+        count = await write_staff_tasks(conn, trip_uuid, tasks)
+    finally:
+        await conn.close()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "staff_tasks_imported": count}
+
+
 async def admin_set_user_role(phone: str, role: str) -> dict:
     """Set the role of a user identified by phone number."""
     if role not in ("traveler", "staff"):

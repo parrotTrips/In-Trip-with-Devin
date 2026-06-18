@@ -1,9 +1,15 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from scripts.import_staff_content import parse_staff_tasks_tab
+from scripts.import_staff_content import (
+    StaffTaskImportError,
+    _require_single_row,
+    parse_staff_tasks_tab,
+)
 
 
 def test_parse_staff_tasks_tab_basic():
@@ -42,3 +48,19 @@ def test_parse_staff_tasks_tab_skips_rows_without_title():
     ]
 
     assert parse_staff_tasks_tab(rows) == []
+
+
+def test_require_single_row_returns_row():
+    row = {"id": "abc"}
+
+    assert _require_single_row([row], "activity", "Airport Transfer") == row
+
+
+def test_require_single_row_fails_when_missing():
+    with pytest.raises(StaffTaskImportError, match="activity not found"):
+        _require_single_row([], "activity", "Airport Transfer")
+
+
+def test_require_single_row_fails_when_duplicate():
+    with pytest.raises(StaffTaskImportError, match="activity is ambiguous"):
+        _require_single_row([{"id": "a"}, {"id": "b"}], "activity", "Airport Transfer")
