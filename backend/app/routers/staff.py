@@ -5,7 +5,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
-from app.db.models.staff import TripContact
+from app.db.models.staff import StaffTask, TripContact
 from app.db.models.trip import TripActivity, TripPhase
 
 router = APIRouter(prefix="/me/staff", tags=["staff"])
@@ -75,8 +75,29 @@ async def get_staff_trip(
         .where(TripActivity.trip_phase_id.in_(phase_ids))
         .order_by(TripActivity.trip_phase_id, TripActivity.sort_order)
     )
+    activities = activities_result.scalars().all()
+
+    activity_ids = [act.id for act in activities]
+    tasks_by_activity: dict = {}
+    if activity_ids:
+        tasks_result = await session.execute(
+            select(StaffTask)
+            .where(
+                StaffTask.trip_activity_id.in_(activity_ids),
+                StaffTask.assigned_to_user_id == user_id,
+            )
+            .order_by(StaffTask.trip_activity_id, StaffTask.sort_order)
+        )
+        for task in tasks_result.scalars():
+            tasks_by_activity.setdefault(task.trip_activity_id, []).append({
+                "id": str(task.id),
+                "title": task.title,
+                "description": task.description,
+                "sort_order": task.sort_order,
+            })
+
     activities_by_phase: dict = {}
-    for act in activities_result.scalars():
+    for act in activities:
         activities_by_phase.setdefault(act.trip_phase_id, []).append({
             "id": str(act.id),
             "name": act.name,
@@ -87,6 +108,7 @@ async def get_staff_trip(
             "practical_info": act.practical_info,
             "amount_brl": float(act.amount_brl) if act.amount_brl else None,
             "sort_order": act.sort_order,
+            "staff_tasks": tasks_by_activity.get(act.id, []),
         })
 
     return {
