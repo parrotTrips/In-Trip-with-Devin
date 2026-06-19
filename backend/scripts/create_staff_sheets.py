@@ -5,6 +5,7 @@ The spreadsheet has three tabs:
   - Viagens  : reference list of active trips (populated by Sync Trips in CodeStaff.gs)
   - Contatos : contacts per trip (local guides, accommodation, transport, emergency)
   - Staff    : staff members per trip (reference — roles are managed via the menu)
+  - Tarefas Staff : operational staff tasks per itinerary activity
 
 Usage:
   gcloud auth application-default login
@@ -45,6 +46,16 @@ CONTATOS_HEADER = ["trip_uuid", "category", "name", "role", "phone", "sort_order
 
 STAFF_HEADER = ["phone", "nome", "funcao", "trip_uuid"]
 
+STAFF_TASKS_HEADER = [
+    "trip_uuid",
+    "dia",
+    "atividade_nome",
+    "staff_phone",
+    "titulo",
+    "descricao",
+    "sort_order",
+]
+
 _TOKEN_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-token.json"
 _OAUTH2_CREDS_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-credentials.json"
 
@@ -82,6 +93,30 @@ def _staff_example_rows(trip_uuid: str) -> list[list]:
     return [
         ["+55 11 99999-0001", "Guia Exemplo 1", "Lead Guide",       u],
         ["+55 11 99999-0002", "Guia Exemplo 2", "Support Guide",    u],
+    ]
+
+
+def _staff_tasks_example_rows(trip_uuid: str) -> list[list]:
+    u = trip_uuid
+    return [
+        [
+            u,
+            1,
+            "Airport Transfer",
+            "+55 11 99999-0001",
+            "Coordenar van 1",
+            "Receber viajantes no aeroporto e direcionar para a van correta",
+            1,
+        ],
+        [
+            u,
+            1,
+            "Airport Transfer",
+            "+55 11 99999-0002",
+            "Confirmar fornecedor",
+            "Falar com motorista e confirmar saída",
+            1,
+        ],
     ]
 
 
@@ -215,14 +250,16 @@ def populate_spreadsheet(sheets_svc, spreadsheet_id: str, trips: list[dict]) -> 
         _apply_header_formatting(sheets_svc, spreadsheet_id, sheet_id, num_cols=len(header))
         time.sleep(0.5)
 
-    contatos_rows, staff_rows = [], []
+    contatos_rows, staff_rows, staff_tasks_rows = [], [], []
     for trip in trips:
         u = trip["trip_uuid"]
         contatos_rows.extend(_contatos_example_rows(u))
         staff_rows.extend(_staff_example_rows(u))
+        staff_tasks_rows.extend(_staff_tasks_example_rows(u))
 
     _add_tab("Contatos", CONTATOS_HEADER, contatos_rows)
     _add_tab("Staff",    STAFF_HEADER,    staff_rows)
+    _add_tab("Tarefas Staff", STAFF_TASKS_HEADER, staff_tasks_rows)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

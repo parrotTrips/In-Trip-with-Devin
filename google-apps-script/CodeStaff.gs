@@ -11,6 +11,7 @@ function onOpen() {
     .addSeparator()
     .addItem("Import Staff → Supabase", "importStaff")
     .addItem("Import Contacts → Supabase", "importContacts")
+    .addItem("Import Staff Tasks → Supabase", "importStaffTasks")
     .addSeparator()
     .addItem("🔧 Setup Sheet Headers (primeira vez)", "setupSheetHeaders")
     .addToUi();
@@ -135,6 +136,16 @@ function importContacts() {
   }
 }
 
+function importStaffTasks() {
+  var trip_uuid = promptForTrip("🦜 Import Staff Tasks → Supabase");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/import-staff-tasks", { trip_uuid: trip_uuid }));
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
+  }
+}
+
 function setupSheetHeaders() {
   var ui = SpreadsheetApp.getUi();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -154,6 +165,11 @@ function setupSheetHeaders() {
       name: "Staff",
       headers: ["phone", "nome", "funcao", "trip_uuid"],
       note: "Registro dos membros de staff por viagem (referência — use o menu para gerenciar roles no Supabase)"
+    },
+    {
+      name: "Tarefas Staff",
+      headers: ["trip_uuid", "dia", "atividade_nome", "staff_phone", "titulo", "descricao", "sort_order"],
+      note: "Uma linha por tarefa operacional de um staff dentro de uma atividade do roteiro"
     }
   ];
 
@@ -197,7 +213,7 @@ function setupSheetHeaders() {
   if (created.length) msg += "✅ Created: " + created.join(", ") + "\n";
   if (updated.length) msg += "🟡 Updated: " + updated.join(", ") + "\n";
   if (skipped.length) msg += "⬜ Already OK: " + skipped.join(", ") + "\n";
-  msg += "\nFill in the Contatos tab and run 'Import Contacts → Supabase'.";
+  msg += "\nFill in the Contatos and Tarefas Staff tabs, then run the matching import menu action.";
 
   ui.alert("🔧 Sheet Setup Complete", msg, ui.ButtonSet.OK);
 }
