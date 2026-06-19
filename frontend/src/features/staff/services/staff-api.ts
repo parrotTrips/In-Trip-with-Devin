@@ -1,5 +1,12 @@
 import { request } from '../../../shared/api/client';
 
+export interface StaffTask {
+  id: string;
+  title: string;
+  description: string | null;
+  sort_order: number;
+}
+
 export interface StaffActivity {
   id: string;
   name: string;
@@ -10,6 +17,7 @@ export interface StaffActivity {
   practical_info: string | null;
   amount_brl: number | null;
   sort_order: number;
+  staff_tasks: StaffTask[];
 }
 
 export interface StaffDay {

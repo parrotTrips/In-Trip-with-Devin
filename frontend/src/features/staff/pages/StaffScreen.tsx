@@ -122,6 +122,23 @@ function ItineraryTab({ days, loading, error }: { days: StaffDay[]; loading: boo
                           {act.amount_brl && (
                             <p className="text-xs text-emerald-600 font-medium">R$ {act.amount_brl.toFixed(2)}</p>
                           )}
+                          {act.staff_tasks.length > 0 && (
+                            <div className="bg-white rounded-lg border border-emerald-100 overflow-hidden">
+                              <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-100">
+                                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">My tasks</p>
+                              </div>
+                              <div className="divide-y divide-gray-100">
+                                {act.staff_tasks.map((task) => (
+                                  <div key={task.id} className="px-3 py-2">
+                                    <p className="text-sm font-medium text-gray-800">{task.title}</p>
+                                    {task.description && (
+                                      <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
