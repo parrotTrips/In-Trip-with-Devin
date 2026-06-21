@@ -235,13 +235,18 @@ async def write_staff_tasks(conn: asyncpg.Connection, trip_uuid: str, tasks: lis
             day_rows = await conn.fetch(
                 """
                 SELECT id
-                FROM trip_phases
-                WHERE wetravel_trip_uuid = $1
-                  AND phase_type = 'in-trip'
-                  AND sort_order = $2
+                FROM (
+                    SELECT
+                        id,
+                        row_number() OVER (ORDER BY sort_order) AS day_number
+                    FROM trip_phases
+                    WHERE wetravel_trip_uuid = $1
+                      AND phase_type = 'in-trip'
+                ) in_trip_days
+                WHERE day_number = $2
                 """,
                 trip_uuid,
-                task["dia"] - 1,
+                task["dia"],
             )
             day = _require_single_row(day_rows, "day", str(task["dia"]))
 
