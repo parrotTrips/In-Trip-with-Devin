@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye } from 'lucide-react';
 import { useAuth } from '../../../app/providers/auth-context';
 import {
@@ -46,16 +47,23 @@ function ActivityScanPanel({
   onCheckedIn: (activityId: string) => void;
   onClose: () => void;
 }) {
+  const scannerElementId = useRef(`staff-activity-scanner-${activity.id}-${Math.random().toString(36).slice(2)}`);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const submittingRef = useRef(false);
   const [qrPayload, setQrPayload] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ActivityScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [showManualEntry, setShowManualEntry] = useState(false);
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmedPayload = qrPayload.trim();
+  const submitScan = useCallback(async (payload: string) => {
+    const trimmedPayload = payload.trim();
     if (!trimmedPayload) return;
+    if (submittingRef.current) return;
 
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     setResult(null);
@@ -69,8 +77,55 @@ function ActivityScanPanel({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to scan traveler');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
+  }, [activity.id, onCheckedIn]);
+
+  useEffect(() => {
+    const scanner = new Html5Qrcode(scannerElementId.current);
+    scannerRef.current = scanner;
+    let disposed = false;
+
+    scanner
+      .start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        decodedText => {
+          void submitScan(decodedText);
+        },
+        () => {}
+      )
+      .then(() => {
+        if (!disposed) {
+          setCameraReady(true);
+        }
+      })
+      .catch(e => {
+        if (!disposed) {
+          setCameraError(e instanceof Error ? e.message : 'Camera unavailable. Enter the QR payload manually.');
+          setShowManualEntry(true);
+        }
+      });
+
+    return () => {
+      disposed = true;
+      const activeScanner = scannerRef.current;
+      scannerRef.current = null;
+      setCameraReady(false);
+      if (!activeScanner) return;
+      activeScanner
+        .stop()
+        .catch(() => undefined)
+        .finally(() => {
+          activeScanner.clear();
+        });
+    };
+  }, [submitScan]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await submitScan(qrPayload);
   };
 
   const travelerName = result?.traveler_name ?? 'Traveler';
@@ -87,25 +142,52 @@ function ActivityScanPanel({
         </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <label className="block">
-          <span className="text-xs font-medium text-gray-600">QR payload</span>
-          <textarea
-            value={qrPayload}
-            onChange={(event) => setQrPayload(event.target.value)}
-            className="mt-1 w-full min-h-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-            placeholder="Paste or type the traveler QR payload"
-          />
-        </label>
-
+      <div className="rounded-lg border border-gray-200 bg-gray-950 p-2">
+        <div id={scannerElementId.current} className="min-h-48 overflow-hidden rounded-md bg-black" />
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Camera scanner</p>
+          <p className="text-xs text-gray-500">
+            {submitting ? 'Processing scan...' : cameraReady ? 'Point the camera at a traveler QR code.' : 'Starting camera...'}
+          </p>
+        </div>
         <button
-          type="submit"
-          disabled={submitting || qrPayload.trim().length === 0}
-          className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+          type="button"
+          onClick={() => setShowManualEntry(value => !value)}
+          className="text-xs font-semibold text-emerald-700"
         >
-          {submitting ? 'Submitting...' : 'Submit scan'}
+          {showManualEntry ? 'Hide manual' : 'Enter manually'}
         </button>
-      </form>
+      </div>
+
+      {cameraError && (
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+          <p className="text-sm font-medium text-amber-800">{cameraError}</p>
+        </div>
+      )}
+
+      {showManualEntry && (
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <label className="block">
+            <span className="text-xs font-medium text-gray-600">QR payload</span>
+            <textarea
+              value={qrPayload}
+              onChange={(event) => setQrPayload(event.target.value)}
+              className="mt-1 w-full min-h-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              placeholder="Paste or type the traveler QR payload"
+            />
+          </label>
+
+          <button
+            type="submit"
+            disabled={submitting || qrPayload.trim().length === 0}
+            className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {submitting ? 'Submitting...' : 'Submit scan'}
+          </button>
+        </form>
+      )}
 
       {result?.status === 'checked_in' && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
@@ -289,25 +371,6 @@ function ItineraryTab({
   );
 }
 
-function QrScannerTab() {
-  return (
-    <div className="px-4 py-5 pb-24 space-y-5">
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="bg-emerald-700 px-4 py-3">
-          <p className="text-white font-semibold text-sm">Activity check-in scanning</p>
-          <p className="text-emerald-200 text-xs mt-0.5">Open an activity from the itinerary first.</p>
-        </div>
-        <div className="p-4">
-          <div className="w-full bg-gray-100 rounded-xl flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 px-4 py-12">
-            <QrCode size={48} className="text-gray-300" />
-            <p className="text-sm text-gray-500 text-center">Open an activity from the itinerary, then use Scan Travelers to check people in for that activity.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ContactsTab({ groups, loading, error }: { groups: StaffContactGroup[]; loading: boolean; error: string | null }) {
   if (loading) {
     return (
@@ -370,7 +433,7 @@ function ContactsTab({ groups, loading, error }: { groups: StaffContactGroup[]; 
 
 // ── Main screen ────────────────────────────────────────────────────────────────
 
-type Tab = 'itinerary' | 'scanner' | 'contacts';
+type Tab = 'itinerary' | 'contacts';
 
 interface Props {
   onSwitchToTravelerView: () => void;
@@ -446,7 +509,6 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
         {activeTab === 'itinerary' && (
           <ItineraryTab days={trip?.days ?? []} loading={loading} error={error} onActivityCheckedIn={handleActivityCheckedIn} />
         )}
-        {activeTab === 'scanner' && <QrScannerTab />}
         {activeTab === 'contacts' && <ContactsTab groups={contactGroups} loading={contactsLoading} error={contactsError} />}
       </div>
 
@@ -455,7 +517,6 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
         <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
           {[
             { id: 'itinerary', icon: Map, label: 'Itinerary' },
-            { id: 'scanner', icon: QrCode, label: 'QR Scan' },
             { id: 'contacts', icon: Headphones, label: 'Contacts' },
           ].map(({ id, icon: Icon, label }) => {
             const isActive = activeTab === id;

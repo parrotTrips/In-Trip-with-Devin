@@ -1,13 +1,34 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
+import { vi } from 'vitest';
 
 import { AuthProvider } from '../../app/providers/AuthProvider';
 import { server } from '../../test/server';
 import StaffScreen from './pages/StaffScreen';
 
+let qrSuccess: ((decodedText: string) => void) | null = null;
+const scannerStart = vi.fn((_cameraConfig, _scannerConfig, onSuccess) => {
+  qrSuccess = onSuccess;
+  return Promise.resolve();
+});
+const scannerStop = vi.fn(() => Promise.resolve());
+const scannerClear = vi.fn();
+
+vi.mock('html5-qrcode', () => ({
+  Html5Qrcode: vi.fn().mockImplementation(() => ({
+    start: scannerStart,
+    stop: scannerStop,
+    clear: scannerClear,
+  })),
+}));
+
 describe('StaffScreen', () => {
   beforeEach(() => {
+    qrSuccess = null;
+    scannerStart.mockClear();
+    scannerStop.mockClear();
+    scannerClear.mockClear();
     localStorage.setItem(
       'parrot_user',
       JSON.stringify({ userId: 'staff-1', phone: '+5511888000001', name: 'Marcelo Staff', token: 'tok', role: 'staff' })
@@ -95,7 +116,7 @@ describe('StaffScreen', () => {
     expect(screen.getByRole('button', { name: /scan travelers/i })).toBeInTheDocument();
   });
 
-  test('submits qr payload to the activity scan endpoint and shows success', async () => {
+  test('opens camera scanner inside the activity and submits decoded qr payload', async () => {
     const user = userEvent.setup();
     let scannedActivityId: string | null = null;
     let scannedPayload: string | null = null;
@@ -118,8 +139,15 @@ describe('StaffScreen', () => {
     await user.click(await screen.findByText('Day 1 — Arrival'));
     await user.click(screen.getByText('Airport Transfer'));
     await user.click(screen.getByRole('button', { name: /scan travelers/i }));
-    await user.type(screen.getByLabelText(/qr payload/i), 'qr-token-123');
-    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+
+    expect(await screen.findByText(/camera scanner/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(scannerStart).toHaveBeenCalled();
+    });
+
+    act(() => {
+      qrSuccess?.('qr-token-123');
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/ana silva checked in/i)).toBeInTheDocument();
@@ -152,8 +180,13 @@ describe('StaffScreen', () => {
     await user.click(await screen.findByText('Day 1 — Arrival'));
     await user.click(screen.getByText('Airport Transfer'));
     await user.click(screen.getByRole('button', { name: /scan travelers/i }));
-    await user.type(screen.getByLabelText(/qr payload/i), 'qr-token-123');
-    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+
+    await waitFor(() => {
+      expect(scannerStart).toHaveBeenCalled();
+    });
+    act(() => {
+      qrSuccess?.('qr-token-123');
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/ana silva was already checked in/i)).toBeInTheDocument();
@@ -187,12 +220,17 @@ describe('StaffScreen', () => {
     await user.click(screen.getByText('Airport Transfer'));
     await user.click(screen.getByRole('button', { name: /scan travelers/i }));
 
-    await user.type(screen.getByLabelText(/qr payload/i), 'qr-token-123');
-    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+    await waitFor(() => {
+      expect(scannerStart).toHaveBeenCalled();
+    });
+    act(() => {
+      qrSuccess?.('qr-token-123');
+    });
     await screen.findByText(/ana silva checked in/i);
 
-    await user.type(screen.getByLabelText(/qr payload/i), 'bad-token');
-    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+    act(() => {
+      qrSuccess?.('bad-token');
+    });
 
     await waitFor(() => {
       expect(screen.getByText(/invalid qr payload/i)).toBeInTheDocument();
@@ -200,17 +238,46 @@ describe('StaffScreen', () => {
     expect(screen.queryByText(/ana silva checked in/i)).not.toBeInTheDocument();
   });
 
-  test('global QR Scan tab directs staff to scan from an activity', async () => {
-    const user = userEvent.setup();
+  test('does not show a global QR Scan tab', async () => {
     render(
       <AuthProvider>
         <StaffScreen onSwitchToTravelerView={() => {}} />
       </AuthProvider>
     );
 
-    await user.click(screen.getByRole('button', { name: /qr scan/i }));
+    await screen.findByText('Day 1 — Arrival');
 
-    expect(screen.getAllByText(/open an activity from the itinerary/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/point camera/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /qr scan/i })).not.toBeInTheDocument();
+  });
+
+  test('can submit a scan through the manual fallback', async () => {
+    const user = userEvent.setup();
+    let scannedPayload: string | null = null;
+
+    server.use(
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', async ({ request }) => {
+        const body = await request.json() as { qr_payload: string };
+        scannedPayload = body.qr_payload;
+        return HttpResponse.json({ status: 'checked_in', traveler_name: 'Ana Silva' });
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+    await user.click(screen.getByText('Airport Transfer'));
+    await user.click(screen.getByRole('button', { name: /scan travelers/i }));
+    await user.click(await screen.findByRole('button', { name: /enter manually/i }));
+    await user.type(screen.getByLabelText(/qr payload/i), 'manual-token-123');
+    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/ana silva checked in/i)).toBeInTheDocument();
+    });
+    expect(scannedPayload).toBe('manual-token-123');
   });
 });
