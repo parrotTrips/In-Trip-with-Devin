@@ -30,8 +30,12 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         token = auth_header[7:]
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-            request.state.user_id = payload["sub"]
-            request.state.phone = payload["phone"]
+            user_id = payload.get("sub")
+            phone = payload.get("phone")
+            if not user_id or not phone:
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            request.state.user_id = user_id
+            request.state.phone = phone
         except JWTError:
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
