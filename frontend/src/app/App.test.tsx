@@ -21,6 +21,13 @@ function setupTripHandlers() {
     http.get('http://localhost:8000/me/trip', () => HttpResponse.json(MOCK_TRIP)),
     http.get('http://localhost:8000/me/trip/phases', () => HttpResponse.json(MOCK_PHASES)),
     http.get('http://localhost:8000/me/trip/travelers', () => HttpResponse.json(MOCK_TRAVELERS)),
+    http.get('http://localhost:8000/me/qr-code', () =>
+      HttpResponse.json({
+        trip_uuid: 'test-001',
+        trip_traveler_id: 'traveler-001',
+        qr_payload: 'parrot-trip-checkin:test-001:traveler-001',
+      })
+    ),
   );
 }
 

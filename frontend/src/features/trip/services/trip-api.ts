@@ -63,6 +63,12 @@ export interface TripTraveler {
   current_phase_id: string | null;
 }
 
+export interface TravelerQrCode {
+  trip_uuid: string;
+  trip_traveler_id: string;
+  qr_payload: string;
+}
+
 export async function getMyTrip() {
   return request<{ trip: TripInfo | null }>('/me/trip');
 }
@@ -77,6 +83,10 @@ export async function getMyTripPhaseDetail(phaseId: string) {
 
 export async function getMyTripTravelers() {
   return request<{ travelers: TripTraveler[] }>('/me/trip/travelers');
+}
+
+export async function getMyQrCode() {
+  return request<TravelerQrCode>('/me/qr-code');
 }
 
 export async function updateChecklistItem(
