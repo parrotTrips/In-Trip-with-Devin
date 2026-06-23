@@ -1,8 +1,21 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import { server } from '../test/server';
+
+vi.mock('../features/staff/pages/StaffScreen', () => ({
+  default: function MockStaffScreen({ onSwitchToTravelerView }: { onSwitchToTravelerView: () => void }) {
+    return (
+      <div>
+        <p>Staff shell</p>
+        <button onClick={onSwitchToTravelerView}>Traveler view</button>
+      </div>
+    );
+  },
+}));
+
 import App from './App';
 
 const MOCK_TRIP = {
@@ -88,5 +101,26 @@ describe('App composition', () => {
     expect(screen.getByText('My Profile')).toBeInTheDocument();
     expect(screen.queryByText('Secret Missions')).not.toBeInTheDocument();
     expect(screen.queryByText('Sharing XP')).not.toBeInTheDocument();
+  });
+
+  test('shows a minimal floating return button when a staff user opens traveler preview', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 'uid-2', phone: '+15552222222', name: 'Bob Staff', token: 'tok', role: 'staff' })
+    );
+    window.history.pushState({}, '', '/');
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    expect(screen.getByText('Staff shell')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Traveler view' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Trip Progress')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Voltar ao staff' })).toBeInTheDocument();
+    expect(screen.queryByText('Viewing as traveler')).not.toBeInTheDocument();
   });
 });
