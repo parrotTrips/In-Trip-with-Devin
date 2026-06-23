@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
 import { useTripContext } from '../../../app/providers/trip-context';
 import { useAuth } from '../../../app/providers/auth-context';
-import { getMyQrCode, type TravelerQrCode, type TripPhase } from '../services/trip-api';
+import { type TripPhase } from '../services/trip-api';
 import ParrotMascot from '../../../shared/components/ParrotMascot';
 import ProgressBar from '../../../shared/components/ProgressBar';
 import TopBar from '../../../shared/components/TopBar';
@@ -53,11 +51,8 @@ export default function HomeScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { tripInfo, phases, travelers, idealPacePhaseId, loading, error } = useTripContext();
-  const [qrCode, setQrCode] = useState<TravelerQrCode | null>(null);
 
   const currentUserPhaseId = travelers.find(t => t.id === user?.userId)?.current_phase_id ?? null;
-  const currentTraveler = travelers.find(t => t.id === user?.userId);
-  const travelerName = currentTraveler?.name ?? user?.name ?? user?.phone ?? 'Traveler';
 
   const isInTrip = tripInfo?.trip_mode === 'in-trip';
 
@@ -95,26 +90,6 @@ export default function HomeScreen() {
       navigate(`/phase/${phase.id}`);
     }
   };
-
-  useEffect(() => {
-    let active = true;
-
-    getMyQrCode()
-      .then((result) => {
-        if (active) {
-          setQrCode(result);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setQrCode(null);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   if (loading) {
     return (
@@ -171,33 +146,6 @@ export default function HomeScreen() {
           </div>
         </div>
       </div>
-
-      {qrCode && (
-        <section className="px-4 pt-4">
-          <div className="max-w-lg mx-auto rounded-2xl border border-emerald-100 bg-white shadow-sm p-4">
-            <div className="flex items-center gap-4">
-              <div className="shrink-0 rounded-xl border border-gray-100 bg-white p-2">
-                <QRCodeSVG
-                  value={qrCode.qr_payload}
-                  size={104}
-                  level="M"
-                  aria-label="Traveler check-in QR code"
-                />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold text-gray-800 font-[Fredoka]">
-                  My QR Code
-                </h2>
-                <p className="mt-1 truncate text-sm font-medium text-gray-700">{travelerName}</p>
-                <p className="truncate text-sm text-emerald-700">{displayTitle}</p>
-                <p className="mt-2 text-xs leading-5 text-gray-500">
-                  Present this QR code to staff for check-in.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
 
       {phases.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 gap-3 px-6">

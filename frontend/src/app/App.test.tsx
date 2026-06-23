@@ -64,6 +64,7 @@ describe('App composition', () => {
       expect(screen.getByText('Trip Progress')).toBeInTheDocument();
     });
     expect(screen.getByText('Map')).toBeInTheDocument();
+    expect(screen.getByText('QR Code')).toBeInTheDocument();
     expect(screen.getByText('My Profile')).toBeInTheDocument();
     expect(screen.queryByText('Secret Missions')).not.toBeInTheDocument();
     expect(screen.queryByText('Sharing XP')).not.toBeInTheDocument();
@@ -83,6 +84,7 @@ describe('App composition', () => {
       expect(screen.getByText('Trip Progress')).toBeInTheDocument();
     });
     expect(screen.getByText('Map')).toBeInTheDocument();
+    expect(screen.getByText('QR Code')).toBeInTheDocument();
     expect(screen.getByText('My Profile')).toBeInTheDocument();
     expect(screen.queryByText('Secret Missions')).not.toBeInTheDocument();
     expect(screen.queryByText('Sharing XP')).not.toBeInTheDocument();

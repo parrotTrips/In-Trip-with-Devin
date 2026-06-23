@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -9,7 +9,6 @@ import HomeScreen from './pages/HomeScreen';
 
 const TRIP_UUID = 'test-trip-001';
 const USER_ID = 'traveler-001';
-const TRAVELER_ID = 'trip-traveler-001';
 
 function setupHandlers() {
   server.use(
@@ -61,13 +60,6 @@ function setupHandlers() {
         ],
       })
     ),
-    http.get('http://localhost:8000/me/qr-code', () =>
-      HttpResponse.json({
-        trip_uuid: TRIP_UUID,
-        trip_traveler_id: TRAVELER_ID,
-        qr_payload: 'parrot-trip-checkin:test-trip-001:trip-traveler-001',
-      })
-    )
   );
 }
 
@@ -86,7 +78,7 @@ describe('HomeScreen', () => {
     setupHandlers();
   });
 
-  test('shows the traveler QR code section', async () => {
+  test('shows the traveler home without the QR code section', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <AuthProvider>
@@ -99,12 +91,7 @@ describe('HomeScreen', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'My QR Code' })).toBeInTheDocument();
-    });
-    expect(screen.getByLabelText('Traveler check-in QR code')).toBeInTheDocument();
-    expect(screen.getByText('Alice Traveler')).toBeInTheDocument();
-    expect(screen.getAllByText('Peru Adventure').length).toBeGreaterThan(0);
-    expect(screen.getByText('Present this QR code to staff for check-in.')).toBeInTheDocument();
+    expect((await screen.findAllByText('Peru Adventure')).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('heading', { name: 'My QR Code' })).not.toBeInTheDocument();
   });
 });

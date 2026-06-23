@@ -1,8 +1,9 @@
-import { Map, User } from 'lucide-react';
+import { Map, QrCode, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const navItems = [
   { path: '/', icon: Map, label: 'Map' },
+  { path: '/qr-code', icon: QrCode, label: 'QR Code' },
   { path: '/profile', icon: User, label: 'My Profile' },
 ];
 
