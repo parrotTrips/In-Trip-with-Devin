@@ -13,7 +13,7 @@ import AppRouter from './router';
 
 function TravelerPreviewExitButton({ onBack }: { onBack: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-24 z-[70] flex justify-center px-4 pointer-events-none sm:bottom-6">
+    <div className="fixed bottom-24 left-1/2 z-[70] flex w-full max-w-lg -translate-x-1/2 justify-end px-4 pointer-events-none sm:bottom-6">
       <button
         onClick={onBack}
         className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-gray-900/25 transition-colors hover:bg-gray-800"
