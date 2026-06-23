@@ -24,6 +24,13 @@ class StaffCheckinScanRequest(BaseModel):
 
 async def _get_staff_trip_uuid(user_id: str, session: AsyncSession) -> str:
     """Return the active trip uuid for a staff member."""
+    role = await session.scalar(
+        text("SELECT role FROM users WHERE id = CAST(:user_id AS uuid)"),
+        {"user_id": user_id},
+    )
+    if role != "staff":
+        raise HTTPException(status_code=403, detail="Staff access required")
+
     result = await session.execute(
         text("""
             SELECT tt.wetravel_trip_uuid

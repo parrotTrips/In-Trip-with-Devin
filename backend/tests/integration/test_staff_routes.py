@@ -36,6 +36,7 @@ async def _seed_staff_trip_with_tasks(session_factory):
         session.add_all([staff, other_staff, traveler, other_trip_traveler_user])
         await session.flush()
         session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=staff.id))
+        session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=other_staff.id))
         trip_traveler = TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=traveler.id)
         session.add(trip_traveler)
         await session.flush()
@@ -113,6 +114,7 @@ async def _seed_staff_trip_with_tasks(session_factory):
         await session.commit()
         return {
             "staff_user_id": str(staff.id),
+            "other_staff_user_id": str(other_staff.id),
             "activity_id": str(activity.id),
             "trip_traveler_id": str(trip_traveler.id),
             "qr_payload": create_traveler_qr_payload(
@@ -178,16 +180,17 @@ def test_scan_activity_checkin_duplicate_returns_existing_checkin(
     session_factory,
 ):
     seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
-    headers = _auth(seeded_client, "+5511888000001")
+    staff_one_headers = _auth(seeded_client, "+5511888000001")
+    staff_two_headers = _auth(seeded_client, "+5511888000002")
 
     first_response = seeded_client.post(
         f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
-        headers=headers,
+        headers=staff_one_headers,
         json={"qr_payload": seed["qr_payload"]},
     )
     duplicate_response = seeded_client.post(
         f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
-        headers=headers,
+        headers=staff_two_headers,
         json={"qr_payload": seed["qr_payload"]},
     )
 
@@ -199,6 +202,7 @@ def test_scan_activity_checkin_duplicate_returns_existing_checkin(
     assert duplicate["trip_activity_id"] == seed["activity_id"]
     assert duplicate["trip_traveler_id"] == seed["trip_traveler_id"]
     assert duplicate["scanned_by_user_id"] == seed["staff_user_id"]
+    assert duplicate["scanned_by_user_id"] != seed["other_staff_user_id"]
     assert duplicate["scanned_by_name"] == "Staff One"
 
 
@@ -243,6 +247,16 @@ def test_scan_activity_checkin_rejects_wrong_trip_qr(seeded_client, session_fact
 
     assert response.status_code in (400, 403)
 
+    async def _count_checkins():
+        async with session_factory() as session:
+            return await session.scalar(
+                select(func.count())
+                .select_from(ActivityCheckin)
+                .where(ActivityCheckin.trip_activity_id == seed["activity_id"])
+            )
+
+    assert asyncio.run(_count_checkins()) == 0
+
 
 def test_scan_activity_checkin_uses_authenticated_staff_user(
     seeded_client,
@@ -259,3 +273,19 @@ def test_scan_activity_checkin_uses_authenticated_staff_user(
 
     assert response.status_code == 200
     assert response.json()["scanned_by_user_id"] == seed["staff_user_id"]
+
+
+def test_scan_activity_checkin_rejects_same_trip_non_staff_user(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    traveler_headers = _auth(seeded_client, "+5511888000003")
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=traveler_headers,
+        json={"qr_payload": seed["qr_payload"]},
+    )
+
+    assert response.status_code == 403
