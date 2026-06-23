@@ -26,7 +26,7 @@ export interface ActivityScanResponse {
   status: 'checked_in' | 'already_checked_in';
   traveler_name?: string | null;
   scanned_by_name?: string | null;
-  scanned_at?: string | null;
+  checked_in_at?: string | null;
 }
 
 export interface StaffDay {

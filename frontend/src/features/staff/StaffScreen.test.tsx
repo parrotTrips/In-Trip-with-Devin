@@ -138,7 +138,7 @@ describe('StaffScreen', () => {
           status: 'already_checked_in',
           traveler_name: 'Ana Silva',
           scanned_by_name: 'Marcelo Staff',
-          scanned_at: '2026-07-01T14:30:00Z',
+          checked_in_at: '2026-07-01T14:30:00Z',
         })
       )
     );
@@ -160,6 +160,44 @@ describe('StaffScreen', () => {
     });
     expect(screen.getByText(/Marcelo Staff/)).toBeInTheDocument();
     expect(screen.getAllByText('0 / 12 checked in')).toHaveLength(2);
+  });
+
+  test('clears previous scan result when a later scan fails', async () => {
+    const user = userEvent.setup();
+    let requestCount = 0;
+
+    server.use(
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', () => {
+        requestCount += 1;
+        if (requestCount === 1) {
+          return HttpResponse.json({ status: 'checked_in', traveler_name: 'Ana Silva' });
+        }
+
+        return HttpResponse.json({ detail: 'Invalid QR payload' }, { status: 400 });
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+    await user.click(screen.getByText('Airport Transfer'));
+    await user.click(screen.getByRole('button', { name: /scan travelers/i }));
+
+    await user.type(screen.getByLabelText(/qr payload/i), 'qr-token-123');
+    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+    await screen.findByText(/ana silva checked in/i);
+
+    await user.type(screen.getByLabelText(/qr payload/i), 'bad-token');
+    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/invalid qr payload/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/ana silva checked in/i)).not.toBeInTheDocument();
   });
 
   test('global QR Scan tab directs staff to scan from an activity', async () => {

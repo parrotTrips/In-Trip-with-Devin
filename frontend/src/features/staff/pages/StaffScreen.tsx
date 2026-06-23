@@ -58,6 +58,7 @@ function ActivityScanPanel({
 
     setSubmitting(true);
     setError(null);
+    setResult(null);
     try {
       const response = await scanActivityTraveler(activity.id, trimmedPayload);
       setResult(response);
@@ -115,10 +116,10 @@ function ActivityScanPanel({
       {result?.status === 'already_checked_in' && (
         <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 space-y-1">
           <p className="text-sm font-medium text-amber-800">{travelerName} was already checked in.</p>
-          {(result.scanned_by_name || result.scanned_at) && (
+          {(result.scanned_by_name || result.checked_in_at) && (
             <p className="text-xs text-amber-700">
               Original scan{result.scanned_by_name ? ` by ${result.scanned_by_name}` : ''}
-              {result.scanned_at ? ` at ${new Date(result.scanned_at).toLocaleString()}` : ''}
+              {result.checked_in_at ? ` at ${new Date(result.checked_in_at).toLocaleString()}` : ''}
             </p>
           )}
         </div>
