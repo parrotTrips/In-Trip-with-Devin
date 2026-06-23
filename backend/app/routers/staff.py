@@ -1,14 +1,25 @@
 """Staff HTTP routes — requires JWT with role=staff."""
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request
+from jose import JWTError
+from pydantic import BaseModel
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
-from app.db.models.staff import StaffTask, TripContact
-from app.db.models.trip import TripActivity, TripPhase
+from app.db.models.staff import ActivityCheckin, StaffTask, TripContact
+from app.db.models.trip import TripActivity, TripPhase, TripTraveler
+from app.db.models.user import User
+from app.services.qr_service import decode_traveler_qr_payload
 
 router = APIRouter(prefix="/me/staff", tags=["staff"])
+
+
+class StaffCheckinScanRequest(BaseModel):
+    qr_payload: str
 
 
 async def _get_staff_trip_uuid(user_id: str, session: AsyncSession) -> str:
@@ -163,4 +174,95 @@ async def get_staff_contacts(
             {"category": cat, "contacts": items}
             for cat, items in grouped.items()
         ],
+    }
+
+
+@router.post("/activities/{activity_id}/checkins/scan")
+async def scan_activity_checkin(
+    activity_id: uuid.UUID,
+    body: StaffCheckinScanRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Scan a traveler's QR code into a staff activity."""
+    try:
+        payload = decode_traveler_qr_payload(body.qr_payload)
+        trip_traveler_id = uuid.UUID(str(payload["trip_traveler_id"]))
+        payload_trip_uuid = payload["trip_uuid"]
+    except (KeyError, TypeError, ValueError, JWTError):
+        raise HTTPException(status_code=400, detail="Invalid QR payload") from None
+
+    staff_user_id = uuid.UUID(str(request.state.user_id))
+    staff_trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
+
+    activity_trip_uuid = await session.scalar(
+        select(TripPhase.wetravel_trip_uuid)
+        .join(TripActivity, TripActivity.trip_phase_id == TripPhase.id)
+        .where(TripActivity.id == activity_id)
+    )
+    if activity_trip_uuid is None:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    if activity_trip_uuid != staff_trip_uuid:
+        raise HTTPException(status_code=403, detail="Activity is outside staff active trip")
+
+    trip_traveler = await session.scalar(
+        select(TripTraveler).where(TripTraveler.id == trip_traveler_id)
+    )
+    if trip_traveler is None:
+        raise HTTPException(status_code=404, detail="Traveler not found")
+    if payload_trip_uuid != staff_trip_uuid or trip_traveler.wetravel_trip_uuid != staff_trip_uuid:
+        raise HTTPException(status_code=403, detail="Traveler is outside staff active trip")
+
+    result = await session.execute(
+        insert(ActivityCheckin)
+        .values(
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+        )
+        .on_conflict_do_nothing(
+            index_elements=["trip_activity_id", "trip_traveler_id"],
+        )
+        .returning(
+            ActivityCheckin.id,
+            ActivityCheckin.trip_activity_id,
+            ActivityCheckin.trip_traveler_id,
+            ActivityCheckin.checked_in_at,
+            ActivityCheckin.scanned_by_user_id,
+        )
+    )
+    inserted = result.mappings().first()
+    if inserted:
+        await session.commit()
+        return {
+            "status": "checked_in",
+            "checkin_id": str(inserted["id"]),
+            "trip_activity_id": str(inserted["trip_activity_id"]),
+            "trip_traveler_id": str(inserted["trip_traveler_id"]),
+            "checked_in_at": inserted["checked_in_at"].isoformat(),
+            "scanned_by_user_id": str(inserted["scanned_by_user_id"]),
+        }
+
+    existing = (
+        await session.execute(
+            select(ActivityCheckin, User.full_name)
+            .join(User, User.id == ActivityCheckin.scanned_by_user_id)
+            .where(
+                ActivityCheckin.trip_activity_id == activity_id,
+                ActivityCheckin.trip_traveler_id == trip_traveler_id,
+            )
+        )
+    ).first()
+    if existing is None:
+        raise HTTPException(status_code=500, detail="Check-in conflict could not be resolved")
+
+    checkin, scanned_by_name = existing
+    return {
+        "status": "already_checked_in",
+        "checkin_id": str(checkin.id),
+        "trip_activity_id": str(checkin.trip_activity_id),
+        "trip_traveler_id": str(checkin.trip_traveler_id),
+        "checked_in_at": checkin.checked_in_at.isoformat(),
+        "scanned_by_user_id": str(checkin.scanned_by_user_id),
+        "scanned_by_name": scanned_by_name,
     }

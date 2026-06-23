@@ -1,11 +1,12 @@
 import asyncio
 from datetime import date
 
-from sqlalchemy import text
+from sqlalchemy import func, select, text
 
-from app.db.models.staff import StaffTask
+from app.db.models.staff import ActivityCheckin, StaffTask
 from app.db.models.trip import TripActivity, TripPhase, TripTraveler
 from app.db.models.user import User
+from app.services.qr_service import create_traveler_qr_payload
 
 
 async def _seed_staff_trip_with_tasks(session_factory):
@@ -26,9 +27,38 @@ async def _seed_staff_trip_with_tasks(session_factory):
         )
         staff = User(phone="+5511888000001", full_name="Staff One", status="active", role="staff")
         other_staff = User(phone="+5511888000002", full_name="Staff Two", status="active", role="staff")
-        session.add_all([staff, other_staff])
+        traveler = User(phone="+5511888000003", full_name="Traveler One", status="active")
+        other_trip_traveler_user = User(
+            phone="+5511888000004",
+            full_name="Other Trip Traveler",
+            status="active",
+        )
+        session.add_all([staff, other_staff, traveler, other_trip_traveler_user])
         await session.flush()
         session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=staff.id))
+        trip_traveler = TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=traveler.id)
+        session.add(trip_traveler)
+        await session.flush()
+
+        await session.execute(
+            text(
+                "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                " VALUES (:uuid, :title, :dest, :sd, :ed)"
+                " ON CONFLICT (trip_uuid) DO NOTHING"
+            ),
+            {
+                "uuid": "staff-route-other-trip-test",
+                "title": "Other Staff Route Test",
+                "dest": "Argentina",
+                "sd": date(2026, 7, 1),
+                "ed": date(2026, 7, 10),
+            },
+        )
+        other_trip_traveler = TripTraveler(
+            wetravel_trip_uuid="staff-route-other-trip-test",
+            user_id=other_trip_traveler_user.id,
+        )
+        session.add(other_trip_traveler)
 
         phase = TripPhase(
             wetravel_trip_uuid="staff-route-test",
@@ -81,6 +111,19 @@ async def _seed_staff_trip_with_tasks(session_factory):
             ),
         ])
         await session.commit()
+        return {
+            "staff_user_id": str(staff.id),
+            "activity_id": str(activity.id),
+            "trip_traveler_id": str(trip_traveler.id),
+            "qr_payload": create_traveler_qr_payload(
+                trip_traveler_id=str(trip_traveler.id),
+                trip_uuid="staff-route-test",
+            ),
+            "other_trip_qr_payload": create_traveler_qr_payload(
+                trip_traveler_id=str(other_trip_traveler.id),
+                trip_uuid="staff-route-other-trip-test",
+            ),
+        }
 
 
 def _auth(client, phone: str) -> dict:
@@ -108,3 +151,111 @@ def test_get_staff_trip_includes_only_current_staff_tasks(seeded_client, session
             "sort_order": 1,
         }
     ]
+
+
+def test_scan_activity_checkin_returns_checked_in(seeded_client, session_factory):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["qr_payload"]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "checked_in"
+    assert data["trip_activity_id"] == seed["activity_id"]
+    assert data["trip_traveler_id"] == seed["trip_traveler_id"]
+    assert data["scanned_by_user_id"] == seed["staff_user_id"]
+    assert data["checkin_id"]
+    assert data["checked_in_at"]
+
+
+def test_scan_activity_checkin_duplicate_returns_existing_checkin(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    first_response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["qr_payload"]},
+    )
+    duplicate_response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["qr_payload"]},
+    )
+
+    assert first_response.status_code == 200
+    assert duplicate_response.status_code == 200
+    duplicate = duplicate_response.json()
+    assert duplicate["status"] == "already_checked_in"
+    assert duplicate["checkin_id"] == first_response.json()["checkin_id"]
+    assert duplicate["trip_activity_id"] == seed["activity_id"]
+    assert duplicate["trip_traveler_id"] == seed["trip_traveler_id"]
+    assert duplicate["scanned_by_user_id"] == seed["staff_user_id"]
+    assert duplicate["scanned_by_name"] == "Staff One"
+
+
+def test_scan_activity_checkin_duplicate_does_not_insert_second_row(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    for _ in range(2):
+        response = seeded_client.post(
+            f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+            headers=headers,
+            json={"qr_payload": seed["qr_payload"]},
+        )
+        assert response.status_code == 200
+
+    async def _count_checkins():
+        async with session_factory() as session:
+            return await session.scalar(
+                select(func.count())
+                .select_from(ActivityCheckin)
+                .where(
+                    ActivityCheckin.trip_activity_id == seed["activity_id"],
+                    ActivityCheckin.trip_traveler_id == seed["trip_traveler_id"],
+                )
+            )
+
+    assert asyncio.run(_count_checkins()) == 1
+
+
+def test_scan_activity_checkin_rejects_wrong_trip_qr(seeded_client, session_factory):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["other_trip_qr_payload"]},
+    )
+
+    assert response.status_code in (400, 403)
+
+
+def test_scan_activity_checkin_uses_authenticated_staff_user(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["qr_payload"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["scanned_by_user_id"] == seed["staff_user_id"]
