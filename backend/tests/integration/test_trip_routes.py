@@ -3,8 +3,11 @@
 import asyncio
 import uuid as _uuid
 
+from sqlalchemy import select
+
 from app.db.models.trip import TripPhase, TripTraveler
 from app.db.models.user import User
+from app.services.qr_service import decode_traveler_qr_payload
 
 TEST_TRIP_UUID = "trip-routes-test-001"
 
@@ -104,6 +107,37 @@ def test_get_my_trip_phases_returns_phases_with_correct_shape(seeded_client, ses
         assert "links" in phase
         assert isinstance(phase["checklist_items"], list)
         assert isinstance(phase["links"], list)
+
+
+def test_get_my_qr_code_returns_signed_traveler_payload(seeded_client, session_factory):
+    """GET /me/qr-code returns the authenticated traveler's signed QR payload."""
+    phone = "+5511333000010"
+    trip_uuid = "trip-qr-code-test-001"
+    user_id = asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+
+    async def _get_trip_traveler_id():
+        async with session_factory() as session:
+            trip_traveler = await session.scalar(
+                select(TripTraveler).where(
+                    TripTraveler.user_id == _uuid.UUID(user_id),
+                    TripTraveler.wetravel_trip_uuid == trip_uuid,
+                )
+            )
+            return str(trip_traveler.id)
+
+    trip_traveler_id = asyncio.run(_get_trip_traveler_id())
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.get("/me/qr-code", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["trip_uuid"] == trip_uuid
+    assert data["trip_traveler_id"] == trip_traveler_id
+    assert "qr_payload" in data
+    decoded_payload = decode_traveler_qr_payload(data["qr_payload"])
+    assert decoded_payload["trip_uuid"] == trip_uuid
+    assert decoded_payload["trip_traveler_id"] == trip_traveler_id
 
 
 def test_get_my_trip_phases_returns_404_when_no_trip_assigned(seeded_client, session_factory):

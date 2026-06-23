@@ -1,10 +1,11 @@
 """Trip HTTP routes."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
+from app.services.qr_service import create_traveler_qr_payload
 from app.services.trip_service import (
     get_trip_phase_detail,
     get_trip_phases,
@@ -60,6 +61,47 @@ async def get_my_trip(
             "service_agreement_url": row["service_agreement_url"],
             "trip_mode": trip_mode,
         }
+    }
+
+
+@router.get("/me/qr-code")
+async def get_my_qr_code(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return the authenticated traveler's signed QR payload."""
+    user_id = request.state.user_id
+
+    result = await session.execute(
+        text("""
+            SELECT
+                tt.id AS trip_traveler_id,
+                tt.wetravel_trip_uuid
+            FROM trip_travelers tt
+            LEFT JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+            WHERE tt.user_id = CAST(:user_id AS uuid)
+              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
+            ORDER BY wt.start_date ASC NULLS LAST, tt.created_at ASC
+            LIMIT 1
+        """),
+        {"user_id": user_id},
+    )
+    row = result.mappings().first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Viagem não encontrada para este usuário")
+
+    trip_traveler_id = str(row["trip_traveler_id"])
+    trip_uuid = row["wetravel_trip_uuid"]
+    qr_payload = create_traveler_qr_payload(
+        trip_traveler_id=trip_traveler_id,
+        trip_uuid=trip_uuid,
+    )
+
+    return {
+        "trip_uuid": trip_uuid,
+        "trip_traveler_id": trip_traveler_id,
+        "qr_payload": qr_payload,
     }
 
 
