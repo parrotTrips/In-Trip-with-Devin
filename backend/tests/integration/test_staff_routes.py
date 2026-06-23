@@ -9,7 +9,7 @@ from app.db.models.user import User
 from app.services.qr_service import create_traveler_qr_payload
 
 
-async def _seed_staff_trip_with_tasks(session_factory):
+async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = False):
     async with session_factory() as session:
         await session.execute(
             text(
@@ -27,18 +27,34 @@ async def _seed_staff_trip_with_tasks(session_factory):
         )
         staff = User(phone="+5511888000001", full_name="Staff One", status="active", role="staff")
         other_staff = User(phone="+5511888000002", full_name="Staff Two", status="active", role="staff")
-        traveler = User(phone="+5511888000003", full_name="Traveler One", status="active")
+        traveler = User(
+            phone="+5511888000003",
+            full_name="Traveler One",
+            status="active",
+            role="traveler",
+        )
+        second_traveler = User(
+            phone="+5511888000005",
+            full_name="Traveler Two",
+            status="active",
+            role="traveler",
+        )
         other_trip_traveler_user = User(
             phone="+5511888000004",
             full_name="Other Trip Traveler",
             status="active",
         )
-        session.add_all([staff, other_staff, traveler, other_trip_traveler_user])
+        session.add_all([staff, other_staff, traveler, second_traveler, other_trip_traveler_user])
         await session.flush()
         session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=staff.id))
         session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=other_staff.id))
         trip_traveler = TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=traveler.id)
         session.add(trip_traveler)
+        second_trip_traveler = TripTraveler(
+            wetravel_trip_uuid="staff-route-test",
+            user_id=second_traveler.id,
+        )
+        session.add(second_trip_traveler)
         await session.flush()
 
         await session.execute(
@@ -111,12 +127,21 @@ async def _seed_staff_trip_with_tasks(session_factory):
                 sort_order=1,
             ),
         ])
+        if seed_checkin:
+            session.add(
+                ActivityCheckin(
+                    trip_activity_id=activity.id,
+                    trip_traveler_id=trip_traveler.id,
+                    scanned_by_user_id=staff.id,
+                )
+            )
         await session.commit()
         return {
             "staff_user_id": str(staff.id),
             "other_staff_user_id": str(other_staff.id),
             "activity_id": str(activity.id),
             "trip_traveler_id": str(trip_traveler.id),
+            "second_trip_traveler_id": str(second_trip_traveler.id),
             "qr_payload": create_traveler_qr_payload(
                 trip_traveler_id=str(trip_traveler.id),
                 trip_uuid="staff-route-test",
@@ -153,6 +178,18 @@ def test_get_staff_trip_includes_only_current_staff_tasks(seeded_client, session
             "sort_order": 1,
         }
     ]
+
+
+def test_get_staff_trip_activity_includes_checkin_counters(seeded_client, session_factory):
+    asyncio.run(_seed_staff_trip_with_tasks(session_factory, seed_checkin=True))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.get("/me/staff/trip", headers=headers)
+
+    assert response.status_code == 200
+    activity = response.json()["days"][0]["activities"][0]
+    assert activity["checkin_count"] == 1
+    assert activity["traveler_count"] == 2
 
 
 def test_scan_activity_checkin_returns_checked_in(seeded_client, session_factory):

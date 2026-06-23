@@ -17,6 +17,8 @@ export interface StaffActivity {
   practical_info: string | null;
   amount_brl: number | null;
   sort_order: number;
+  checkin_count: number;
+  traveler_count: number;
   staff_tasks: StaffTask[];
 }
 

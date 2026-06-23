@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import JWTError
 from pydantic import BaseModel
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,6 +97,7 @@ async def get_staff_trip(
 
     activity_ids = [act.id for act in activities]
     tasks_by_activity: dict = {}
+    checkin_counts_by_activity: dict = {}
     if activity_ids:
         tasks_result = await session.execute(
             select(StaffTask)
@@ -114,6 +115,30 @@ async def get_staff_trip(
                 "sort_order": task.sort_order,
             })
 
+        checkins_result = await session.execute(
+            select(
+                ActivityCheckin.trip_activity_id,
+                func.count(func.distinct(ActivityCheckin.trip_traveler_id)),
+            )
+            .where(ActivityCheckin.trip_activity_id.in_(activity_ids))
+            .group_by(ActivityCheckin.trip_activity_id)
+        )
+        checkin_counts_by_activity = {
+            activity_id: count
+            for activity_id, count in checkins_result.all()
+        }
+
+    traveler_count = await session.scalar(
+        text("""
+            SELECT COUNT(*)
+            FROM trip_travelers tt
+            JOIN users u ON u.id = tt.user_id
+            WHERE tt.wetravel_trip_uuid = :uuid
+              AND u.role = 'traveler'
+        """),
+        {"uuid": trip_uuid},
+    )
+
     activities_by_phase: dict = {}
     for act in activities:
         activities_by_phase.setdefault(act.trip_phase_id, []).append({
@@ -126,6 +151,8 @@ async def get_staff_trip(
             "practical_info": act.practical_info,
             "amount_brl": float(act.amount_brl) if act.amount_brl else None,
             "sort_order": act.sort_order,
+            "checkin_count": checkin_counts_by_activity.get(act.id, 0),
+            "traveler_count": traveler_count or 0,
             "staff_tasks": tasks_by_activity.get(act.id, []),
         })
 
