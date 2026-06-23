@@ -46,7 +46,8 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
         )
         session.add_all([staff, other_staff, traveler, second_traveler, other_trip_traveler_user])
         await session.flush()
-        session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=staff.id))
+        staff_trip_traveler = TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=staff.id)
+        session.add(staff_trip_traveler)
         session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=other_staff.id))
         trip_traveler = TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=traveler.id)
         session.add(trip_traveler)
@@ -105,6 +106,18 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
             sort_order=0,
         )
         session.add(activity)
+        second_activity = TripActivity(
+            trip_phase_id=phase.id,
+            name="Welcome Briefing",
+            activity_type="meeting",
+            starts_at=None,
+            duration_minutes=None,
+            short_description="Trip orientation",
+            practical_info=None,
+            amount_brl=None,
+            sort_order=1,
+        )
+        session.add(second_activity)
         await session.flush()
 
         session.add_all([
@@ -140,10 +153,16 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
             "staff_user_id": str(staff.id),
             "other_staff_user_id": str(other_staff.id),
             "activity_id": str(activity.id),
+            "second_activity_id": str(second_activity.id),
             "trip_traveler_id": str(trip_traveler.id),
             "second_trip_traveler_id": str(second_trip_traveler.id),
+            "staff_trip_traveler_id": str(staff_trip_traveler.id),
             "qr_payload": create_traveler_qr_payload(
                 trip_traveler_id=str(trip_traveler.id),
+                trip_uuid="staff-route-test",
+            ),
+            "staff_qr_payload": create_traveler_qr_payload(
+                trip_traveler_id=str(staff_trip_traveler.id),
                 trip_uuid="staff-route-test",
             ),
             "other_trip_qr_payload": create_traveler_qr_payload(
@@ -180,16 +199,22 @@ def test_get_staff_trip_includes_only_current_staff_tasks(seeded_client, session
     ]
 
 
-def test_get_staff_trip_activity_includes_checkin_counters(seeded_client, session_factory):
-    asyncio.run(_seed_staff_trip_with_tasks(session_factory, seed_checkin=True))
+def test_get_staff_trip_activity_includes_per_activity_checkin_counters(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory, seed_checkin=True))
     headers = _auth(seeded_client, "+5511888000001")
 
     response = seeded_client.get("/me/staff/trip", headers=headers)
 
     assert response.status_code == 200
-    activity = response.json()["days"][0]["activities"][0]
-    assert activity["checkin_count"] == 1
-    assert activity["traveler_count"] == 2
+    activities = response.json()["days"][0]["activities"]
+    activity_by_id = {activity["id"]: activity for activity in activities}
+    assert activity_by_id[seed["activity_id"]]["checkin_count"] == 1
+    assert activity_by_id[seed["activity_id"]]["traveler_count"] == 2
+    assert activity_by_id[seed["second_activity_id"]]["checkin_count"] == 0
+    assert activity_by_id[seed["second_activity_id"]]["traveler_count"] == 2
 
 
 def test_scan_activity_checkin_returns_checked_in(seeded_client, session_factory):
@@ -290,6 +315,32 @@ def test_scan_activity_checkin_rejects_wrong_trip_qr(seeded_client, session_fact
                 select(func.count())
                 .select_from(ActivityCheckin)
                 .where(ActivityCheckin.trip_activity_id == seed["activity_id"])
+            )
+
+    assert asyncio.run(_count_checkins()) == 0
+
+
+def test_scan_activity_checkin_rejects_non_traveler_qr(seeded_client, session_factory):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["staff_qr_payload"]},
+    )
+
+    assert response.status_code in (400, 403)
+
+    async def _count_checkins():
+        async with session_factory() as session:
+            return await session.scalar(
+                select(func.count())
+                .select_from(ActivityCheckin)
+                .where(
+                    ActivityCheckin.trip_activity_id == seed["activity_id"],
+                    ActivityCheckin.trip_traveler_id == seed["staff_trip_traveler_id"],
+                )
             )
 
     assert asyncio.run(_count_checkins()) == 0

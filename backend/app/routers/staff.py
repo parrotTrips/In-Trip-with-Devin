@@ -246,6 +246,11 @@ async def scan_activity_checkin(
         raise HTTPException(status_code=404, detail="Traveler not found")
     if payload_trip_uuid != staff_trip_uuid or trip_traveler.wetravel_trip_uuid != staff_trip_uuid:
         raise HTTPException(status_code=403, detail="Traveler is outside staff active trip")
+    traveler_role = await session.scalar(
+        select(User.role).where(User.id == trip_traveler.user_id)
+    )
+    if traveler_role != "traveler":
+        raise HTTPException(status_code=403, detail="QR code does not belong to a traveler")
 
     result = await session.execute(
         insert(ActivityCheckin)
