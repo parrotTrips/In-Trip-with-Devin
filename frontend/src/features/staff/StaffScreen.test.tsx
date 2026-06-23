@@ -38,6 +38,8 @@ describe('StaffScreen', () => {
                   practical_info: null,
                   amount_brl: null,
                   sort_order: 0,
+                  checkin_count: 0,
+                  traveler_count: 12,
                   staff_tasks: [
                     {
                       id: 'task-1',
@@ -74,5 +76,103 @@ describe('StaffScreen', () => {
     });
     expect(screen.getByText('Coordenar van 1')).toBeInTheDocument();
     expect(screen.getByText('Receber viajantes no aeroporto')).toBeInTheDocument();
+  });
+
+  test('shows activity check-in counter and scanner entry inside expanded activity', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+
+    expect(screen.getByText('0 / 12 checked in')).toBeInTheDocument();
+
+    await user.click(screen.getByText('Airport Transfer'));
+
+    expect(screen.getByRole('button', { name: /scan travelers/i })).toBeInTheDocument();
+  });
+
+  test('submits qr payload to the activity scan endpoint and shows success', async () => {
+    const user = userEvent.setup();
+    let scannedActivityId: string | null = null;
+    let scannedPayload: string | null = null;
+
+    server.use(
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', async ({ params, request }) => {
+        scannedActivityId = String(params.activityId);
+        const body = await request.json() as { qr_payload: string };
+        scannedPayload = body.qr_payload;
+        return HttpResponse.json({ status: 'checked_in', traveler_name: 'Ana Silva' });
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+    await user.click(screen.getByText('Airport Transfer'));
+    await user.click(screen.getByRole('button', { name: /scan travelers/i }));
+    await user.type(screen.getByLabelText(/qr payload/i), 'qr-token-123');
+    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/ana silva checked in/i)).toBeInTheDocument();
+    });
+    expect(scannedActivityId).toBe('activity-1');
+    expect(scannedPayload).toBe('qr-token-123');
+    expect(screen.getAllByText('1 / 12 checked in')).toHaveLength(2);
+  });
+
+  test('shows duplicate check-in message with scanner metadata', async () => {
+    const user = userEvent.setup();
+
+    server.use(
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', () =>
+        HttpResponse.json({
+          status: 'already_checked_in',
+          traveler_name: 'Ana Silva',
+          scanned_by_name: 'Marcelo Staff',
+          scanned_at: '2026-07-01T14:30:00Z',
+        })
+      )
+    );
+
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+    await user.click(screen.getByText('Airport Transfer'));
+    await user.click(screen.getByRole('button', { name: /scan travelers/i }));
+    await user.type(screen.getByLabelText(/qr payload/i), 'qr-token-123');
+    await user.click(screen.getByRole('button', { name: /submit scan/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/ana silva was already checked in/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Marcelo Staff/)).toBeInTheDocument();
+    expect(screen.getAllByText('0 / 12 checked in')).toHaveLength(2);
+  });
+
+  test('global QR Scan tab directs staff to scan from an activity', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await user.click(screen.getByRole('button', { name: /qr scan/i }));
+
+    expect(screen.getAllByText(/open an activity from the itinerary/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/point camera/i)).not.toBeInTheDocument();
   });
 });

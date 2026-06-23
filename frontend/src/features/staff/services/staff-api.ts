@@ -22,6 +22,13 @@ export interface StaffActivity {
   staff_tasks: StaffTask[];
 }
 
+export interface ActivityScanResponse {
+  status: 'checked_in' | 'already_checked_in';
+  traveler_name?: string | null;
+  scanned_by_name?: string | null;
+  scanned_at?: string | null;
+}
+
 export interface StaffDay {
   id: string;
   title: string;
@@ -42,6 +49,13 @@ export interface StaffTrip {
 
 export async function getStaffTrip() {
   return request<StaffTrip>('/me/staff/trip');
+}
+
+export async function scanActivityTraveler(activityId: string, qrPayload: string) {
+  return request<ActivityScanResponse>(`/me/staff/activities/${activityId}/checkins/scan`, {
+    method: 'POST',
+    body: JSON.stringify({ qr_payload: qrPayload }),
+  });
 }
 
 export interface StaffContact {

@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye } from 'lucide-react';
 import { useAuth } from '../../../app/providers/auth-context';
-import { getStaffContacts, getStaffTrip, type StaffContactGroup, type StaffDay, type StaffTrip } from '../services/staff-api';
+import {
+  getStaffContacts,
+  getStaffTrip,
+  scanActivityTraveler,
+  type ActivityScanResponse,
+  type StaffActivity,
+  type StaffContactGroup,
+  type StaffDay,
+  type StaffTrip,
+} from '../services/staff-api';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -28,9 +37,116 @@ function isTodayOrPast(startsAt: string | null): boolean {
 
 // ── Sub-screens ────────────────────────────────────────────────────────────────
 
-function ItineraryTab({ days, loading, error }: { days: StaffDay[]; loading: boolean; error: string | null }) {
+function ActivityScanPanel({
+  activity,
+  onCheckedIn,
+  onClose,
+}: {
+  activity: StaffActivity;
+  onCheckedIn: (activityId: string) => void;
+  onClose: () => void;
+}) {
+  const [qrPayload, setQrPayload] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<ActivityScanResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedPayload = qrPayload.trim();
+    if (!trimmedPayload) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await scanActivityTraveler(activity.id, trimmedPayload);
+      setResult(response);
+      if (response.status === 'checked_in') {
+        onCheckedIn(activity.id);
+      }
+      setQrPayload('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to scan traveler');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const travelerName = result?.traveler_name ?? 'Traveler';
+
+  return (
+    <div className="bg-white rounded-lg border border-emerald-100 p-3 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Scan Travelers</p>
+          <p className="text-xs text-gray-500">{activity.name}</p>
+        </div>
+        <button type="button" onClick={onClose} className="text-xs font-medium text-gray-400 hover:text-gray-600">
+          Close
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <label className="block">
+          <span className="text-xs font-medium text-gray-600">QR payload</span>
+          <textarea
+            value={qrPayload}
+            onChange={(event) => setQrPayload(event.target.value)}
+            className="mt-1 w-full min-h-24 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+            placeholder="Paste or type the traveler QR payload"
+          />
+        </label>
+
+        <button
+          type="submit"
+          disabled={submitting || qrPayload.trim().length === 0}
+          className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-300"
+        >
+          {submitting ? 'Submitting...' : 'Submit scan'}
+        </button>
+      </form>
+
+      {result?.status === 'checked_in' && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
+          <p className="text-sm font-medium text-emerald-800">{travelerName} checked in.</p>
+        </div>
+      )}
+
+      {result?.status === 'already_checked_in' && (
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 space-y-1">
+          <p className="text-sm font-medium text-amber-800">{travelerName} was already checked in.</p>
+          {(result.scanned_by_name || result.scanned_at) && (
+            <p className="text-xs text-amber-700">
+              Original scan{result.scanned_by_name ? ` by ${result.scanned_by_name}` : ''}
+              {result.scanned_at ? ` at ${new Date(result.scanned_at).toLocaleString()}` : ''}
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2">
+          <p className="text-sm font-medium text-red-700">{error}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ItineraryTab({
+  days,
+  loading,
+  error,
+  onActivityCheckedIn,
+}: {
+  days: StaffDay[];
+  loading: boolean;
+  error: string | null;
+  onActivityCheckedIn: (activityId: string) => void;
+}) {
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [openActivity, setOpenActivity] = useState<string | null>(null);
+  const [scanActivityId, setScanActivityId] = useState<string | null>(null);
 
   // Auto-open today's day
   useEffect(() => {
@@ -109,6 +225,7 @@ function ItineraryTab({ days, loading, error }: { days: StaffDay[]; loading: boo
                             {formatTime(act.starts_at)}
                             {act.duration_minutes ? ` · ${act.duration_minutes} min` : ''}
                           </p>
+                          <p className="text-xs font-medium text-emerald-700 mt-1">{act.checkin_count} / {act.traveler_count} checked in</p>
                         </div>
                         <ChevronRight size={16} className={`text-gray-300 mt-1 flex-shrink-0 transition-transform ${isActivityOpen ? 'rotate-90' : ''}`} />
                       </button>
@@ -121,6 +238,24 @@ function ItineraryTab({ days, loading, error }: { days: StaffDay[]; loading: boo
                           )}
                           {act.amount_brl && (
                             <p className="text-xs text-emerald-600 font-medium">R$ {act.amount_brl.toFixed(2)}</p>
+                          )}
+                          <div className="flex items-center justify-between gap-3 rounded-lg bg-white border border-gray-100 px-3 py-2">
+                            <p className="text-sm font-semibold text-gray-800">{act.checkin_count} / {act.traveler_count} checked in</p>
+                            <button
+                              type="button"
+                              onClick={() => setScanActivityId(act.id)}
+                              className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white"
+                            >
+                              <QrCode size={14} />
+                              Scan Travelers
+                            </button>
+                          </div>
+                          {scanActivityId === act.id && (
+                            <ActivityScanPanel
+                              activity={act}
+                              onCheckedIn={onActivityCheckedIn}
+                              onClose={() => setScanActivityId(null)}
+                            />
                           )}
                           {act.staff_tasks.length > 0 && (
                             <div className="bg-white rounded-lg border border-emerald-100 overflow-hidden">
@@ -158,13 +293,13 @@ function QrScannerTab() {
     <div className="px-4 py-5 pb-24 space-y-5">
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <div className="bg-emerald-700 px-4 py-3">
-          <p className="text-white font-semibold text-sm">Scan traveler QR Code</p>
-          <p className="text-emerald-200 text-xs mt-0.5">Point camera at traveler's QR to check them in</p>
+          <p className="text-white font-semibold text-sm">Activity check-in scanning</p>
+          <p className="text-emerald-200 text-xs mt-0.5">Open an activity from the itinerary first.</p>
         </div>
         <div className="p-4">
-          <div className="w-full aspect-square bg-gray-100 rounded-xl flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300">
+          <div className="w-full bg-gray-100 rounded-xl flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 px-4 py-12">
             <QrCode size={48} className="text-gray-300" />
-            <p className="text-sm text-gray-400">Camera integration coming soon</p>
+            <p className="text-sm text-gray-500 text-center">Open an activity from the itinerary, then use Scan Travelers to check people in for that activity.</p>
           </div>
         </div>
       </div>
@@ -250,6 +385,24 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
+  const handleActivityCheckedIn = (activityId: string) => {
+    setTrip(currentTrip => {
+      if (!currentTrip) return currentTrip;
+
+      return {
+        ...currentTrip,
+        days: currentTrip.days.map(day => ({
+          ...day,
+          activities: day.activities.map(activity => (
+            activity.id === activityId
+              ? { ...activity, checkin_count: Math.min(activity.checkin_count + 1, activity.traveler_count) }
+              : activity
+          )),
+        })),
+      };
+    });
+  };
+
   useEffect(() => {
     getStaffTrip()
       .then(setTrip)
@@ -290,7 +443,7 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'itinerary' && (
-          <ItineraryTab days={trip?.days ?? []} loading={loading} error={error} />
+          <ItineraryTab days={trip?.days ?? []} loading={loading} error={error} onActivityCheckedIn={handleActivityCheckedIn} />
         )}
         {activeTab === 'scanner' && <QrScannerTab />}
         {activeTab === 'contacts' && <ContactsTab groups={contactGroups} loading={contactsLoading} error={contactsError} />}
