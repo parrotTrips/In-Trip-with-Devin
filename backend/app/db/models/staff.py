@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,3 +50,28 @@ class StaffTask(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class ActivityCheckin(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "activity_checkins"
+    __table_args__ = (
+        UniqueConstraint("trip_activity_id", "trip_traveler_id"),
+        Index("ix_activity_checkins_trip_activity_id", "trip_activity_id"),
+        Index("ix_activity_checkins_trip_traveler_id", "trip_traveler_id"),
+    )
+
+    trip_activity_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("trip_activities.id"), nullable=False
+    )
+    trip_traveler_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("trip_travelers.id"), nullable=False
+    )
+    scanned_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    checked_in_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )

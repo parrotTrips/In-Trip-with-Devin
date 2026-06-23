@@ -89,6 +89,7 @@ def test_metadata_exposes_the_approved_postgres_tables():
         "otp_codes",
         "trip_staff",
         "staff_tasks",
+        "activity_checkins",
     }
 
     assert expected_tables.issubset(base_module.metadata.tables)
@@ -106,6 +107,31 @@ def test_staff_tasks_has_trip_activity_id_foreign_key():
         for fk in staff_tasks.c.trip_activity_id.foreign_keys
     }
     assert "trip_activities.id" in fk_targets
+
+
+def test_activity_checkins_table_metadata():
+    reload_module("app.db.models")
+    base_module = importlib.import_module("app.db.base")
+
+    activity_checkins = base_module.metadata.tables["activity_checkins"]
+
+    fk_targets = {
+        column.name: {
+            fk.column.table.name + "." + fk.column.name
+            for fk in column.foreign_keys
+        }
+        for column in activity_checkins.c
+    }
+    assert fk_targets["trip_activity_id"] == {"trip_activities.id"}
+    assert fk_targets["trip_traveler_id"] == {"trip_travelers.id"}
+    assert fk_targets["scanned_by_user_id"] == {"users.id"}
+
+    unique_constraints = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in activity_checkins.constraints
+        if constraint.__class__.__name__ == "UniqueConstraint"
+    }
+    assert ("trip_activity_id", "trip_traveler_id") in unique_constraints
 
 
 def test_alembic_database_url_defaults_to_application_config(monkeypatch):
@@ -241,6 +267,7 @@ def test_alembic_upgrade_creates_the_full_schema(monkeypatch, tmp_path):
         "otp_codes",
         "trip_staff",
         "staff_tasks",
+        "activity_checkins",
     }
 
     with temporary_postgres_database(tmp_path) as database_url:
