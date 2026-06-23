@@ -78,7 +78,7 @@ async def get_my_qr_code(
                 tt.id AS trip_traveler_id,
                 tt.wetravel_trip_uuid
             FROM trip_travelers tt
-            LEFT JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
             WHERE tt.user_id = CAST(:user_id AS uuid)
               AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
             ORDER BY wt.start_date ASC NULLS LAST, tt.created_at ASC

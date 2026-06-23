@@ -2,6 +2,7 @@
 
 import asyncio
 import uuid as _uuid
+from datetime import date
 
 from sqlalchemy import select
 
@@ -15,20 +16,23 @@ TEST_TRIP_UUID = "trip-routes-test-001"
 # ── Seed helpers ──────────────────────────────────────────────────────────────
 
 async def _seed_trip(session_factory, *, user_phone: str, trip_uuid: str = TEST_TRIP_UUID):
-    """Create user + trip_traveler. Also inserts wetravel_trips if the table exists."""
+    """Create user + synced trip_traveler assignment."""
     async with session_factory() as session:
         from sqlalchemy import text
-        try:
-            await session.execute(
-                text(
-                    "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
-                    " VALUES (:uuid, :title, :dest, :sd, :ed)"
-                    " ON CONFLICT (trip_uuid) DO NOTHING"
-                ),
-                {"uuid": trip_uuid, "title": "Test Trip", "dest": "Brazil", "sd": "2026-07-01", "ed": "2026-07-10"},
-            )
-        except Exception:
-            await session.rollback()
+        await session.execute(
+            text(
+                "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                " VALUES (:uuid, :title, :dest, :sd, :ed)"
+                " ON CONFLICT (trip_uuid) DO NOTHING"
+            ),
+            {
+                "uuid": trip_uuid,
+                "title": "Test Trip",
+                "dest": "Brazil",
+                "sd": date(2026, 7, 1),
+                "ed": date(2026, 7, 10),
+            },
+        )
         user = User(phone=user_phone, full_name="Trip Tester", status="active")
         session.add(user)
         await session.flush()
@@ -138,6 +142,32 @@ def test_get_my_qr_code_returns_signed_traveler_payload(seeded_client, session_f
     decoded_payload = decode_traveler_qr_payload(data["qr_payload"])
     assert decoded_payload["trip_uuid"] == trip_uuid
     assert decoded_payload["trip_traveler_id"] == trip_traveler_id
+
+
+def test_get_my_qr_code_returns_404_without_synced_trip(seeded_client, session_factory):
+    """GET /me/qr-code does not mint QR payloads for unsynced trip assignments."""
+    phone = "+5511333000011"
+    orphan_trip_uuid = "trip-qr-code-unsynced-001"
+
+    async def _seed_unsynced_trip_assignment():
+        async with session_factory() as session:
+            user = User(phone=phone, full_name="Unsynced Trip", status="active")
+            session.add(user)
+            await session.flush()
+            session.add(
+                TripTraveler(
+                    wetravel_trip_uuid=orphan_trip_uuid,
+                    user_id=user.id,
+                )
+            )
+            await session.commit()
+
+    asyncio.run(_seed_unsynced_trip_assignment())
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.get("/me/qr-code", headers=headers)
+
+    assert response.status_code == 404
 
 
 def test_get_my_trip_phases_returns_404_when_no_trip_assigned(seeded_client, session_factory):
