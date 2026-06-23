@@ -133,6 +133,10 @@ def test_activity_checkins_table_metadata():
     }
     assert ("trip_activity_id", "trip_traveler_id") in unique_constraints
 
+    indexes = {index.name for index in activity_checkins.indexes}
+    assert "ix_activity_checkins_trip_activity_id" in indexes
+    assert "ix_activity_checkins_trip_traveler_id" in indexes
+
 
 def test_alembic_database_url_defaults_to_application_config(monkeypatch):
     monkeypatch.setenv(
