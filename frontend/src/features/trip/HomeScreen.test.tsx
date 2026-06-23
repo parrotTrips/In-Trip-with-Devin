@@ -102,6 +102,7 @@ describe('HomeScreen', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'My QR Code' })).toBeInTheDocument();
     });
+    expect(screen.getByLabelText('Traveler check-in QR code')).toBeInTheDocument();
     expect(screen.getByText('Alice Traveler')).toBeInTheDocument();
     expect(screen.getAllByText('Peru Adventure').length).toBeGreaterThan(0);
     expect(screen.getByText('Present this QR code to staff for check-in.')).toBeInTheDocument();
