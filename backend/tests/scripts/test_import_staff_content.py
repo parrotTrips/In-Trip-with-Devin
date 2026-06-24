@@ -9,7 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from scripts.import_staff_content import (
     StaffTaskImportError,
     _require_single_row,
+    parse_activity_participants_tab,
     parse_staff_tasks_tab,
+    write_activity_participants,
     write_staff_tasks,
 )
 
@@ -52,6 +54,40 @@ def test_parse_staff_tasks_tab_skips_rows_without_title():
     assert parse_staff_tasks_tab(rows) == []
 
 
+def test_parse_activity_participants_tab_basic():
+    rows = [
+        ["trip_uuid", "dia", "atividade_nome", "traveler_phone", "status"],
+        [
+            "TEST-2026-FULL",
+            "2",
+            "Optional: Hang Gliding",
+            "+5511999990001",
+            "allowed",
+        ],
+    ]
+
+    participants = parse_activity_participants_tab(rows)
+
+    assert participants == [
+        {
+            "trip_uuid": "TEST-2026-FULL",
+            "dia": 2,
+            "atividade_nome": "Optional: Hang Gliding",
+            "traveler_phone": "+5511999990001",
+            "status": "allowed",
+        }
+    ]
+
+
+def test_parse_activity_participants_tab_skips_rows_without_phone():
+    rows = [
+        ["trip_uuid", "dia", "atividade_nome", "traveler_phone", "status"],
+        ["TEST-2026-FULL", "2", "Optional: Hang Gliding", "", "allowed"],
+    ]
+
+    assert parse_activity_participants_tab(rows) == []
+
+
 def test_require_single_row_returns_row():
     row = {"id": "abc"}
 
@@ -82,6 +118,8 @@ class _FakeConn:
         self.phase_id = uuid4()
         self.activity_id = uuid4()
         self.staff_id = uuid4()
+        self.traveler_id = uuid4()
+        self.activity_ids = [self.activity_id]
 
     def transaction(self):
         return _FakeTransaction()
@@ -90,6 +128,10 @@ class _FakeConn:
         self.fetch_calls.append((query, args))
         if "FROM trip_phases WHERE wetravel_trip_uuid" in query:
             return [{"id": self.phase_id}]
+        if "SELECT id FROM trip_activities WHERE trip_phase_id = ANY" in query:
+            return [{"id": activity_id} for activity_id in self.activity_ids]
+        if "JOIN trip_travelers" in query:
+            return [{"id": self.traveler_id}]
         if "FROM users" in query:
             return [{"id": self.staff_id}]
         if "day_number = $2" in query:
@@ -120,3 +162,26 @@ async def test_write_staff_tasks_resolves_dia_as_in_trip_day_number():
         if "day_number = $2" in query and args == ("TEST-2026-FULL", 1)
     ]
     assert day_lookup
+
+
+@pytest.mark.asyncio
+async def test_write_activity_participants_resolves_activity_and_traveler():
+    conn = _FakeConn()
+
+    await write_activity_participants(conn, "TEST-2026-FULL", [{
+        "dia": 2,
+        "atividade_nome": "Optional: Hang Gliding",
+        "traveler_phone": "+5511999990001",
+        "status": "allowed",
+    }])
+
+    day_lookup = [
+        query for query, args in conn.fetch_calls
+        if "day_number = $2" in query and args == ("TEST-2026-FULL", 2)
+    ]
+    traveler_lookup = [
+        query for query, args in conn.fetch_calls
+        if "JOIN trip_travelers" in query and args == ("+5511999990001", "TEST-2026-FULL")
+    ]
+    assert day_lookup
+    assert traveler_lookup

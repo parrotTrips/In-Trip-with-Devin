@@ -56,6 +56,14 @@ STAFF_TASKS_HEADER = [
     "sort_order",
 ]
 
+ACTIVITY_PARTICIPANTS_HEADER = [
+    "trip_uuid",
+    "dia",
+    "atividade_nome",
+    "traveler_phone",
+    "status",
+]
+
 _TOKEN_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-token.json"
 _OAUTH2_CREDS_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-credentials.json"
 
@@ -117,6 +125,13 @@ def _staff_tasks_example_rows(trip_uuid: str) -> list[list]:
             "Falar com motorista e confirmar saída",
             1,
         ],
+    ]
+
+
+def _activity_participants_example_rows(trip_uuid: str) -> list[list]:
+    return [
+        [trip_uuid, 2, "Optional: Hang Gliding", "+55 11 99999-1111", "allowed"],
+        [trip_uuid, 4, "Optional: Scuba Diving", "+55 11 99999-2222", "allowed"],
     ]
 
 
@@ -250,16 +265,18 @@ def populate_spreadsheet(sheets_svc, spreadsheet_id: str, trips: list[dict]) -> 
         _apply_header_formatting(sheets_svc, spreadsheet_id, sheet_id, num_cols=len(header))
         time.sleep(0.5)
 
-    contatos_rows, staff_rows, staff_tasks_rows = [], [], []
+    contatos_rows, staff_rows, staff_tasks_rows, activity_participants_rows = [], [], [], []
     for trip in trips:
         u = trip["trip_uuid"]
         contatos_rows.extend(_contatos_example_rows(u))
         staff_rows.extend(_staff_example_rows(u))
         staff_tasks_rows.extend(_staff_tasks_example_rows(u))
+        activity_participants_rows.extend(_activity_participants_example_rows(u))
 
     _add_tab("Contatos", CONTATOS_HEADER, contatos_rows)
     _add_tab("Staff",    STAFF_HEADER,    staff_rows)
     _add_tab("Tarefas Staff", STAFF_TASKS_HEADER, staff_tasks_rows)
+    _add_tab("Participantes Atividades", ACTIVITY_PARTICIPANTS_HEADER, activity_participants_rows)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

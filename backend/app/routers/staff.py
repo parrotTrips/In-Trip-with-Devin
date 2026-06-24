@@ -1,5 +1,6 @@
 """Staff HTTP routes — requires JWT with role=staff."""
 
+import hashlib
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -10,7 +11,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
-from app.db.models.staff import ActivityCheckin, StaffTask, TripContact
+from app.db.models.staff import (
+    ActivityCheckin,
+    ActivityCheckinScanEvent,
+    ActivityParticipant,
+    StaffTask,
+    TripContact,
+)
 from app.db.models.trip import TripActivity, TripPhase, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import decode_traveler_qr_payload
@@ -20,6 +27,32 @@ router = APIRouter(prefix="/me/staff", tags=["staff"])
 
 class StaffCheckinScanRequest(BaseModel):
     qr_payload: str
+
+
+def _payload_hash(payload: str) -> str:
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+async def _record_scan_event(
+    session: AsyncSession,
+    *,
+    trip_activity_id: uuid.UUID | None,
+    trip_traveler_id: uuid.UUID | None,
+    scanned_by_user_id: uuid.UUID,
+    status: str,
+    raw_payload: str,
+    failure_reason: str | None = None,
+) -> None:
+    session.add(
+        ActivityCheckinScanEvent(
+            trip_activity_id=trip_activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=scanned_by_user_id,
+            status=status,
+            failure_reason=failure_reason,
+            raw_payload_hash=_payload_hash(raw_payload),
+        )
+    )
 
 
 async def _get_staff_trip_uuid(user_id: str, session: AsyncSession) -> str:
@@ -219,15 +252,25 @@ async def scan_activity_checkin(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Scan a traveler's QR code into a staff activity."""
+    staff_user_id = uuid.UUID(str(request.state.user_id))
+    staff_trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
+
     try:
         payload = decode_traveler_qr_payload(body.qr_payload)
         trip_traveler_id = uuid.UUID(str(payload["trip_traveler_id"]))
         payload_trip_uuid = payload["trip_uuid"]
     except (KeyError, TypeError, ValueError, JWTError):
+        await _record_scan_event(
+            session,
+            trip_activity_id=None,
+            trip_traveler_id=None,
+            scanned_by_user_id=staff_user_id,
+            status="invalid_qr",
+            raw_payload=body.qr_payload,
+            failure_reason="Invalid QR payload",
+        )
+        await session.commit()
         raise HTTPException(status_code=400, detail="Invalid QR payload") from None
-
-    staff_user_id = uuid.UUID(str(request.state.user_id))
-    staff_trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
 
     activity_trip_uuid = await session.scalar(
         select(TripPhase.wetravel_trip_uuid)
@@ -235,22 +278,98 @@ async def scan_activity_checkin(
         .where(TripActivity.id == activity_id)
     )
     if activity_trip_uuid is None:
+        await _record_scan_event(
+            session,
+            trip_activity_id=None,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="activity_not_found",
+            raw_payload=body.qr_payload,
+            failure_reason="Activity not found",
+        )
+        await session.commit()
         raise HTTPException(status_code=404, detail="Activity not found")
     if activity_trip_uuid != staff_trip_uuid:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="activity_outside_staff_trip",
+            raw_payload=body.qr_payload,
+            failure_reason="Activity is outside staff active trip",
+        )
+        await session.commit()
         raise HTTPException(status_code=403, detail="Activity is outside staff active trip")
 
     trip_traveler = await session.scalar(
         select(TripTraveler).where(TripTraveler.id == trip_traveler_id)
     )
     if trip_traveler is None:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=None,
+            scanned_by_user_id=staff_user_id,
+            status="traveler_not_found",
+            raw_payload=body.qr_payload,
+            failure_reason="Traveler not found",
+        )
+        await session.commit()
         raise HTTPException(status_code=404, detail="Traveler not found")
     if payload_trip_uuid != staff_trip_uuid or trip_traveler.wetravel_trip_uuid != staff_trip_uuid:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="traveler_outside_staff_trip",
+            raw_payload=body.qr_payload,
+            failure_reason="Traveler is outside staff active trip",
+        )
+        await session.commit()
         raise HTTPException(status_code=403, detail="Traveler is outside staff active trip")
     traveler_role = await session.scalar(
         select(User.role).where(User.id == trip_traveler.user_id)
     )
     if traveler_role != "traveler":
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="not_traveler",
+            raw_payload=body.qr_payload,
+            failure_reason="QR code does not belong to a traveler",
+        )
+        await session.commit()
         raise HTTPException(status_code=403, detail="QR code does not belong to a traveler")
+
+    participant_count = await session.scalar(
+        select(func.count())
+        .select_from(ActivityParticipant)
+        .where(ActivityParticipant.trip_activity_id == activity_id)
+    )
+    if participant_count:
+        allowed = await session.scalar(
+            select(ActivityParticipant.id).where(
+                ActivityParticipant.trip_activity_id == activity_id,
+                ActivityParticipant.trip_traveler_id == trip_traveler_id,
+                ActivityParticipant.status == "allowed",
+            )
+        )
+        if allowed is None:
+            await _record_scan_event(
+                session,
+                trip_activity_id=activity_id,
+                trip_traveler_id=trip_traveler_id,
+                scanned_by_user_id=staff_user_id,
+                status="not_authorized_for_activity",
+                raw_payload=body.qr_payload,
+                failure_reason="Traveler is not authorized for this activity",
+            )
+            await session.commit()
+            raise HTTPException(status_code=403, detail="Traveler is not authorized for this activity")
 
     result = await session.execute(
         insert(ActivityCheckin)
@@ -272,6 +391,14 @@ async def scan_activity_checkin(
     )
     inserted = result.mappings().first()
     if inserted:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="checked_in",
+            raw_payload=body.qr_payload,
+        )
         await session.commit()
         return {
             "status": "checked_in",
@@ -296,6 +423,15 @@ async def scan_activity_checkin(
         raise HTTPException(status_code=500, detail="Check-in conflict could not be resolved")
 
     checkin, scanned_by_name = existing
+    await _record_scan_event(
+        session,
+        trip_activity_id=activity_id,
+        trip_traveler_id=trip_traveler_id,
+        scanned_by_user_id=staff_user_id,
+        status="already_checked_in",
+        raw_payload=body.qr_payload,
+    )
+    await session.commit()
     return {
         "status": "already_checked_in",
         "checkin_id": str(checkin.id),

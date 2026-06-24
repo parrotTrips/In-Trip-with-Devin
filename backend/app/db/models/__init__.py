@@ -2,7 +2,14 @@
 
 from app.db.models.auth import OTPCode
 from app.db.models.progress import TravelerChecklistProgress, TravelerPhaseProgress
-from app.db.models.staff import ActivityCheckin, StaffTask, TripContact, TripStaff
+from app.db.models.staff import (
+    ActivityCheckin,
+    ActivityCheckinScanEvent,
+    ActivityParticipant,
+    StaffTask,
+    TripContact,
+    TripStaff,
+)
 from app.db.models.traveler import TravelerProfile
 from app.db.models.trip import (
     TripActivity,
@@ -16,6 +23,8 @@ from app.db.models.user import User
 __all__ = [
     "OTPCode",
     "ActivityCheckin",
+    "ActivityCheckinScanEvent",
+    "ActivityParticipant",
     "StaffTask",
     "TravelerChecklistProgress",
     "TravelerPhaseProgress",

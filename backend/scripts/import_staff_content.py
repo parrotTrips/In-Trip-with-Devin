@@ -176,6 +176,43 @@ def parse_staff_tasks_tab(rows: list[list[str]]) -> list[dict]:
     return tasks
 
 
+def parse_activity_participants_tab(rows: list[list[str]]) -> list[dict]:
+    """Parse Participantes Atividades tab.
+
+    Columns: trip_uuid, dia, atividade_nome, traveler_phone, status
+    """
+    if not rows or len(rows) < 2:
+        return []
+    header = [h.strip().lower() for h in rows[0]]
+
+    def col(row: list[str], name: str) -> str:
+        try:
+            idx = header.index(name)
+            return row[idx].strip() if idx < len(row) else ""
+        except ValueError:
+            return ""
+
+    participants = []
+    for row in rows[1:]:
+        if not row or not row[0].strip():
+            continue
+        phone = col(row, "traveler_phone")
+        if not phone:
+            continue
+        try:
+            day = int(col(row, "dia") or "0")
+        except ValueError:
+            day = 0
+        participants.append({
+            "trip_uuid": col(row, "trip_uuid"),
+            "dia": day,
+            "atividade_nome": col(row, "atividade_nome"),
+            "traveler_phone": phone,
+            "status": (col(row, "status") or "allowed").lower(),
+        })
+    return participants
+
+
 class StaffTaskImportError(ValueError):
     pass
 
@@ -281,6 +318,92 @@ async def write_staff_tasks(conn: asyncpg.Connection, trip_uuid: str, tasks: lis
     return inserted
 
 
+async def write_activity_participants(conn: asyncpg.Connection, trip_uuid: str, participants: list[dict]) -> int:
+    """Delete existing activity participant allowlist rows for a trip and insert fresh rows."""
+    async with conn.transaction():
+        phase_rows = await conn.fetch(
+            "SELECT id FROM trip_phases WHERE wetravel_trip_uuid = $1",
+            trip_uuid,
+        )
+        phase_ids = [r["id"] for r in phase_rows]
+        if phase_ids:
+            activity_rows = await conn.fetch(
+                "SELECT id FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])",
+                phase_ids,
+            )
+            activity_ids = [r["id"] for r in activity_rows]
+            if activity_ids:
+                await conn.execute(
+                    "DELETE FROM activity_participants WHERE trip_activity_id = ANY($1::uuid[])",
+                    activity_ids,
+                )
+
+        inserted = 0
+        for participant in participants:
+            if participant["status"] != "allowed":
+                continue
+
+            day_rows = await conn.fetch(
+                """
+                SELECT id
+                FROM (
+                    SELECT
+                        id,
+                        row_number() OVER (ORDER BY sort_order) AS day_number
+                    FROM trip_phases
+                    WHERE wetravel_trip_uuid = $1
+                      AND phase_type = 'in-trip'
+                ) in_trip_days
+                WHERE day_number = $2
+                """,
+                trip_uuid,
+                participant["dia"],
+            )
+            day = _require_single_row(day_rows, "day", str(participant["dia"]))
+
+            activity_rows = await conn.fetch(
+                """
+                SELECT id
+                FROM trip_activities
+                WHERE trip_phase_id = $1
+                  AND lower(name) = lower($2)
+                """,
+                day["id"],
+                participant["atividade_nome"],
+            )
+            activity = _require_single_row(activity_rows, "activity", participant["atividade_nome"])
+
+            traveler_rows = await conn.fetch(
+                """
+                SELECT tt.id
+                FROM users u
+                JOIN trip_travelers tt ON tt.user_id = u.id
+                WHERE u.phone = $1
+                  AND u.role = 'traveler'
+                  AND tt.wetravel_trip_uuid = $2
+                """,
+                participant["traveler_phone"],
+                trip_uuid,
+            )
+            traveler = _require_single_row(traveler_rows, "traveler", participant["traveler_phone"])
+
+            await conn.execute(
+                """
+                INSERT INTO activity_participants
+                    (id, trip_activity_id, trip_traveler_id, status, created_at, updated_at)
+                VALUES (gen_random_uuid(), $1, $2, $3, now(), now())
+                ON CONFLICT (trip_activity_id, trip_traveler_id)
+                DO UPDATE SET status = EXCLUDED.status, updated_at = now()
+                """,
+                activity["id"],
+                traveler["id"],
+                participant["status"],
+            )
+            inserted += 1
+
+    return inserted
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def parse_staff_tab(rows: list[list[str]]) -> list[dict]:
@@ -373,20 +496,24 @@ async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet
 
     tasks_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Tarefas Staff"), trip_uuid)
     tasks = parse_staff_tasks_tab(tasks_rows)
+    participant_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Participantes Atividades"), trip_uuid)
+    participants = parse_activity_participants_tab(participant_rows)
 
-    if not contacts and not members and not tasks:
+    if not contacts and not members and not tasks and not participants:
         return {"skipped": True, "trip_uuid": trip_uuid}
 
     async with conn.transaction():
         contacts_count = await write_contacts(conn, trip_uuid, contacts)
         staff_result = await write_staff(conn, trip_uuid, members)
         tasks_count = await write_staff_tasks(conn, trip_uuid, tasks)
+        participants_count = await write_activity_participants(conn, trip_uuid, participants)
 
     return {
         "skipped": False,
         "trip_uuid": trip_uuid,
         "contacts": contacts_count,
         "staff_tasks": tasks_count,
+        "activity_participants": participants_count,
         "staff_created": staff_result["created"],
         "staff_updated": staff_result["updated"],
         "staff_linked": staff_result["linked"],
@@ -409,6 +536,7 @@ async def main(trip_uuids: list[str], sheet_id: str) -> None:
             else:
                 print(f"  ✅ {result['contacts']} contacts imported")
                 print(f"  ✅ {result['staff_tasks']} staff tasks imported")
+                print(f"  ✅ {result['activity_participants']} activity participants imported")
     finally:
         await conn.close()
 

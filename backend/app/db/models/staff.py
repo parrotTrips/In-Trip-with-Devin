@@ -75,3 +75,48 @@ class ActivityCheckin(UUIDPrimaryKeyMixin, Base):
         default=lambda: datetime.now(UTC),
         server_default=func.now(),
     )
+
+
+class ActivityParticipant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "activity_participants"
+    __table_args__ = (
+        UniqueConstraint("trip_activity_id", "trip_traveler_id"),
+        Index("ix_activity_participants_trip_activity_id", "trip_activity_id"),
+        Index("ix_activity_participants_trip_traveler_id", "trip_traveler_id"),
+    )
+
+    trip_activity_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("trip_activities.id"), nullable=False
+    )
+    trip_traveler_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("trip_travelers.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class ActivityCheckinScanEvent(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "activity_checkin_scan_events"
+    __table_args__ = (
+        Index("ix_activity_checkin_scan_events_trip_activity_id", "trip_activity_id"),
+        Index("ix_activity_checkin_scan_events_trip_traveler_id", "trip_traveler_id"),
+        Index("ix_activity_checkin_scan_events_scanned_by_user_id", "scanned_by_user_id"),
+    )
+
+    trip_activity_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("trip_activities.id"), nullable=True
+    )
+    trip_traveler_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("trip_travelers.id"), nullable=True
+    )
+    scanned_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+    raw_payload_hash: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )

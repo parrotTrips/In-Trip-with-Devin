@@ -356,6 +356,33 @@ async def admin_import_staff_tasks(trip_uuid: str) -> dict:
     return {"status": "ok", "trip_uuid": trip_uuid, "staff_tasks_imported": count}
 
 
+async def admin_import_activity_participants(trip_uuid: str) -> dict:
+    """Import controlled activity participant allowlists from the Staff Google Sheet."""
+    if not STAFF_CONTENT_SHEET_ID:
+        raise ValueError("STAFF_CONTENT_SHEET_ID is not set")
+
+    from scripts.import_staff_content import (
+        filter_rows_by_trip,
+        parse_activity_participants_tab,
+        read_tab,
+        write_activity_participants,
+    )
+
+    sheets_svc = _build_sheets_client_adc()
+    participant_rows = filter_rows_by_trip(
+        read_tab(sheets_svc, STAFF_CONTENT_SHEET_ID, "Participantes Atividades"), trip_uuid
+    )
+    participants = parse_activity_participants_tab(participant_rows)
+
+    conn = await _get_connection()
+    try:
+        count = await write_activity_participants(conn, trip_uuid, participants)
+    finally:
+        await conn.close()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "activity_participants_imported": count}
+
+
 async def admin_set_user_role(phone: str, role: str) -> dict:
     """Set the role of a user identified by phone number."""
     if role not in ("traveler", "staff"):

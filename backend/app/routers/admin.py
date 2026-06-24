@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.admin_service import (
+    admin_import_activity_participants,
     admin_import_contacts,
     admin_import_staff,
     admin_import_staff_tasks,
@@ -90,6 +91,15 @@ async def import_staff_tasks(body: TripUUIDRequest):
     """Import staff activity tasks from the Staff Google Sheet into staff_tasks."""
     try:
         return await admin_import_staff_tasks(body.trip_uuid)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/trips/import-activity-participants")
+async def import_activity_participants(body: TripUUIDRequest):
+    """Import controlled activity participant allowlists from the Staff Google Sheet."""
+    try:
+        return await admin_import_activity_participants(body.trip_uuid)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
