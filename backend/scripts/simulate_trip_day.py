@@ -29,7 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import asyncpg
@@ -46,6 +46,21 @@ PG_URL = (
     .replace("postgresql+asyncpg://", "postgresql://")
     .replace("postgresql+psycopg2://", "postgresql://")
 )
+
+
+def validate_target_day(target_day: int, total_days: int) -> None:
+    if target_day < 0 or target_day > total_days:
+        raise ValueError(f"Day must be between 0 and {total_days}. Received: {target_day}")
+
+
+def calculate_simulated_starts_at(day_num: int, target_day: int, now: datetime) -> datetime:
+    if day_num <= target_day:
+        return now - timedelta(days=(target_day - day_num + 1))
+    return now + timedelta(days=(day_num - target_day))
+
+
+def calculate_reset_starts_at(trip_start: date, day_num: int) -> datetime:
+    return datetime.combine(trip_start + timedelta(days=day_num - 1), datetime.min.time(), tzinfo=UTC)
 
 
 async def simulate(trip_uuid: str, target_day: int) -> None:
@@ -66,6 +81,7 @@ async def simulate(trip_uuid: str, target_day: int) -> None:
             return
 
         total = len(phases)
+        validate_target_day(target_day, total)
         print(f"\nTrip: {trip_uuid} | {total} in-trip days | simulating Day {target_day}/{total}")
         print(f"Progress bar will show: {target_day}/{total} = {round(target_day/total*100)}%\n")
 
@@ -73,13 +89,10 @@ async def simulate(trip_uuid: str, target_day: int) -> None:
 
         for i, phase in enumerate(phases):
             day_num = i + 1
+            new_starts_at = calculate_simulated_starts_at(day_num, target_day, now)
             if day_num <= target_day:
-                # This day has "already started" — set starts_at to past
-                new_starts_at = now - timedelta(hours=(target_day - day_num + 1) * 24)
                 status = "✅ STARTED"
             else:
-                # This day hasn't started yet — set starts_at to future
-                new_starts_at = now + timedelta(hours=(day_num - target_day) * 24)
                 status = "⏳ future"
 
             await conn.execute(
@@ -95,9 +108,19 @@ async def simulate(trip_uuid: str, target_day: int) -> None:
 
 
 async def reset_dates(trip_uuid: str) -> None:
-    """Restore original starts_at from the sheet data (date only, midnight UTC)."""
+    """Restore starts_at from the trip start date (date only, midnight UTC)."""
     conn = await asyncpg.connect(PG_URL)
     try:
+        trip_start = await conn.fetchval(
+            "SELECT start_date FROM wetravel_trips WHERE trip_uuid = $1",
+            trip_uuid,
+        )
+        if not trip_start:
+            print(f"No start_date found for trip '{trip_uuid}'. Reset aborted.")
+            return
+        if isinstance(trip_start, datetime):
+            trip_start = trip_start.date()
+
         phases = await conn.fetch(
             """
             SELECT id, title, sort_order, starts_at
@@ -112,10 +135,9 @@ async def reset_dates(trip_uuid: str) -> None:
             print(f"No in-trip phases found for trip '{trip_uuid}'.")
             return
 
-        print(f"\nResetting {len(phases)} in-trip phases to their original dates...\n")
+        print(f"\nResetting {len(phases)} in-trip phases from trip start date {trip_start}...\n")
         for i, phase in enumerate(phases):
-            # Original dates: 2026-07-01, 02, 03...
-            original_date = datetime(2026, 7, 1 + i, 0, 0, 0, tzinfo=UTC)
+            original_date = calculate_reset_starts_at(trip_start, i + 1)
             await conn.execute(
                 "UPDATE trip_phases SET starts_at = $1 WHERE id = $2",
                 original_date, phase["id"],
@@ -136,6 +158,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.reset:
-        asyncio.run(reset_dates(args.trip_uuid))
+        try:
+            asyncio.run(reset_dates(args.trip_uuid))
+        except ValueError as exc:
+            print(f"ERROR: {exc}")
     else:
-        asyncio.run(simulate(args.trip_uuid, args.day))
+        try:
+            asyncio.run(simulate(args.trip_uuid, args.day))
+        except ValueError as exc:
+            print(f"ERROR: {exc}")
