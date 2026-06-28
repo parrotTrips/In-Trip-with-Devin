@@ -315,10 +315,6 @@ function ItineraryTab({
 
                       {isActivityOpen && (
                         <div className="px-4 pb-4 pt-1 bg-gray-50 space-y-2">
-                          <p className="text-sm text-gray-600">{act.short_description}</p>
-                          {act.practical_info && (
-                            <p className="text-xs text-gray-500 bg-white rounded-lg px-3 py-2 border border-gray-100">{act.practical_info}</p>
-                          )}
                           {act.amount_brl && (
                             <p className="text-xs text-emerald-600 font-medium">R$ {act.amount_brl.toFixed(2)}</p>
                           )}
