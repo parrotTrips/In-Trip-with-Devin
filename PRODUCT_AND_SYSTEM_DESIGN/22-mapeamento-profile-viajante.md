@@ -7,8 +7,9 @@ Este documento explica, em linguagem direta, de onde vem cada informação exibi
 A regra geral é:
 
 - **WeTravel** informa dados da compra, pacote, pagamento e add-ons.
-- **Viajante** informa dados pessoais, passaporte, saúde, acompanhante e preferências.
-- **Parrot / operação** informa dados da viagem, roteiro, service agreement e conteúdos operacionais.
+- **Viajante** informa ou completa dados pessoais, passaporte, saúde, acompanhante e preferências.
+- **Planilhas da operação** devem conseguir alimentar todo conteúdo não pessoal: cards, links, roteiro, atividades, contatos, tarefas e materiais.
+- **Parrot / operação** é dona dos dados da viagem, roteiro, service agreement e conteúdos operacionais.
 - **App** apenas mostra ou grava esses dados no lugar correto; ele não deve inventar informação.
 
 ## Fluxo Resumido
@@ -23,14 +24,16 @@ flowchart LR
 
 ## Tela: Registration Details
 
-Esses campos são preenchidos pelo próprio viajante dentro do app.
+Esses campos são uma mistura de dados iniciais vindos da WeTravel/conta do usuário e dados completados pelo próprio viajante dentro do app.
 
-Quando o viajante clica em **Save Profile**, o app envia os dados para o backend, e o backend grava principalmente na tabela `traveler_profiles`.
+A WeTravel ajuda a identificar quem é o viajante e a qual viagem ele pertence. Depois disso, o viajante completa as informações pessoais que a operação precisa.
+
+Quando o viajante clica em **Save Profile**, o app envia os dados editáveis para o backend, e o backend grava principalmente na tabela `traveler_profiles`.
 
 | Bloco no app | Campo no app | Chave técnica | Origem do dado | Onde grava hoje | Status |
 |---|---|---|---|---|---|
-| Basic Info | Preferred Name | `preferred_name` | Viajante | `traveler_profiles.preferred_name` e `users.full_name` | Implementado |
-| Basic Info | Email | `email` | Viajante | `users.email` | Implementado |
+| Basic Info | Preferred Name | `preferred_name` | WeTravel/usuário como base; viajante pode ajustar | `traveler_profiles.preferred_name` e `users.full_name` | Implementado |
+| Basic Info | Email | `email` | WeTravel/usuário como base; viajante pode ajustar | `users.email` | Implementado |
 | Basic Info | Date of Birth | `dob` | Viajante | `traveler_profiles.date_of_birth` | Implementado |
 | Basic Info | Gender | `gender` | Viajante | `traveler_profiles.gender` | Implementado |
 | Passport Information | First Name as in passport | `first_name_passport` | Viajante | `traveler_profiles.passport_first_name` | Implementado |
@@ -52,6 +55,8 @@ Quando o viajante clica em **Save Profile**, o app envia os dados para o backend
 
 ### Observações importantes
 
+- Registration Details não deve ser preenchido por planilha como fluxo principal, porque contém dados pessoais do viajante.
+- O vínculo inicial do viajante com a viagem vem da WeTravel e do telefone/email associado ao usuário.
 - Datas precisam estar no formato `YYYY-MM-DD`.
 - Campos de sim/não são salvos internamente como booleanos, mas o app envia `yes` ou `no`.
 - Se o viajante ainda não tiver profile salvo, o app consegue criar o profile no primeiro save.
@@ -107,6 +112,13 @@ No fluxo atual, a WeTravel é a fonte de verdade para:
 | Email do participante | vínculo WeTravel -> usuário | `host_trip_participants.participant_email` |
 | Telefone do participante | login e vínculo com app | `wetravel_participant_phones.phone` |
 
+Confirmando diretamente: **Your Package** e **Additional Activities Purchased / Add-ons** vêm da WeTravel.
+
+- `Your Package / Package Name` vem de `host_trip_participants.package_names`.
+- `Additional Activities Purchased / Add-on Activities` vem de `host_trip_participants.addon_names`.
+- `Amount Paid` vem de `host_trip_participants.paid_amount`.
+- Esses campos são somente leitura no app.
+
 ## Dados que o viajante oferece
 
 O viajante oferece os dados que não são garantidos pela compra na WeTravel:
@@ -139,6 +151,38 @@ A operação da Parrot é fonte de verdade para:
 
 Esses dados normalmente entram por planilhas, scripts de importação ou atualização direta no Supabase.
 
+## Dados que devem ser preenchidos por planilha
+
+A regra operacional desejada é: **tudo que não for dado pessoal do viajante deve poder ser alimentado por planilha**.
+
+Isso permite que uma pessoa não técnica da operação preencha ou revise a viagem sem precisar mexer diretamente no banco de dados.
+
+| Tipo de informação | Deve vir de planilha? | Exemplo no app | Observação |
+|---|---|---|---|
+| Dados pessoais do viajante | Não | Registration Details | O viajante preenche no app; WeTravel pode trazer dados iniciais de identificação. |
+| Pacote comprado | Não como fonte principal | Your Package | Fonte oficial é WeTravel. Pode aparecer em planilha apenas para conferência operacional. |
+| Add-ons comprados | Não como fonte principal | Additional Activities Purchased | Fonte oficial é WeTravel. Pode aparecer em planilha apenas para conferência operacional. |
+| Valor pago | Não como fonte principal | Amount Paid | Fonte oficial é WeTravel. |
+| Roteiro | Sim | Pre Trip / In Trip / atividades do dia | Deve ser importado das planilhas para o Supabase. |
+| Cards de preparação | Sim | Visa, Packing, documentos, avisos | Deve ser conteúdo editável pela operação. |
+| Cards durante a viagem | Sim | Atividades, orientações e materiais | Deve ser conteúdo editável pela operação. |
+| Links | Sim | links de documentos, mapas, compras, materiais | Devem vir de planilha ou campo operacional equivalente. |
+| Contatos | Sim | contatos úteis da viagem | Devem vir da aba de contatos da planilha. |
+| Tarefas da staff | Sim | My Tasks no app da staff | Devem vir da planilha de staff. |
+| QRCode / controle por atividade | Sim para configuração; não para check-ins | atividades controladas por QRCode | A operação define quais atividades exigem controle; os check-ins são gerados pelo app. |
+| Service Agreement | Sim | Service Agreement | A planilha deve guardar a URL ou `gs://...` do documento. |
+
+## Matriz de responsabilidade
+
+| Fonte | Responsabilidade |
+|---|---|
+| WeTravel | Compra, pacote, add-ons, valor pago, participante e vínculo comercial. |
+| Viajante | Dados pessoais, passaporte, saúde, preferências, acompanhante e pedidos de ajuda. |
+| Planilhas | Todo conteúdo operacional e editorial da viagem que não seja dado pessoal. |
+| Supabase | Base consolidada que o app lê e atualiza. |
+| App do viajante | Mostra dados e permite o viajante preencher o que é dele. |
+| App da staff | Mostra operação, tarefas, contatos e controle de presença/check-in. |
+
 ## Campos existentes no código, mas sem uso completo hoje
 
 Existem campos no tipo do frontend e no schema da API que ainda não têm fluxo completo no app atual.
@@ -165,9 +209,11 @@ Importante: mesmo que alguns desses campos existam no schema da API, o backend h
 
 Sim. Os campos editáveis de Registration Details são enviados pelo app para o backend e gravados no Supabase.
 
+Parte da identificação inicial pode vir da WeTravel/usuário, mas as informações pessoais completas são preenchidas pelo viajante no app.
+
 ### Em Products & Payment, tudo vem do Supabase?
 
-Quase tudo.
+Sim, o app lê esses dados do Supabase. A origem desses dados no Supabase é a WeTravel.
 
 - `Package Name`: sim, vem da WeTravel via Supabase.
 - `Amount Paid`: sim, vem da WeTravel via Supabase.
