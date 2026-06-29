@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTripContext } from '../../../app/providers/trip-context';
 import { useAuth } from '../../../app/providers/auth-context';
 import { type TripPhase } from '../services/trip-api';
-import ParrotMascot from '../../../shared/components/ParrotMascot';
+import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
 import ProgressBar from '../../../shared/components/ProgressBar';
 import TopBar from '../../../shared/components/TopBar';
 import {
@@ -208,8 +208,8 @@ export default function HomeScreen() {
                         >
                           {isParrotHere && (
                             <div data-testid="phase-parrot-badge" className="shrink-0">
-                              <ParrotMascot
-                                size={36}
+                              <ParrotLogoIcon
+                                size={38}
                                 showSpeech
                                 speechText="You should be here!"
                               />

@@ -1,1 +1,1 @@
-export { default } from '../shared/components/ParrotMascot';
+export { default } from '../shared/components/ParrotLogoIcon';

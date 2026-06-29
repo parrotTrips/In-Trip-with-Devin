@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import ParrotMascot from '../../../shared/components/ParrotMascot';
+import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
 import { requestOTP, verifyOTP } from '../services/auth-api';
 import { useAuth } from '../../../app/providers/auth-context';
 
@@ -92,9 +92,9 @@ export default function LoginScreen() {
       </div>
 
       <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-8 safe-top safe-bottom">
-        {/* Mascot & Brand */}
+        {/* Brand icon */}
         <div className="text-center mb-6">
-          <ParrotMascot size={64} className="mx-auto mb-3" />
+          <ParrotLogoIcon size={64} className="mx-auto mb-3" color="#ffffff" />
           <h1 className="text-2xl font-bold text-white font-[Fredoka]">Parrot Trips</h1>
           <p className="text-emerald-100 text-xs mt-1">Your Brazilian Adventure Awaits!</p>
         </div>
