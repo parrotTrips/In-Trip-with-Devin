@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
 from app.services.qr_service import create_traveler_qr_payload
+from app.services.service_agreement_service import resolve_service_agreement_url
 from app.services.trip_service import (
     get_trip_phase_detail,
     get_trip_phases,
@@ -58,7 +59,7 @@ async def get_my_trip(
             "start_date": row["start_date"],
             "end_date": row["end_date"],
             "url": row["url"],
-            "service_agreement_url": row["service_agreement_url"],
+            "service_agreement_url": resolve_service_agreement_url(row["service_agreement_url"]),
             "trip_mode": trip_mode,
         }
     }

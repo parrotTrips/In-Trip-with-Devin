@@ -3,6 +3,7 @@
 import asyncio
 import uuid as _uuid
 from datetime import date
+from unittest.mock import patch
 
 from sqlalchemy import select
 
@@ -40,6 +41,18 @@ async def _seed_trip(session_factory, *, user_phone: str, trip_uuid: str = TEST_
         session.add(tt)
         await session.commit()
         return str(user.id)
+
+
+async def _set_service_agreement_url(session_factory, *, trip_uuid: str, service_agreement_url: str):
+    async with session_factory() as session:
+        from sqlalchemy import text
+        await session.execute(
+            text(
+                "UPDATE wetravel_trips SET service_agreement_url = :url WHERE trip_uuid = :trip_uuid"
+            ),
+            {"url": service_agreement_url, "trip_uuid": trip_uuid},
+        )
+        await session.commit()
 
 
 async def _seed_phases(session_factory, *, trip_uuid: str = TEST_TRIP_UUID):
@@ -111,6 +124,32 @@ def test_get_my_trip_phases_returns_phases_with_correct_shape(seeded_client, ses
         assert "links" in phase
         assert isinstance(phase["checklist_items"], list)
         assert isinstance(phase["links"], list)
+
+
+def test_get_my_trip_returns_signed_service_agreement_url_for_gcs_uri(seeded_client, session_factory):
+    """GET /me/trip resolves private GCS service agreements into signed URLs."""
+    phone = "+5511333000012"
+    trip_uuid = "trip-service-agreement-gcs-001"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    asyncio.run(_set_service_agreement_url(
+        session_factory,
+        trip_uuid=trip_uuid,
+        service_agreement_url="gs://parrot-trips-service-agreements-prod/trips/TEST-2026-FULL/service-agreement.pdf",
+    ))
+    headers = _auth(seeded_client, phone)
+
+    with patch(
+        "app.routers.trip.resolve_service_agreement_url",
+        return_value="https://storage.googleapis.com/signed-service-agreement",
+    ) as resolver:
+        response = seeded_client.get("/me/trip", headers=headers)
+
+    assert response.status_code == 200
+    trip = response.json()["trip"]
+    assert trip["service_agreement_url"] == "https://storage.googleapis.com/signed-service-agreement"
+    resolver.assert_called_once_with(
+        "gs://parrot-trips-service-agreements-prod/trips/TEST-2026-FULL/service-agreement.pdf"
+    )
 
 
 def test_get_my_qr_code_returns_signed_traveler_payload(seeded_client, session_factory):
