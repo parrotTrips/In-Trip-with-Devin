@@ -189,7 +189,7 @@ export default function HomeScreen() {
                   >
                     <button
                       onClick={() => handlePhaseClick(phase)}
-                      className={`w-full rounded-2xl border-2 p-3 transition-all duration-300 hover:scale-105 active:scale-95 ${
+                      className={`relative w-full overflow-visible rounded-2xl border-2 p-3 transition-transform duration-300 transform-gpu hover:scale-[1.03] active:scale-[0.98] ${
                         isPast
                           ? isPreTrip
                             ? 'bg-blue-50 border-blue-200'
@@ -198,16 +198,31 @@ export default function HomeScreen() {
                             ? isPreTrip
                               ? 'bg-blue-500 border-blue-600 shadow-lg shadow-blue-200'
                               : 'bg-emerald-500 border-emerald-600 shadow-lg shadow-emerald-200'
-                            : 'bg-white border-gray-200 hover:border-gray-300'
+                          : 'bg-white border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      {isParrotHere && (
-                        <div className={`absolute -top-3 ${isLeft ? '-right-2' : '-left-2'}`}>
-                          <ParrotMascot
-                            size={36}
-                            showSpeech
-                            speechText="You should be here!"
-                          />
+                      {(isParrotHere || isPast) && (
+                        <div
+                          data-testid="phase-card-badges"
+                          className="pointer-events-none absolute -top-4 -right-2 z-20 flex items-center gap-1.5"
+                        >
+                          {isParrotHere && (
+                            <div data-testid="phase-parrot-badge" className="shrink-0">
+                              <ParrotMascot
+                                size={36}
+                                showSpeech
+                                speechText="You should be here!"
+                              />
+                            </div>
+                          )}
+                          {isPast && (
+                            <div
+                              data-testid="phase-completed-badge"
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 shadow-sm"
+                            >
+                              <span className="text-xs text-white">✓</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -250,12 +265,6 @@ export default function HomeScreen() {
                         >
                           {phase.subtitle}
                         </p>
-                      )}
-
-                      {isPast && (
-                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs">✓</span>
-                        </div>
                       )}
 
                       {isCurrentUser && (

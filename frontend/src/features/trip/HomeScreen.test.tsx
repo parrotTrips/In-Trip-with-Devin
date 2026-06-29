@@ -10,7 +10,13 @@ import HomeScreen from './pages/HomeScreen';
 const TRIP_UUID = 'test-trip-001';
 const USER_ID = 'traveler-001';
 
-function setupHandlers() {
+function setupHandlers({
+  idealPacePhaseId = null,
+  currentPhaseId = 'phase-001',
+}: {
+  idealPacePhaseId?: string | null;
+  currentPhaseId?: string | null;
+} = {}) {
   server.use(
     http.get('http://localhost:8000/me/trip', () =>
       HttpResponse.json({
@@ -45,7 +51,7 @@ function setupHandlers() {
             links: [],
           },
         ],
-        ideal_pace_phase_id: null,
+        ideal_pace_phase_id: idealPacePhaseId,
       })
     ),
     http.get('http://localhost:8000/me/trip/travelers', () =>
@@ -55,7 +61,7 @@ function setupHandlers() {
             id: USER_ID,
             name: 'Alice Traveler',
             phone: '+15550000001',
-            current_phase_id: 'phase-001',
+            current_phase_id: currentPhaseId,
           },
         ],
       })
@@ -93,5 +99,27 @@ describe('HomeScreen', () => {
 
     expect((await screen.findAllByText('Peru Adventure')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'My QR Code' })).not.toBeInTheDocument();
+  });
+
+  test('groups parrot and completed check in one card badge container', async () => {
+    setupHandlers({ idealPacePhaseId: 'phase-001', currentPhaseId: 'phase-999' });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/" element={<HomeScreen />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Passport');
+
+    const badgeGroup = screen.getByTestId('phase-card-badges');
+    expect(badgeGroup).toContainElement(screen.getByTestId('phase-parrot-badge'));
+    expect(badgeGroup).toContainElement(screen.getByTestId('phase-completed-badge'));
   });
 });
