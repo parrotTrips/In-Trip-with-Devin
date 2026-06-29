@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Parrot Trips Service Agreement - Test Trip</title>
+  <style>
+    @page {
+      size: Letter;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #f4f6f1;
+      color: #111111;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .page {
+      width: 8.5in;
+      min-height: 11in;
+      margin: 0 auto;
+      background: #ffffff;
+      position: relative;
+      padding-bottom: 56px;
+    }
+
+    .header {
+      height: 88px;
+      background: #087f38;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      color: #ffffff;
+    }
+
+    .brand svg {
+      width: 32px;
+      height: 32px;
+      display: block;
+    }
+
+    .brand-wordmark {
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 19px;
+      line-height: 0.86;
+      letter-spacing: 1.3px;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .content {
+      padding: 62px 78px 34px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      line-height: 1.2;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    h2 {
+      margin: 30px 0 8px;
+      font-size: 16px;
+      line-height: 1.3;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 0 0 13px;
+    }
+
+    .muted {
+      color: #3f3f3f;
+    }
+
+    .customer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 56px;
+      row-gap: 18px;
+      margin: 22px 8px 20px;
+    }
+
+    .field strong,
+    .label {
+      font-weight: 700;
+    }
+
+    .summary {
+      margin-top: 22px;
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    .summary tr {
+      border-bottom: 3px solid #087f38;
+    }
+
+    .summary tr:first-child {
+      border-top: 3px solid #087f38;
+    }
+
+    .summary td {
+      padding: 12px 10px;
+      vertical-align: top;
+    }
+
+    .summary .label {
+      width: 34%;
+      white-space: nowrap;
+    }
+
+    .summary .value {
+      text-align: center;
+    }
+
+    .bullets {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .agreement-copy {
+      margin-top: 28px;
+      font-size: 14px;
+    }
+
+    .agreement-copy p {
+      margin-bottom: 11px;
+    }
+
+    .signature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 44px;
+      margin-top: 42px;
+    }
+
+    .signature-line {
+      border-top: 2px solid #087f38;
+      padding-top: 8px;
+      min-height: 52px;
+      font-size: 13px;
+    }
+
+    .footer {
+      position: absolute;
+      left: 78px;
+      right: 78px;
+      bottom: 22px;
+      display: flex;
+      justify-content: space-between;
+      color: #555555;
+      font-size: 12px;
+    }
+
+    .page-break {
+      page-break-before: always;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .page {
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <header class="header">
+      <div class="brand" aria-label="Parrot Trips">
+        <svg viewBox="0 0 375 375" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="#ffffff" d="M 211.222656 97.867188 C 209.484375 97.867188 207.75 97.191406 206.433594 95.984375 C 205.242188 94.644531 204.589844 93.066406 204.589844 91.238281 C 204.589844 89.5 205.242188 87.761719 206.433594 86.566406 C 208.96875 84.0625 213.476562 84.0625 215.867188 86.566406 C 217.058594 87.761719 217.855469 89.5 217.855469 91.238281 C 217.855469 93.105469 217.019531 94.832031 215.867188 95.984375 C 214.671875 97.164062 212.933594 97.867188 211.222656 97.867188 Z M 211.222656 97.867188"/>
+          <path fill="#ffffff" d="M 256.335938 365.109375 C 255.949219 365.109375 255.527344 365.082031 255.140625 365 C 251.878906 364.40625 249.542969 361.472656 249.703125 358.15625 L 255.140625 230.90625 L 230.402344 228.238281 C 227.367188 227.933594 224.964844 225.597656 224.554688 222.589844 L 210.230469 119.046875 C 209.738281 115.40625 212.289062 112.0625 215.921875 111.570312 C 219.582031 111.078125 222.894531 113.628906 223.386719 117.261719 L 236.976562 215.589844 L 263.078125 218.40625 C 266.503906 218.765625 269.105469 221.710938 268.945312 225.152344 L 262.984375 358.765625 C 262.824219 362.339844 259.890625 365.109375 256.335938 365.109375 Z M 256.335938 365.109375"/>
+          <path fill="#ffffff" d="M 174.71875 140.433594 C 172.917969 140.433594 171.140625 139.664062 169.867188 138.308594 C 167.914062 136.214844 150.804688 117.300781 152.050781 98.851562 C 152.53125 91.632812 155.859375 85.320312 161.65625 80.570312 C 175.132812 69.5625 184.988281 67.28125 186.0625 67.042969 C 189.617188 66.261719 193.144531 68.519531 193.925781 72.089844 C 194.703125 75.65625 192.460938 79.160156 188.917969 79.957031 C 188.785156 79.984375 181.035156 81.964844 170.105469 90.902344 C 167.140625 93.320312 165.554688 96.394531 165.304688 99.742188 C 164.660156 109.277344 172.746094 121.945312 179.570312 129.210938 C 182.078125 131.878906 181.945312 136.082031 179.265625 138.585938 C 177.976562 139.824219 176.332031 140.433594 174.71875 140.433594 Z M 174.71875 140.433594"/>
+          <path fill="#ffffff" d="M 45.953125 298.789062 C 43.628906 298.789062 41.347656 297.542969 40.140625 295.367188 C 38.363281 292.15625 39.519531 288.136719 42.714844 286.320312 C 44.015625 285.589844 175.15625 213.953125 338.148438 244.6875 C 341.742188 245.363281 344.105469 248.835938 343.402344 252.441406 C 342.730469 256.035156 339.28125 258.398438 335.660156 257.695312 C 177.300781 227.835938 50.0625 297.328125 48.800781 298.046875 C 47.902344 298.550781 46.917969 298.789062 45.953125 298.789062 Z M 45.953125 298.789062"/>
+          <path fill="#ffffff" d="M 257.621094 202.863281 C 254.542969 202.863281 251.773438 200.742188 251.121094 197.613281 L 240.085938 144.558594 C 239.304688 140.960938 241.636719 137.460938 245.21875 136.703125 C 248.8125 135.949219 252.316406 138.269531 253.070312 141.863281 L 264.109375 194.917969 C 264.851562 198.507812 262.546875 202.027344 258.957031 202.769531 C 258.519531 202.835938 258.066406 202.863281 257.621094 202.863281 Z M 257.621094 202.863281"/>
+        </svg>
+        <div class="brand-wordmark">Parrot<br />Trips</div>
+      </div>
+    </header>
+
+    <main class="content">
+      <h1>Service Agreement</h1>
+      <p class="muted">Customer details:</p>
+
+      <div class="customer-grid">
+        <div class="field"><strong>Name:</strong> Marcelo Angelo</div>
+        <div class="field"><strong>Email:</strong> marcelo.test@example.com</div>
+        <div class="field"><strong>Date of Birth:</strong> March 9, 1995</div>
+        <div class="field"><strong>Phone Number:</strong> +55 12 99129-6651</div>
+        <div class="field"><strong>Passport Number:</strong> Brazil AB123456</div>
+        <div class="field"><strong>Trip ID:</strong> TEST-2026-FULL</div>
+      </div>
+
+      <p>Details of the itinerary and included items:</p>
+
+      <table class="summary">
+        <tr>
+          <td class="label">Trip Name</td>
+          <td class="value">Parrot Brazil Test Trip</td>
+        </tr>
+        <tr>
+          <td class="label">Hired package and items</td>
+          <td class="value">Parrot Brazil Test Trip 2026 | Shared Room</td>
+        </tr>
+        <tr>
+          <td class="label">Starting and finishing dates:</td>
+          <td class="value">This trip will officially begin in Rio de Janeiro on July 1st, 2026, then move to Ilha Grande on July 4th and return to Rio on July 7th, 2026.</td>
+        </tr>
+        <tr>
+          <td class="label">Accommodation:</td>
+          <td class="value">Shared room in selected partner hotels and guesthouses.</td>
+        </tr>
+        <tr>
+          <td class="label">Booked hotels:</td>
+          <td class="value">
+            Rio de Janeiro:<br />
+            Parrot Ipanema House - Rua das Palmeiras, 539 - Ipanema, Rio de Janeiro - RJ<br /><br />
+            Ilha Grande:<br />
+            Parrot Beach Lodge - Rua da Praia, 815 - Vila do Abraao, Angra dos Reis - RJ
+          </td>
+        </tr>
+        <tr>
+          <td class="label">Flights:</td>
+          <td class="value">No flights included.</td>
+        </tr>
+        <tr>
+          <td class="label">Transportation:</td>
+          <td class="value">Ground transfers in Rio de Janeiro and boat transfer to Ilha Grande for scheduled group activities.</td>
+        </tr>
+        <tr>
+          <td class="label">Base activities included:</td>
+          <td class="value">
+            <ul class="bullets">
+              <li>Welcome gathering in Rio de Janeiro</li>
+              <li>Group transfer to Ilha Grande</li>
+              <li>Guided beach day and local orientation</li>
+              <li>Farewell dinner coordination</li>
+            </ul>
+          </td>
+        </tr>
+      </table>
+
+      <div class="footer">
+        <span>Parrot Trips - Test Service Agreement</span>
+        <span>1</span>
+      </div>
+    </main>
+  </section>
+
+  <section class="page page-break">
+    <header class="header">
+      <div class="brand" aria-label="Parrot Trips">
+        <svg viewBox="0 0 375 375" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="#ffffff" d="M 211.222656 97.867188 C 209.484375 97.867188 207.75 97.191406 206.433594 95.984375 C 205.242188 94.644531 204.589844 93.066406 204.589844 91.238281 C 204.589844 89.5 205.242188 87.761719 206.433594 86.566406 C 208.96875 84.0625 213.476562 84.0625 215.867188 86.566406 C 217.058594 87.761719 217.855469 89.5 217.855469 91.238281 C 217.855469 93.105469 217.019531 94.832031 215.867188 95.984375 C 214.671875 97.164062 212.933594 97.867188 211.222656 97.867188 Z M 211.222656 97.867188"/>
+          <path fill="#ffffff" d="M 45.953125 298.789062 C 43.628906 298.789062 41.347656 297.542969 40.140625 295.367188 C 38.363281 292.15625 39.519531 288.136719 42.714844 286.320312 C 44.015625 285.589844 175.15625 213.953125 338.148438 244.6875 C 341.742188 245.363281 344.105469 248.835938 343.402344 252.441406 C 342.730469 256.035156 339.28125 258.398438 335.660156 257.695312 C 177.300781 227.835938 50.0625 297.328125 48.800781 298.046875 C 47.902344 298.550781 46.917969 298.789062 45.953125 298.789062 Z M 45.953125 298.789062"/>
+        </svg>
+        <div class="brand-wordmark">Parrot<br />Trips</div>
+      </div>
+    </header>
+
+    <main class="content">
+      <h1>Traveler Acknowledgement</h1>
+
+      <div class="agreement-copy">
+        <h2>General Terms</h2>
+        <p>The traveler understands that this document is a test agreement prepared for internal validation of the Parrot Trips application experience. All names, dates, accommodations, addresses, prices, and itinerary items in this document are fictional or generic.</p>
+        <p>The traveler agrees to review itinerary details, preparation instructions, travel documents, and operational updates shared by Parrot Trips before and during the trip.</p>
+
+        <h2>Payment and Package</h2>
+        <p>The package described above includes only the items explicitly listed in this agreement. Optional activities, personal expenses, international flights, travel insurance, meals not listed, and independent transportation are not included unless separately confirmed in writing.</p>
+
+        <h2>Traveler Responsibilities</h2>
+        <p>The traveler is responsible for valid travel documents, passport accuracy, visa requirements, health requirements, insurance decisions, and punctual arrival for scheduled group activities.</p>
+
+        <h2>Changes and Operations</h2>
+        <p>Parrot Trips may adjust hotels, timings, transportation details, activity order, or meeting points when needed for safety, weather, supplier availability, or operational reasons. Equivalent alternatives may be used when appropriate.</p>
+
+        <h2>Test Use Only</h2>
+        <p>This agreement is not intended for legal execution. It is a sample document created to test the Service Agreement link and traveler-facing PDF experience inside the Parrot Trips app.</p>
+      </div>
+
+      <div class="signature-grid">
+        <div class="signature-line">
+          Traveler Signature<br />
+          Marcelo Angelo
+        </div>
+        <div class="signature-line">
+          Parrot Trips Representative<br />
+          Operations Team
+        </div>
+      </div>
+
+      <div class="footer">
+        <span>Parrot Trips - Test Service Agreement</span>
+        <span>2</span>
+      </div>
+    </main>
+  </section>
+</body>
+</html>
