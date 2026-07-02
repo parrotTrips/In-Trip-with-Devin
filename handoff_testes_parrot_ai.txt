@@ -1,0 +1,1175 @@
+HANDOFF PARA NOVA SESSAO DE IA - PARROT TRIPS
+Data deste handoff: 2026-07-01
+Repositorio: In-Trip-with-Devin
+App publicado: https://parrot-trips-app-286.netlify.app
+Backend publicado: https://parrot-trips-backend-428743191336.southamerica-east1.run.app
+
+===============================================================================
+1. OBJETIVO DESTE ARQUIVO
+===============================================================================
+
+Este arquivo existe para iniciar uma nova sessao usando inteligencia artificial sem perder contexto.
+
+O objetivo do projeto neste momento e validar o app da Parrot Trips de ponta a ponta, primeiro pela experiencia do viajante e depois pela experiencia da staff.
+
+Queremos conseguir responder, com evidencia pratica:
+
+1. Uma pessoa comprou uma viagem na WeTravel?
+2. Essa compra chegou corretamente no Supabase?
+3. O viajante consegue entrar no app com WhatsApp?
+4. O viajante consegue ver a viagem correta?
+5. O viajante consegue preencher e salvar Registration Details?
+6. O app mostra corretamente o pacote, valor pago e add-ons comprados?
+7. Todo conteudo operacional da viagem pode ser preenchido por planilha?
+8. O conteudo importado da planilha aparece no app do viajante?
+9. O QRCode do viajante aparece corretamente no app?
+10. A staff consegue entrar no app?
+11. A staff ve apenas as tarefas dela em cada atividade?
+12. A staff consegue escanear o QRCode do viajante dentro da atividade correta?
+13. O sistema registra quem escaneou, qual atividade foi escaneada e qual viajante foi escaneado?
+14. Atividades controladas conseguem bloquear viajantes que nao deveriam participar?
+
+Este arquivo deve ser usado como guia para continuidade do trabalho, testes manuais, validacoes e futuras implementacoes.
+
+
+===============================================================================
+2. ESTADO GERAL DO PRODUTO
+===============================================================================
+
+O app tem duas experiencias principais:
+
+1. App do viajante
+   - Login via WhatsApp OTP.
+   - Pre Trip.
+   - In Trip.
+   - Profile.
+   - QRCode do viajante em uma aba propria.
+   - Service Agreement.
+   - Products & Payment.
+   - Registration Details.
+
+2. App da staff
+   - Login via WhatsApp OTP.
+   - Itinerary da viagem.
+   - Atividades por dia.
+   - Tarefas da staff dentro de cada atividade.
+   - Contatos operacionais.
+   - Botao para alternar para a visao do viajante.
+   - Scanner de QRCode dentro da atividade.
+   - Contador de check-ins por atividade.
+
+O fluxo de dados desejado e:
+
+WeTravel -> Supabase -> App
+Planilhas -> Supabase -> App
+Viajante no app -> Supabase -> App
+Staff no app -> Supabase -> App
+
+
+===============================================================================
+3. PRINCIPIO DE FONTE DE VERDADE DOS DADOS
+===============================================================================
+
+A regra de produto definida e:
+
+1. WeTravel e fonte de verdade para:
+   - compra da viagem;
+   - pacote comprado;
+   - add-ons comprados;
+   - valor pago;
+   - participante;
+   - email usado na compra;
+   - vinculo comercial com a viagem.
+
+2. Viajante e fonte de verdade para:
+   - dados pessoais complementares;
+   - passaporte;
+   - saude;
+   - restricoes alimentares;
+   - enjoo;
+   - acompanhante;
+   - pedido de ajuda com voos;
+   - pedido de ajuda com seguro viagem;
+   - preferencias pessoais sobre a viagem.
+
+3. Planilhas da operacao sao fonte de verdade para tudo que nao e dado pessoal:
+   - roteiro;
+   - fases;
+   - cards;
+   - checklist;
+   - links;
+   - atividades;
+   - contatos;
+   - tarefas da staff;
+   - service agreement;
+   - configuracao de quais atividades exigem QRCode;
+   - participantes permitidos em atividades controladas, se aplicavel.
+
+4. Supabase e a base consolidada:
+   - recebe dados da WeTravel;
+   - recebe imports das planilhas;
+   - recebe preenchimentos do app;
+   - e lido pelo backend para alimentar o app.
+
+5. O app nao deve inventar dados:
+   - se aparece no app, deve vir de WeTravel, Supabase, planilha ou input do usuario.
+   - dados mockados devem ser eliminados ou claramente identificados como teste.
+
+
+===============================================================================
+4. CONFIRMACAO SOBRE YOUR PACKAGE E ADD-ONS
+===============================================================================
+
+Sim: YOUR PACKAGE e ADD-ONS vem da WeTravel.
+
+No app, esses campos aparecem em:
+
+Profile -> Products & Payment
+
+Bloco YOUR PACKAGE:
+1. Package Name
+   - chave no frontend: package_option
+   - fonte no backend: host_trip_participants.package_names
+   - origem real: WeTravel
+   - status: implementado
+
+2. Amount Paid
+   - chave no frontend: usd_amount
+   - fonte no backend: host_trip_participants.paid_amount / 100
+   - origem real: WeTravel
+   - status: implementado
+
+3. Room Type
+   - chave no frontend: transfer_platform
+   - fonte atual: nenhuma fonte conectada
+   - status: lacuna
+   - observacao: aparece no app, mas hoje nao esta vindo da WeTravel nem da planilha.
+
+Bloco ADDITIONAL ACTIVITIES PURCHASED:
+1. Add-on Activities
+   - chave no frontend: proof_of_transfer
+   - fonte no backend: host_trip_participants.addon_names
+   - origem real: WeTravel
+   - status: implementado
+   - observacao: o nome tecnico proof_of_transfer esta ruim, porque hoje representa add-ons comprados, nao comprovante.
+
+Conclusao:
+Package Name, Amount Paid e Add-on Activities vem da WeTravel via Supabase.
+Room Type ainda precisa de decisao de produto/implementacao.
+
+
+===============================================================================
+5. REGISTRATION DETAILS - O QUE VALIDAR
+===============================================================================
+
+Registration Details e a parte do profile do viajante onde ele completa informacoes pessoais.
+
+Parte inicial pode vir da WeTravel/usuario:
+1. Nome base do usuario.
+2. Email base do usuario.
+3. Vinculo com viagem via email/telefone.
+
+O restante deve ser preenchido pelo viajante no app.
+
+Campos atuais de Registration Details:
+
+Basic Info:
+1. Preferred Name
+   - frontend: preferred_name
+   - Supabase: traveler_profiles.preferred_name e users.full_name
+   - origem: WeTravel/usuario como base, viajante pode ajustar
+   - teste: alterar o nome, salvar, sair e entrar de novo; confirmar que ficou salvo.
+
+2. Email
+   - frontend: email
+   - Supabase: users.email
+   - origem: WeTravel/usuario como base, viajante pode ajustar
+   - teste: preencher email, salvar, recarregar app; confirmar persistencia.
+
+3. Date of Birth
+   - frontend: dob
+   - Supabase: traveler_profiles.date_of_birth
+   - origem: viajante
+   - formato esperado pelo backend: YYYY-MM-DD
+   - teste: preencher data completa; salvar; recarregar; conferir se aparece igual.
+
+4. Gender
+   - frontend: gender
+   - Supabase: traveler_profiles.gender
+   - origem: viajante
+   - teste: selecionar uma opcao; salvar; recarregar.
+
+Passport Information:
+5. First Name as in passport
+   - frontend: first_name_passport
+   - Supabase: traveler_profiles.passport_first_name
+
+6. Last Name as in passport
+   - frontend: last_name_passport
+   - Supabase: traveler_profiles.passport_last_name
+
+7. Passport Issuing Country
+   - frontend: passport_country
+   - Supabase: traveler_profiles.passport_country
+
+8. Passport Number
+   - frontend: passport_number
+   - Supabase: traveler_profiles.passport_number
+
+9. Issue Date
+   - frontend: passport_issue_date
+   - Supabase: traveler_profiles.passport_issue_date
+   - formato: YYYY-MM-DD
+
+10. Expiration Date
+    - frontend: passport_expiration_date
+    - Supabase: traveler_profiles.passport_expiration_date
+    - formato: YYYY-MM-DD
+
+Health & Dietary:
+11. Dietary Restrictions?
+    - frontend: dietary_restrictions_yn
+    - Supabase: traveler_profiles.dietary_restrictions_flag
+    - app envia: yes/no
+    - banco salva: booleano
+
+12. Describe your dietary restrictions
+    - frontend: dietary_restrictions_desc
+    - Supabase: traveler_profiles.dietary_restrictions_details
+    - deve aparecer quando Dietary Restrictions? = yes
+
+13. Prone to Seasickness?
+    - frontend: seasickness_yn
+    - Supabase: traveler_profiles.seasickness_flag
+    - app envia: yes/no
+    - banco salva: booleano
+
+Plus One:
+14. Bringing a Plus One?
+    - frontend: plus_one_yn
+    - Supabase: traveler_profiles.plus_one_flag
+
+15. Plus One Name
+    - frontend: plus_one_name
+    - Supabase: traveler_profiles.plus_one_name
+    - deve aparecer quando Bringing a Plus One? = yes
+
+16. Plus One Email
+    - frontend: plus_one_email
+    - Supabase: traveler_profiles.plus_one_email
+    - deve aparecer quando Bringing a Plus One? = yes
+
+Additional:
+17. Need help with international flights?
+    - frontend: intl_flights_help_yn
+    - Supabase: traveler_profiles.needs_flight_help_flag
+
+18. Flight help details
+    - frontend: intl_flights_help_details
+    - Supabase: traveler_profiles.flight_help_details
+    - deve aparecer quando Need help with international flights? = yes
+
+19. Need help with travel insurance?
+    - frontend: travel_insurance_help_yn
+    - Supabase: traveler_profiles.needs_travel_insurance_help_flag
+
+20. What would make this trip unforgettable?
+    - frontend: unforgettable_trip_details
+    - Supabase: traveler_profiles.unforgettable_trip_details
+
+Validacao manual de Registration Details:
+1. Entrar como viajante.
+2. Abrir Profile.
+3. Abrir Registration Details.
+4. Preencher todos os campos.
+5. Clicar Save Profile.
+6. Confirmar mensagem de sucesso.
+7. Fechar app/recarregar pagina.
+8. Entrar de novo.
+9. Confirmar que todos os campos persistiram.
+10. Conferir no Supabase, se necessario.
+
+Pontos de atencao:
+1. Campos pessoais nao devem vir de planilha como fluxo principal.
+2. Planilha pode servir para conferencia operacional, mas nao deve ser fonte oficial dos dados pessoais.
+3. Dados de data precisam manter formato correto.
+4. Campos condicionais precisam aparecer e desaparecer corretamente.
+
+
+===============================================================================
+6. DADOS QUE DEVEM VIR DAS PLANILHAS
+===============================================================================
+
+Regra definida:
+Tudo que nao for dado pessoal do viajante e nao for compra/pagamento da WeTravel deve poder ser preenchido por planilha.
+
+Isso inclui:
+
+1. Dados da viagem
+   - trip_uuid;
+   - nome da viagem;
+   - data de inicio;
+   - data de fim;
+   - service_agreement_url;
+   - possiveis mensagens e textos operacionais.
+
+2. Pre Trip
+   - fases;
+   - cards;
+   - checklist;
+   - links;
+   - textos;
+   - titulos;
+   - subtitulos;
+   - ordem;
+   - visibilidade.
+
+3. In Trip
+   - dias;
+   - titulo do dia;
+   - data do dia;
+   - atividades;
+   - tipo de atividade;
+   - duracao;
+   - descricao para viajante;
+   - informacoes praticas para viajante;
+   - links;
+   - ordem;
+   - preco se for atividade opcional.
+
+4. Staff
+   - membros da staff;
+   - telefone da staff;
+   - nome;
+   - funcao;
+   - vinculo com viagem;
+   - contatos operacionais;
+   - tarefas por pessoa;
+   - tarefas por atividade;
+   - participantes permitidos por atividade controlada.
+
+5. QRCode e governanca operacional
+   - a configuracao de qual atividade exige controle pode vir da planilha;
+   - a lista de quem pode participar de uma atividade controlada pode vir da planilha;
+   - os eventos de scan nao vem da planilha, sao gerados pelo app.
+
+6. Service Agreement
+   - a planilha deve guardar o caminho do PDF;
+   - preferencialmente usar GCS privado no formato:
+     gs://parrot-trips-service-agreements-prod/trips/<trip_uuid>/service-agreement.pdf
+   - backend converte isso em signed URL temporaria para o app.
+
+
+===============================================================================
+7. SERVICE AGREEMENT
+===============================================================================
+
+Ja foi implementada uma abordagem de producao usando Google Cloud Storage privado.
+
+Bucket:
+gs://parrot-trips-service-agreements-prod
+
+Padrao por viagem:
+gs://parrot-trips-service-agreements-prod/trips/<trip_uuid>/service-agreement.pdf
+
+Exemplo da viagem de teste:
+gs://parrot-trips-service-agreements-prod/trips/TEST-2026-FULL/service-agreement.pdf
+
+Como funciona:
+1. A planilha de viajantes tem uma coluna service_agreement_url.
+2. A operacao coloca ali o caminho gs://...
+3. O import salva esse valor em wetravel_trips.service_agreement_url.
+4. O app chama GET /me/trip.
+5. O backend ve que o valor comeca com gs://.
+6. O backend gera uma signed URL temporaria.
+7. O app recebe uma URL HTTPS e abre o PDF no botao View Service Agreement.
+
+Teste do Service Agreement:
+1. Entrar como viajante.
+2. Abrir Profile.
+3. Abrir Service Agreement.
+4. Clicar View Service Agreement.
+5. Confirmar que o PDF abre.
+6. Confirmar que nao aparece erro 403.
+7. Confirmar que a URL aberta e HTTPS, nao gs://.
+8. Confirmar que a viagem correta esta usando o PDF correto.
+
+
+===============================================================================
+8. QR CODE DO VIAJANTE E CHECK-IN POR ATIVIDADE
+===============================================================================
+
+Decisao de produto:
+1. Cada viajante tem seu QRCode.
+2. O QRCode nao deve expirar como experiencia de usuario.
+3. No app do viajante, o QRCode deve ficar em uma aba propria chamada QRCode ou My QRCode.
+4. No app da staff, o scan deve acontecer dentro de uma atividade especifica.
+5. O objetivo e garantir que o scan valide a atividade correta, nao apenas o viajante genericamente.
+
+Comportamento desejado:
+1. Staff abre uma atividade no app.
+2. Staff clica em Scan Traveler.
+3. Camera do celular abre.
+4. Staff escaneia o QRCode do viajante.
+5. Backend valida:
+   - QRCode e valido;
+   - viajante pertence a viagem;
+   - atividade pertence a mesma viagem;
+   - staff esta autenticado;
+   - staff pertence a viagem;
+   - se atividade for controlada, viajante esta permitido;
+   - se ja foi escaneado, retorna duplicado em vez de criar outro check-in.
+6. Sistema registra:
+   - qual viajante foi escaneado;
+   - qual atividade;
+   - qual staff escaneou;
+   - horario do scan;
+   - status do scan;
+   - motivo de falha, se falhou.
+
+Contador:
+1. Dentro da atividade da staff aparece algo como 0 / 6 checked in.
+2. Por enquanto, o denominador pode ser o total de viajantes da viagem.
+3. Futuramente, para atividades opcionais/controladas, o denominador deve ser o total de viajantes esperados naquela atividade.
+
+Atividades controladas:
+1. Algumas atividades opcionais/controladas devem ter lista de participantes permitidos.
+2. Se um viajante nao comprado/nao autorizado mostrar QRCode, o app deve bloquear.
+3. Esse bloqueio precisa gerar auditoria.
+4. Essa governanca e mais importante para atividades opcionais, pagas ou com limite.
+
+
+===============================================================================
+9. VIAGEM DE TESTE PRINCIPAL
+===============================================================================
+
+Viagem usada para testes:
+
+trip_uuid:
+TEST-2026-FULL
+
+Nome:
+Viagem de Teste — Full Coverage
+
+Data de inicio documentada:
+2026-07-01
+
+Objetivo:
+Validar cobertura completa do app.
+
+Ja existem documentos sobre essa viagem em:
+PRODUCT_AND_SYSTEM_DESIGN/09-viagem-de-teste.md
+
+O teste deve cobrir:
+1. Conteudo pre-trip.
+2. Conteudo in-trip.
+3. Profile.
+4. Service Agreement.
+5. Products & Payment.
+6. QRCode do viajante.
+7. Staff app.
+8. Tarefas de staff por atividade.
+9. Contatos da staff.
+10. Check-ins por atividade.
+
+
+===============================================================================
+10. TESTE E2E DO VIAJANTE - PASSO A PASSO
+===============================================================================
+
+Objetivo:
+Validar a experiencia completa do ponto de vista do viajante.
+
+Pergunta central:
+Uma pessoa comprou a viagem, entrou no app e conseguiu usar tudo que precisa como viajante?
+
+Antes de comecar:
+1. Ter acesso a WeTravel.
+2. Ter acesso a planilha de conteudo dos viajantes.
+3. Ter acesso ao Supabase ou alguem que consiga conferir.
+4. Ter WhatsApp OTP funcionando.
+5. Ter telefone do viajante de teste.
+6. Ter trip_uuid da viagem.
+7. Ter app publicado funcionando.
+8. Ter backend publicado funcionando.
+
+Etapa 1 - Criar ou escolher viagem na WeTravel:
+1. Entrar na WeTravel.
+2. Criar uma viagem de teste ou escolher uma viagem segura.
+3. Preencher nome da viagem.
+4. Preencher data de inicio.
+5. Preencher data de fim.
+6. Configurar pacote/produto compravel.
+7. Configurar add-ons se forem parte do teste.
+8. Salvar.
+
+Conferir:
+1. Viagem aparece na WeTravel.
+2. Viagem tem datas.
+3. Viagem tem pacote.
+4. Viagem tem add-on se for testar ADDITIONAL ACTIVITIES PURCHASED.
+
+Anotar se der errado:
+1. Qual campo falhou.
+2. Print da tela.
+3. Status da viagem na WeTravel.
+
+Etapa 2 - Simular compra do viajante:
+1. Abrir pagina publica da viagem na WeTravel.
+2. Fazer uma compra como viajante de teste.
+3. Usar nome claro, por exemplo Marcelo Angelo.
+4. Usar email de teste conhecido.
+5. Usar telefone de teste com WhatsApp.
+6. Comprar pacote.
+7. Comprar pelo menos um add-on, se quiser validar add-ons.
+8. Finalizar a compra.
+
+Conferir:
+1. Compra aparece na WeTravel.
+2. Comprador/participante esta correto.
+3. Email esta correto.
+4. Telefone esta correto.
+5. Pacote comprado esta correto.
+6. Add-ons comprados estao corretos.
+7. Valor pago esta correto.
+
+Etapa 3 - Conferir se a compra chegou no Supabase:
+Pedir para alguem tecnico conferir:
+1. wetravel_trips.
+2. wetravel_bookings.
+3. wetravel_payments.
+4. wetravel_order_options.
+5. host_trip_participants.
+6. wetravel_participant_phones.
+7. users.
+8. trip_travelers.
+
+Conferir:
+1. A viagem existe no Supabase.
+2. A compra existe no Supabase.
+3. O email do viajante aparece.
+4. O telefone do viajante aparece.
+5. O viajante foi criado em users.
+6. O viajante esta vinculado em trip_travelers.
+7. host_trip_participants mostra package_names.
+8. host_trip_participants mostra addon_names.
+9. host_trip_participants mostra paid_amount.
+
+Se der errado:
+1. Compra nao chegou.
+2. Telefone nao foi associado.
+3. Email da compra difere do email esperado.
+4. Viajante nao foi vinculado.
+5. Package ou add-on nao apareceu.
+
+Etapa 4 - Preencher planilha dos viajantes:
+Preencher tudo que e operacional, nao pessoal.
+
+Aba Viagens:
+1. trip_uuid.
+2. nome da viagem.
+3. data de inicio.
+4. data de fim.
+5. service_agreement_url.
+
+Aba Fases:
+1. fases pre-trip.
+2. titulos.
+3. subtitulos.
+4. ordem.
+5. icones se aplicavel.
+6. visibilidade.
+
+Aba Checklist:
+1. tarefas por fase.
+2. nome da fase.
+3. texto da tarefa.
+4. ordem.
+5. obrigatorio/opcional se aplicavel.
+
+Aba Links:
+1. links por fase.
+2. label do link.
+3. URL.
+4. ordem.
+
+Aba Roteiro:
+1. dia.
+2. data.
+3. titulo do dia.
+4. subtitulo do dia.
+5. nome da atividade.
+6. tipo da atividade.
+7. duracao.
+8. descricao curta.
+9. informacao pratica.
+10. preco, se aplicavel.
+
+Conferir:
+1. trip_uuid nao tem espaco extra.
+2. datas fazem sentido.
+3. atividades estao ordenadas.
+4. textos sao para viajante, nao para staff.
+5. links abrem.
+6. service agreement aponta para gs:// ou URL valida.
+
+Etapa 5 - Importar planilha para Supabase:
+1. Rodar botao de import na planilha ou endpoint/comando tecnico.
+2. Usar o trip_uuid correto.
+3. Aguardar sucesso.
+
+Conferir resposta do import:
+1. Quantas fases importadas.
+2. Quantos checklist items importados.
+3. Quantos links importados.
+4. Quantos dias/atividades importados.
+5. Se service_agreement_url foi atualizado.
+
+Se der erro:
+1. Anotar mensagem completa.
+2. Verificar permissao da Google Sheets API.
+3. Verificar se aba existe.
+4. Verificar se cabecalhos estao corretos.
+5. Verificar trip_uuid.
+
+Etapa 6 - Entrar no app como viajante:
+1. Abrir https://parrot-trips-app-286.netlify.app
+2. Digitar telefone do viajante.
+3. Solicitar codigo WhatsApp.
+4. Receber codigo.
+5. Digitar codigo.
+6. Entrar.
+
+Conferir:
+1. Codigo chegou pelo WhatsApp.
+2. Login nao deu Load failed.
+3. App abriu na visao correta.
+4. Viagem certa aparece.
+5. Nome/telefone do usuario aparece corretamente.
+
+Etapa 7 - Validar Home/Pre Trip:
+1. Conferir se fases pre-trip aparecem.
+2. Abrir cada card.
+3. Conferir textos.
+4. Conferir checklist.
+5. Marcar/desmarcar itens.
+6. Conferir links.
+7. Conferir visual dos cards.
+8. Conferir se check e icone da Parrot nao sobrepoem.
+
+Conferir:
+1. Nada parece mockado.
+2. Cards vem da planilha.
+3. Links abrem.
+4. Progresso muda quando checklist e marcado.
+5. Ao recarregar, progresso persiste.
+
+Etapa 8 - Validar Profile:
+1. Abrir Profile.
+2. Abrir Registration Details.
+3. Preencher todos os campos pessoais.
+4. Salvar.
+5. Recarregar app.
+6. Conferir persistencia.
+7. Abrir Products & Payment.
+8. Conferir Package Name.
+9. Conferir Amount Paid.
+10. Conferir Add-on Activities.
+11. Observar Room Type como lacuna se estiver vazio.
+12. Abrir Service Agreement.
+13. Clicar View Service Agreement.
+
+Conferir:
+1. Registration Details salva.
+2. Your Package vem da WeTravel.
+3. Add-ons vem da WeTravel.
+4. Amount Paid vem da WeTravel.
+5. Service Agreement abre PDF.
+
+Etapa 9 - Validar QRCode do viajante:
+1. Abrir aba QRCode.
+2. Confirmar que QRCode aparece.
+3. Confirmar que e facil para staff escanear.
+4. Confirmar que nao esta escondido em Map.
+5. Tirar print para registro.
+
+Conferir:
+1. QRCode aparece rapido.
+2. QRCode nao esta cortado.
+3. Tela tem contraste suficiente.
+4. QRCode pertence ao usuario logado.
+
+Etapa 10 - Simular dias da viagem:
+Existe uma abordagem para simular a passagem dos dias ajustando datas das fases in-trip.
+
+Objetivo:
+1. Testar Day 1, Day 2, Day 3 etc sem esperar dias reais.
+2. Conferir que o app mostra o dia correto.
+3. Conferir conteudo In Trip.
+
+Conferir:
+1. Antes da viagem, aparece Pre Trip.
+2. No dia simulado, aparece In Trip correto.
+3. Dia e atividades batem com a planilha.
+4. Cards e atividades nao mostram informacao errada.
+
+Etapa 11 - Validar In Trip:
+1. Abrir dia 1.
+2. Conferir atividades.
+3. Abrir atividades.
+4. Conferir descricao curta.
+5. Conferir informacao pratica.
+6. Conferir links se houver.
+7. Repetir para varios dias.
+
+Conferir:
+1. Atividades do viajante usam textos para viajante.
+2. Datas fazem sentido.
+3. Ordem das atividades faz sentido.
+4. Conteudo veio da planilha.
+
+
+===============================================================================
+11. TESTE E2E DA STAFF - PASSO A PASSO
+===============================================================================
+
+Objetivo:
+Validar a experiencia completa da staff.
+
+Pergunta central:
+Uma pessoa cadastrada como staff consegue entrar no app, ver a operacao da viagem, executar tarefas e fazer check-in de viajantes por atividade?
+
+Antes de comecar:
+1. Ter planilha de staff.
+2. Ter staff cadastrada com telefone.
+3. Ter staff vinculada ao trip_uuid correto.
+4. Ter contatos preenchidos.
+5. Ter tarefas preenchidas por pessoa e por atividade.
+6. Ter viajante com QRCode.
+7. Ter atividades no roteiro.
+
+Etapa 1 - Preencher aba Staff:
+Campos esperados:
+1. phone.
+2. nome.
+3. funcao.
+4. trip_uuid.
+
+Conferir:
+1. telefone tem codigo do pais.
+2. nome esta correto.
+3. funcao esta clara.
+4. trip_uuid esta correto.
+
+Etapa 2 - Importar Staff para Supabase:
+1. Rodar Import Staff -> Supabase.
+2. Confirmar sucesso.
+
+O que deve acontecer:
+1. Se usuario nao existe, cria em users com role=staff.
+2. Se usuario existe, atualiza nome e role=staff.
+3. Vincula staff a viagem em trip_travelers.
+
+Conferir:
+1. users.role = staff.
+2. trip_travelers contem vinculo com a viagem.
+3. Staff consegue login.
+
+Etapa 3 - Preencher Contatos:
+Campos esperados:
+1. trip_uuid.
+2. category.
+3. name.
+4. role.
+5. phone.
+6. sort_order.
+
+Exemplos:
+1. guias locais.
+2. hotel.
+3. transporte.
+4. emergencia.
+5. operacao Parrot.
+
+Etapa 4 - Importar Contatos:
+1. Rodar Import Contacts -> Supabase.
+2. Entrar como staff.
+3. Abrir Contacts.
+
+Conferir:
+1. contatos aparecem.
+2. categorias aparecem.
+3. ordem esta correta.
+4. telefones estao corretos.
+
+Etapa 5 - Preencher tarefas da staff:
+Regra de produto:
+Cada membro da staff deve ver apenas as tarefas dele naquela atividade.
+
+Exemplo:
+Dia 1 - atividade Airport Transfer:
+1. Staff 1 ve tarefa: coordenar chegada no aeroporto.
+2. Staff 2 ve tarefa: comprar ingressos.
+3. Staff 3 ve tarefa: organizar van.
+4. Staff 4 ve tarefa: confirmar lista.
+
+Campos importantes:
+1. trip_uuid.
+2. dia.
+3. nome da atividade.
+4. staff phone ou identificador do staff.
+5. titulo da tarefa.
+6. descricao da tarefa.
+7. ordem.
+
+Importante:
+Nao colocar horario da task se isso engessar a operacao.
+A tarefa deve estar agrupada por atividade.
+A staff deve ver tarefas dentro da atividade correspondente.
+
+Etapa 6 - Importar tarefas da staff:
+1. Rodar import da planilha de staff.
+2. Entrar como cada staff.
+3. Abrir Itinerary.
+4. Abrir atividade.
+5. Ver My Tasks.
+
+Conferir:
+1. Staff A ve so tarefas da Staff A.
+2. Staff B ve so tarefas da Staff B.
+3. Atividade certa contem tarefa certa.
+4. Dias sem tarefa nao mostram tarefas falsas.
+5. Tarefas antigas/mockadas nao aparecem.
+
+Etapa 7 - Validar app da staff:
+1. Entrar com telefone da staff.
+2. Confirmar que cai na visao de staff.
+3. Conferir Day 1, Day 2 etc.
+4. Conferir atividades.
+5. Conferir contador de check-in.
+6. Conferir botao Scan Traveler.
+7. Conferir My Tasks.
+8. Conferir Contacts.
+9. Testar botao Traveler view.
+10. Testar voltar para Staff pelo botao no header.
+
+Conferir visual:
+1. Staff nao deve ver short_description e practical_info que sao textos do viajante, se isso poluir a tela.
+2. Staff deve ver o que ajuda na operacao.
+3. Botao voltar ao staff deve estar no header/canto superior direito, nao centralizado no footer.
+
+Etapa 8 - Testar QR scan por atividade:
+1. Entrar como staff.
+2. Abrir uma atividade especifica.
+3. Clicar Scan Traveler.
+4. Permitir camera.
+5. Escanear QRCode do viajante.
+
+Conferir:
+1. Camera abre no celular.
+2. Scan acontece dentro da atividade correta.
+3. Contador sobe.
+4. Duplicado nao cria novo check-in.
+5. Mensagem de duplicado e clara.
+6. Staff que escaneou fica registrado.
+7. Horario fica registrado.
+8. Viajante fica registrado.
+9. Atividade fica registrada.
+
+Etapa 9 - Testar atividade controlada:
+Objetivo:
+Garantir que uma pessoa nao possa participar de atividade opcional/controlada de outra pessoa.
+
+Teste:
+1. Criar atividade controlada.
+2. Inserir lista de participantes permitidos.
+3. Escanear QRCode de participante permitido.
+4. Deve aceitar.
+5. Escanear QRCode de participante nao permitido.
+6. Deve bloquear.
+7. Confirmar que tentativa bloqueada gerou auditoria.
+
+Conferir:
+1. Aceito quando deveria aceitar.
+2. Bloqueado quando deveria bloquear.
+3. Auditoria existe para sucesso.
+4. Auditoria existe para falha.
+5. Mensagem para staff e compreensivel.
+
+
+===============================================================================
+12. CAMPOS E TELAS QUE PRECISAM DE ATENCAO
+===============================================================================
+
+1. Room Type
+   - Aparece em Products & Payment.
+   - Ainda nao tem fonte conectada.
+   - Decidir se vem:
+     a. do nome do pacote;
+     b. de coluna especifica no Supabase;
+     c. de campo estruturado da WeTravel;
+     d. de planilha apenas como apoio.
+
+2. proof_of_transfer
+   - Nome tecnico ruim.
+   - Hoje representa Add-on Activities.
+   - Ideal renomear futuramente para addon_activities ou purchased_addons.
+
+3. Campos tecnicos existentes mas sem fluxo completo:
+   - num_people;
+   - receive_addon_updates;
+   - esim_qr_image;
+   - roommate_user_id;
+   - arrival_date;
+   - arrival_time;
+   - arrival_flight;
+   - departure_date;
+   - departure_time;
+   - departure_flight.
+
+4. WhatsApp OTP / Meta
+   - Houve problema com token da Meta.
+   - Existe documentacao no repo sobre gerar WHATSAPP_ACCESS_TOKEN.
+   - Se login falhar com Load failed ou nao chegar codigo, investigar token/Meta.
+
+5. Planilhas
+   - Erros comuns:
+     a. permissao do Google Sheets;
+     b. aba com nome diferente;
+     c. cabecalho errado;
+     d. trip_uuid com espaco;
+     e. usuario do backend sem permissao na planilha.
+
+6. Service Agreement
+   - Se PDF nao abrir, verificar:
+     a. valor em wetravel_trips.service_agreement_url;
+     b. se comeca com gs://;
+     c. se objeto existe no bucket;
+     d. se service account tem permissao;
+     e. se SERVICE_ACCOUNT_EMAIL esta configurado.
+
+
+===============================================================================
+13. LISTA DE EVIDENCIAS A COLETAR DURANTE OS TESTES
+===============================================================================
+
+Para cada teste, coletar:
+
+1. Nome do testador.
+2. Data do teste.
+3. trip_uuid.
+4. telefone usado.
+5. email usado.
+6. print da compra na WeTravel.
+7. print do app apos login.
+8. print de Profile -> Registration Details preenchido.
+9. print de Products & Payment.
+10. print de Service Agreement aberto.
+11. print de QRCode do viajante.
+12. print de Pre Trip.
+13. print de In Trip.
+14. print do app da staff.
+15. print de My Tasks.
+16. print de Contacts.
+17. print ou log de QR scan.
+18. resultado esperado.
+19. resultado observado.
+20. classificacao:
+    - funcionou;
+    - funcionou com ajuste visual;
+    - funcionou com problema de dados;
+    - bloqueou o teste;
+    - precisa implementacao.
+
+
+===============================================================================
+14. CRITERIOS DE SUCESSO DO TESTE DO VIAJANTE
+===============================================================================
+
+Considerar o teste do viajante bem-sucedido se:
+
+1. Compra aparece na WeTravel.
+2. Compra chega no Supabase.
+3. Viajante consegue login via WhatsApp.
+4. Viajante ve a viagem correta.
+5. Pre Trip aparece com conteudo da planilha.
+6. Checklist funciona e persiste.
+7. Links abrem.
+8. In Trip aparece com dias/atividades corretos.
+9. Profile abre.
+10. Registration Details salva e persiste.
+11. Package Name vem da WeTravel.
+12. Amount Paid vem da WeTravel.
+13. Add-on Activities vem da WeTravel.
+14. Service Agreement abre.
+15. QRCode aparece em aba propria.
+16. Nenhum conteudo importante esta mockado.
+17. Nao ha texto quebrado, sobreposto ou visualmente confuso.
+
+
+===============================================================================
+15. CRITERIOS DE SUCESSO DO TESTE DA STAFF
+===============================================================================
+
+Considerar o teste da staff bem-sucedido se:
+
+1. Staff e criada via planilha.
+2. Staff consegue login via WhatsApp.
+3. Staff cai na visao de staff.
+4. Staff ve viagem correta.
+5. Staff ve dias e atividades.
+6. Staff ve contatos importados da planilha.
+7. Staff ve apenas suas tarefas.
+8. Tarefas aparecem dentro da atividade correta.
+9. Staff consegue abrir camera pelo botao Scan Traveler.
+10. Scan e feito dentro de uma atividade especifica.
+11. Check-in registra viajante.
+12. Check-in registra staff que escaneou.
+13. Check-in registra atividade.
+14. Check-in registra horario.
+15. Contador da atividade atualiza.
+16. Duplicado nao cria check-in duplicado.
+17. Atividade controlada bloqueia viajante nao autorizado.
+18. Tentativas de scan geram auditoria.
+19. Alternancia Staff -> Traveler view funciona.
+20. Voltar para Staff funciona pelo header.
+
+
+===============================================================================
+16. PROXIMOS PASSOS RECOMENDADOS
+===============================================================================
+
+Ordem recomendada:
+
+1. Rodar teste E2E do viajante com uma viagem real ou semi-real.
+2. Validar Products & Payment contra WeTravel:
+   - Package Name;
+   - Amount Paid;
+   - Add-on Activities.
+3. Validar Registration Details:
+   - salvar;
+   - recarregar;
+   - conferir Supabase.
+4. Validar conteudo de planilha:
+   - Pre Trip;
+   - Links;
+   - Checklist;
+   - In Trip;
+   - Service Agreement.
+5. Validar QRCode do viajante.
+6. Rodar teste E2E da staff.
+7. Validar tarefas personalizadas por staff.
+8. Validar contatos.
+9. Validar scanner por atividade.
+10. Validar auditoria de QRCode.
+11. Decidir origem de Room Type.
+12. Decidir se campos de voo/eSIM/roommate entram no Profile ou em telas separadas.
+13. Limpar nomes tecnicos ruins, especialmente proof_of_transfer.
+
+
+===============================================================================
+17. DOCUMENTOS DO REPOSITORIO IMPORTANTES
+===============================================================================
+
+1. PRODUCT_AND_SYSTEM_DESIGN/22-mapeamento-profile-viajante.md
+   - Mapeia o que vem da WeTravel, viajante e planilhas.
+
+2. tests_documentation/traveler_e2e_test_plan.md
+   - Passo a passo do teste E2E do viajante.
+
+3. PRODUCT_AND_SYSTEM_DESIGN/20-fluxo-staffs.md
+   - Fluxo de cadastro e operacao da staff.
+
+4. PRODUCT_AND_SYSTEM_DESIGN/09-viagem-de-teste.md
+   - Mapa da viagem de teste TEST-2026-FULL.
+
+5. docs/service-agreements-gcs.md
+   - Como armazenar Service Agreement em bucket privado GCS.
+
+6. docs/plans/2026-06-22-activity-qr-checkins.md
+   - Plano de QRCode e check-ins por atividade.
+
+7. docs/plans/2026-06-24-controlled-activity-qr-governance.md
+   - Plano de governanca/auditoria para atividades controladas.
+
+8. docs/plans/2026-06-18-staff-activity-tasks.md
+   - Plano de tarefas de staff por atividade.
+
+
+===============================================================================
+18. COMO A PROXIMA SESSAO DE IA DEVE TRABALHAR
+===============================================================================
+
+Instrucoes para a proxima IA:
+
+1. Nao assumir que um dado esta implementado sem verificar no codigo ou no Supabase.
+2. Separar sempre:
+   - fonte real do dado;
+   - onde o dado aparece no app;
+   - onde o dado fica no Supabase;
+   - se o dado e editavel ou somente leitura;
+   - se o dado vem de WeTravel, planilha, viajante ou staff.
+3. Ao testar app publicado, diferenciar:
+   - bug de frontend;
+   - bug de backend;
+   - problema de dado;
+   - problema de permissao;
+   - problema de deploy/cache.
+4. Sempre registrar o trip_uuid usado.
+5. Sempre registrar telefone e email usados no teste.
+6. Se algo parece mockado, procurar a fonte no codigo.
+7. Se um dado deveria vir da planilha, verificar:
+   - aba;
+   - cabecalho;
+   - import;
+   - tabela no Supabase;
+   - endpoint;
+   - componente do frontend.
+8. Se um dado deveria vir da WeTravel, verificar:
+   - tabela raw;
+   - view;
+   - relacionamento com email/telefone;
+   - endpoint de profile/trip;
+   - frontend.
+9. Nao misturar dados pessoais com planilha operacional.
+10. Nao colocar tarefas iguais para todas as staffs se a regra e personalizacao por pessoa.
+
+
+===============================================================================
+19. RESUMO EXECUTIVO PARA A EQUIPE
+===============================================================================
+
+Estamos preparando a validacao completa da plataforma Parrot Trips.
+
+O teste sera dividido em duas frentes:
+
+1. Experiencia do viajante:
+   - compra na WeTravel;
+   - entrada no app;
+   - visualizacao da viagem;
+   - preenchimento do profile;
+   - validacao de pacote/pagamento/add-ons;
+   - uso de Pre Trip;
+   - uso de In Trip;
+   - abertura do Service Agreement;
+   - exibicao do QRCode.
+
+2. Experiencia da staff:
+   - cadastro via planilha;
+   - login;
+   - visualizacao da operacao;
+   - tarefas individuais por atividade;
+   - contatos;
+   - scan de QRCode dentro da atividade;
+   - contador de presenca;
+   - governanca de atividades controladas;
+   - auditoria de scans.
+
+O ponto mais importante de arquitetura de dados:
+1. WeTravel manda compra, pacote, valor e add-ons.
+2. Viajante preenche dados pessoais.
+3. Planilhas alimentam todo conteudo operacional.
+4. Supabase consolida tudo.
+5. App exibe e grava apenas o que deve.
+
+Fim do handoff.
