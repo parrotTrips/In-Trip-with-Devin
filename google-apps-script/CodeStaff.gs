@@ -163,8 +163,8 @@ function setupSheetHeaders() {
     },
     {
       name: "Staff",
-      headers: ["phone", "nome", "funcao", "trip_uuid"],
-      note: "Registro dos membros de staff por viagem (referência — use o menu para gerenciar roles no Supabase)"
+      headers: ["phone", "nome", "funcao", "trip_uuid", "photo_url", "bio"],
+      note: "photo_url → URL pública da foto do membro | bio → descrição curta que aparece no app"
     },
     {
       name: "Tarefas Staff",

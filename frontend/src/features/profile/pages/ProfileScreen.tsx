@@ -1,9 +1,12 @@
-import { ArrowLeft, User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut, QrCode, Camera } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import AppHeader from '../../../shared/components/AppHeader';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../../../app/providers/auth-context';
 import { useTripContext } from '../../../app/providers/trip-context';
+import { useAvatar } from '../../../app/providers/avatar-context';
 import { getProfile, updateProfile, type ProfileData } from '../services/profile-api';
+import { getMyQrCode, type TravelerQrCode } from '../../trip/services/trip-api';
 
 interface SectionProps {
   title: string;
@@ -210,13 +213,14 @@ function DateSelectField({ label, value, onChange }: {
 }
 
 export default function ProfileScreen() {
-  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { setAvatarUrl } = useAvatar();
   const { tripInfo } = useTripContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [qrCode, setQrCode] = useState<TravelerQrCode | null>(null);
 
   const [form, setForm] = useState<Record<string, string>>({
     preferred_name: '',
@@ -244,7 +248,22 @@ export default function ProfileScreen() {
     intl_flights_help_details: '',
     travel_insurance_help_yn: '',
     unforgettable_trip_details: '',
+    avatar_url: '',
   });
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = reader.result as string;
+      setField('avatar_url', url);
+      setAvatarUrl(url);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const setField = (key: string, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -256,24 +275,31 @@ export default function ProfileScreen() {
 
     const load = async () => {
       try {
-        const profileRes = await getProfile(user.userId);
+        const [profileRes, qrRes] = await Promise.allSettled([
+          getProfile(user.userId),
+          getMyQrCode(),
+        ]);
+        if (qrRes.status === 'fulfilled') setQrCode(qrRes.value);
+        const profileRes2 = profileRes.status === 'fulfilled' ? profileRes.value : null;
+        if (!profileRes2) { setLoading(false); return; }
 
-        if (profileRes.profile) {
-          const p = profileRes.profile;
+        if (profileRes2.profile) {
+          const p = profileRes2.profile;
           const newForm: Record<string, string> = {};
           for (const [key, val] of Object.entries(p)) {
             newForm[key] = val !== null && val !== undefined ? String(val) : '';
           }
+          if (p.avatar_url) setAvatarUrl(p.avatar_url);
           setForm(prev => {
             const nextForm = { ...prev, ...newForm };
-            if (!prev.preferred_name && profileRes.name) {
-              nextForm.preferred_name = profileRes.name;
+            if (!prev.preferred_name && profileRes2.name) {
+              nextForm.preferred_name = profileRes2.name;
             }
             return nextForm;
           });
-        } else if (profileRes.name) {
+        } else if (profileRes2.name) {
           setForm(prev => (
-            prev.preferred_name ? prev : { ...prev, preferred_name: profileRes.name ?? '' }
+            prev.preferred_name ? prev : { ...prev, preferred_name: profileRes2.name ?? '' }
           ));
         }
       } catch (err) {
@@ -324,29 +350,41 @@ export default function ProfileScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-gray-50 pb-24">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
-        <div className="flex items-center h-14 px-4 max-w-lg mx-auto">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <ArrowLeft size={22} className="text-gray-700" />
-          </button>
-          <h1 className="flex-1 text-center text-base font-semibold text-gray-800 font-[Fredoka] pr-8">
-            My Profile
-          </h1>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-gray-50" style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }}>
+      <AppHeader title="My Profile" />
 
       <div className="pt-14">
         {/* Profile Header */}
         <div className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 px-5 py-6 text-white">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-              <User size={32} />
-            </div>
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              className="relative shrink-0 group"
+              aria-label="Change profile photo"
+            >
+              {form.avatar_url ? (
+                <img
+                  src={form.avatar_url}
+                  alt="Profile"
+                  className="w-16 h-16 rounded-full object-cover border-2 border-white/30"
+                />
+              ) : (
+                <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center border-2 border-white/30">
+                  <User size={32} />
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera size={18} className="text-white" />
+              </div>
+            </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
             <div>
               <h2 className="text-xl font-bold font-[Fredoka]">
                 {form.preferred_name || user?.name || 'Traveler'}
@@ -360,7 +398,31 @@ export default function ProfileScreen() {
 
       <div className="px-4 py-5 space-y-3">
 
-        {/* ── Section 1: Registration Details (moved to top) ── */}
+        {/* ── Section 1: My QR Code ── */}
+        <CollapsibleSection title="My QR Code" icon={<QrCode size={18} />} emoji="📱" defaultOpen={false}>
+          <div className="pt-3">
+            {qrCode ? (
+              <div className="flex items-center gap-4">
+                <div className="shrink-0 rounded-xl border border-gray-100 bg-white p-2">
+                  <QRCodeSVG value={qrCode.qr_payload} size={140} level="M" aria-label="Traveler check-in QR code" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{form.preferred_name || user?.name || 'Traveler'}</p>
+                  {tripInfo && <p className="text-sm text-emerald-700 mt-0.5">{tripInfo.title}</p>}
+                  <p className="mt-2 text-xs text-gray-500 leading-5">Present this QR code to staff for check-in at activities.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 rounded-xl p-6 text-center">
+                <QrCode className="mx-auto text-gray-300 mb-2" size={32} />
+                <p className="text-sm font-medium text-gray-500">QR Code not available</p>
+                <p className="text-xs text-gray-400 mt-1">Available once your trip is confirmed.</p>
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Section 2: Registration Details ── */}
         <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" defaultOpen={false}>
           <div className="pt-3 space-y-3">
             <InputField label="Preferred Name" value={form.preferred_name} onChange={v => setField('preferred_name', v)} placeholder="How you'd like to be called" />
@@ -444,14 +506,13 @@ export default function ProfileScreen() {
           </div>
         </CollapsibleSection>
 
-        {/* ── Section 2: Products & Payment (non-editable basic package + Add-ons) ── */}
-        <CollapsibleSection title="Products & Payment" icon={<ShoppingCart size={18} />} emoji="🛒" defaultOpen={false}>
+        {/* ── Section 2: Packages (non-editable basic package + Add-ons) ── */}
+        <CollapsibleSection title="Packages" icon={<ShoppingCart size={18} />} emoji="🛒" defaultOpen={false}>
           <div className="pt-3 space-y-4">
             <div>
               <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Your Package</p>
               <div className="bg-emerald-50 rounded-xl p-4 space-y-2">
                 <ReadOnlyField label="Package Name" value={form.package_option} placeholder="Will be set by Parrot Trips team" />
-                <ReadOnlyField label="Amount Paid" value={form.usd_amount ? `$${form.usd_amount}` : ''} placeholder="Will be set by Parrot Trips team" />
                 <ReadOnlyField label="Room Type" value={form.transfer_platform} placeholder="Will be set by Parrot Trips team" />
               </div>
             </div>
@@ -461,17 +522,20 @@ export default function ProfileScreen() {
                 <ReadOnlyField label="Add-on Activities" value={form.proof_of_transfer} placeholder="No additional activities purchased yet" />
               </div>
             </div>
-            <a
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-semibold text-sm shadow-lg transition-all"
-            >
-              <ShoppingCart size={18} />
-              Add-ons
-              <ExternalLink size={14} />
-            </a>
-            <p className="text-xs text-center text-gray-400">Browse and purchase optional activities and upgrades</p>
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Package Changes</p>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <a
+                  href="https://package-transfer-116789457910.southamerica-east1.run.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-colors"
+                >
+                  Transfer or cancel your package
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
           </div>
         </CollapsibleSection>
 
@@ -511,9 +575,9 @@ export default function ProfileScreen() {
         </CollapsibleSection>
       </div>
 
-      {/* Save button - fixed at bottom */}
-      <div className="fixed bottom-16 left-0 right-0 px-4 pb-4 z-40">
-        <div className="max-w-lg mx-auto space-y-2">
+      {/* Save and Sign Out buttons */}
+      <div className="px-4 pt-4">
+        <div className="space-y-2">
           <button
             onClick={handleSave}
             disabled={saving}

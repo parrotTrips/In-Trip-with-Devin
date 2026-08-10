@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
+import posthog from 'posthog-js';
 
 import { AuthContext, type AuthUser, type UserRole } from './auth-context';
 
@@ -43,11 +45,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const newUser = { userId, phone, name, token, role };
     localStorage.setItem('parrot_user', JSON.stringify(newUser));
     setUser(newUser);
+    posthog.identify(userId, { telefone: phone, nome: name, papel: role });
+    Sentry.setUser({ id: userId, username: name ?? phone });
   };
 
   const logout = () => {
     localStorage.removeItem('parrot_user');
     setUser(null);
+    posthog.reset();
+    Sentry.setUser(null);
   };
 
   return (

@@ -1,15 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import posthog from 'posthog-js';
 import {
   ArrowLeft,
   Clock,
-  MapPin,
+  Info,
   Star,
   ChevronRight,
-  Camera,
   Check,
   DollarSign,
-  ImagePlus,
 } from 'lucide-react';
 import {
   getMyTripPhaseDetail,
@@ -19,12 +18,17 @@ import {
 
 function ActivityCard({ activity, index }: { activity: Activity; index: number }) {
   const [expanded, setExpanded] = useState(false);
+  const toggleExpanded = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next) posthog.capture('atividade_expandida', { atividade_nome: activity.name, atividade_tipo: activity.activity_type });
+  };
 
   const typeConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
     included: { label: 'Included', color: 'bg-emerald-100 text-emerald-700', icon: <Check size={12} /> },
     optional: { label: 'Optional', color: 'bg-amber-100 text-amber-700', icon: <Star size={12} /> },
     suggested: { label: 'Suggested', color: 'bg-blue-100 text-blue-700', icon: <Star size={12} /> },
-    logistics: { label: 'Logistics', color: 'bg-gray-100 text-gray-700', icon: <MapPin size={12} /> },
+    logistics: { label: 'Logistics', color: 'bg-gray-100 text-gray-700', icon: <Info size={12} /> },
   };
 
   const config = typeConfig[activity.activity_type] ?? typeConfig.included;
@@ -62,7 +66,7 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
 
         <div className="flex-1 pb-6">
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={toggleExpanded}
             className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
           >
             <div className="p-4">
@@ -93,7 +97,7 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
               {expanded && activity.practical_info && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <MapPin size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                    <Info size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
                     <div className="whitespace-pre-line">{activity.practical_info}</div>
                   </div>
                   {activity.amount_brl !== null && activity.activity_type === 'optional' && (
@@ -119,7 +123,6 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
 export default function DayDetails() {
   const { dayId } = useParams<{ dayId: string }>();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [phase, setPhase] = useState<TripPhaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -155,7 +158,7 @@ export default function DayDetails() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
       <div className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 text-white">
         <div className="flex items-center gap-3 px-4 pt-12 pb-2">
           <button
@@ -190,27 +193,6 @@ export default function DayDetails() {
         </div>
       </div>
 
-      <div className="px-4 mt-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-50 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800 font-[Fredoka]">Group Album</h3>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full hover:bg-emerald-100 transition-colors"
-            >
-              <ImagePlus size={14} />
-              Add Photo
-            </button>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" />
-          </div>
-          <div className="p-8 text-center">
-            <div className="w-16 h-16 mx-auto bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
-              <Camera size={24} className="text-gray-400" />
-            </div>
-            <p className="text-sm text-gray-400">No photos yet. Be the first to share!</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

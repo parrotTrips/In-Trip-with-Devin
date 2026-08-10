@@ -83,9 +83,269 @@ def _build_sheets_client_adc():
     """Build a Sheets client using Application Default Credentials (works in Cloud Run)."""
     import google.auth
     from googleapiclient.discovery import build as gapi_build
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds, _ = google.auth.default(scopes=SCOPES)
     return gapi_build("sheets", "v4", credentials=creds)
+
+
+async def admin_sync_roteiro_to_sheet(trip_uuid: str) -> dict:
+    """Write address and max_checkins from DB back to the Roteiro sheet tab."""
+    if not TRIP_CONTENT_SHEET_ID:
+        raise ValueError("TRIP_CONTENT_SHEET_ID is not set")
+
+    sheets_svc = _build_sheets_client_adc()
+
+    # Read current Roteiro tab to find header and row positions
+    resp = (
+        sheets_svc.spreadsheets()
+        .values()
+        .get(spreadsheetId=TRIP_CONTENT_SHEET_ID, range="Roteiro")
+        .execute()
+    )
+    rows = resp.get("values", [])
+    if not rows:
+        return {"status": "skipped", "message": "Roteiro tab is empty"}
+
+    header = [h.strip().lower() for h in rows[0]]
+    def find_col(names):
+        for n in names:
+            try:
+                return header.index(n)
+            except ValueError:
+                pass
+        return None
+
+    endereco_col = find_col(["atividade_endereco", "endereco"])
+    max_scans_col = find_col(["max_scans", "atividade_max_scans"])
+    atividade_col = find_col(["atividade_nome", "atividade"])
+    trip_uuid_col = find_col(["trip_uuid"])
+
+    if None in (endereco_col, max_scans_col, atividade_col, trip_uuid_col):
+        missing = [n for n, c in [("endereco", endereco_col), ("max_scans", max_scans_col), ("atividade_nome", atividade_col), ("trip_uuid", trip_uuid_col)] if c is None]
+        return {"status": "error", "message": f"Columns not found: {missing}. Header: {header}"}
+
+    # Fetch DB values
+    conn = await _get_connection()
+    try:
+        db_rows = await conn.fetch("""
+            SELECT ta.name, ta.address, ta.max_checkins
+            FROM trip_activities ta
+            JOIN trip_phases tp ON tp.id = ta.trip_phase_id
+            WHERE tp.wetravel_trip_uuid = $1 AND tp.phase_type = 'in-trip'
+        """, trip_uuid)
+    finally:
+        await conn.close()
+
+    db_map = {r["name"]: r for r in db_rows}
+
+    # Build batch update — write address and max_scans into each matching row
+    updates = []
+    for i, row in enumerate(rows[1:], start=2):  # 1-indexed, skip header
+        if len(row) <= trip_uuid_col:
+            continue
+        if row[trip_uuid_col].strip() != trip_uuid:
+            continue
+        act_name = row[atividade_col].strip() if atividade_col < len(row) else ""
+        if not act_name or act_name not in db_map:
+            continue
+        db = db_map[act_name]
+        # Address cell
+        updates.append({
+            "range": f"Roteiro!{chr(65 + endereco_col)}{i}",
+            "values": [[db["address"] or ""]],
+        })
+        # max_scans cell
+        updates.append({
+            "range": f"Roteiro!{chr(65 + max_scans_col)}{i}",
+            "values": [[str(db["max_checkins"]) if db["max_checkins"] > 1 else ""]],
+        })
+
+    if not updates:
+        return {"status": "skipped", "message": "No matching rows found"}
+
+    sheets_svc.spreadsheets().values().batchUpdate(
+        spreadsheetId=TRIP_CONTENT_SHEET_ID,
+        body={"valueInputOption": "RAW", "data": updates},
+    ).execute()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "cells_updated": len(updates)}
+
+
+async def admin_setup_staff_sheet_headers() -> dict:
+    """Add photo_url and bio columns to the Staff sheet header if missing."""
+    if not STAFF_CONTENT_SHEET_ID:
+        raise ValueError("STAFF_CONTENT_SHEET_ID is not set")
+
+    sheets_svc = _build_sheets_client_adc()
+    resp = (
+        sheets_svc.spreadsheets()
+        .values()
+        .get(spreadsheetId=STAFF_CONTENT_SHEET_ID, range="Staff!1:1")
+        .execute()
+    )
+    header = [h.strip().lower() for h in (resp.get("values") or [[]])[0]]
+
+    updates = []
+    next_col = len(header)
+    added = []
+    for col_name in ["photo_url", "bio"]:
+        if col_name not in header:
+            updates.append({
+                "range": f"Staff!{chr(65 + next_col)}1",
+                "values": [[col_name]],
+            })
+            next_col += 1
+            added.append(col_name)
+
+    if not updates:
+        return {"status": "ok", "message": "Headers already present", "added": []}
+
+    sheets_svc.spreadsheets().values().batchUpdate(
+        spreadsheetId=STAFF_CONTENT_SHEET_ID,
+        body={"valueInputOption": "RAW", "data": updates},
+    ).execute()
+
+    return {"status": "ok", "added": added}
+
+
+async def admin_write_staff_bios(trip_uuid: str, bios: dict) -> dict:
+    """Write bio values into the Staff sheet tab for matching phone numbers."""
+    if not STAFF_CONTENT_SHEET_ID:
+        raise ValueError("STAFF_CONTENT_SHEET_ID is not set")
+
+    sheets_svc = _build_sheets_client_adc()
+
+    resp = (
+        sheets_svc.spreadsheets()
+        .values()
+        .get(spreadsheetId=STAFF_CONTENT_SHEET_ID, range="Staff")
+        .execute()
+    )
+    rows = resp.get("values", [])
+    if not rows:
+        return {"status": "error", "message": "Staff tab is empty"}
+
+    header = [h.strip().lower() for h in rows[0]]
+
+    def find_col(names):
+        for n in names:
+            try:
+                return header.index(n)
+            except ValueError:
+                pass
+        return None
+
+    phone_col = find_col(["phone"])
+    bio_col = find_col(["bio"])
+
+    if phone_col is None or bio_col is None:
+        return {"status": "error", "message": f"Columns not found. Header: {header}"}
+
+    updates = []
+    for i, row in enumerate(rows[1:], start=2):
+        phone = row[phone_col].strip() if phone_col < len(row) else ""
+        if phone in bios:
+            updates.append({
+                "range": f"Staff!{chr(65 + bio_col)}{i}",
+                "values": [[bios[phone]]],
+            })
+
+    if not updates:
+        return {"status": "skipped", "message": "No matching phones found"}
+
+    sheets_svc.spreadsheets().values().batchUpdate(
+        spreadsheetId=STAFF_CONTENT_SHEET_ID,
+        body={"valueInputOption": "RAW", "data": updates},
+    ).execute()
+
+    return {"status": "ok", "cells_updated": len(updates)}
+
+
+async def admin_sync_staff_to_sheet(trip_uuid: str) -> dict:
+    """Write staff tasks and activity participants from DB to the Staff Google Sheet."""
+    if not STAFF_CONTENT_SHEET_ID:
+        raise ValueError("STAFF_CONTENT_SHEET_ID is not set")
+
+    sheets_svc = _build_sheets_client_adc()
+    conn = await _get_connection()
+
+    try:
+        # --- Tarefas Staff ---
+        task_rows = await conn.fetch("""
+            SELECT u.phone, tp.sort_order as phase_order, ta.name as activity_name,
+                   st.title, st.description, st.sort_order
+            FROM staff_tasks st
+            JOIN users u ON u.id = st.assigned_to_user_id
+            JOIN trip_activities ta ON ta.id = st.trip_activity_id
+            JOIN trip_phases tp ON tp.id = st.trip_phase_id
+            WHERE tp.wetravel_trip_uuid = $1
+            ORDER BY tp.sort_order, ta.sort_order, u.full_name
+        """, trip_uuid)
+
+        # phase_order starts at 4 for day 1 (4 pre-trip phases before in-trip)
+        min_phase = min((r["phase_order"] for r in task_rows), default=4)
+
+        tasks_data = [["trip_uuid", "dia", "atividade_nome", "staff_phone", "titulo", "descricao", "sort_order"]]
+        for r in task_rows:
+            day_num = r["phase_order"] - (min_phase - 1)
+            tasks_data.append([
+                trip_uuid,
+                day_num,
+                r["activity_name"],
+                r["phone"],
+                r["title"],
+                r["description"] or "",
+                r["sort_order"],
+            ])
+
+        # --- Participantes Atividades ---
+        part_rows = await conn.fetch("""
+            SELECT u.phone, tp.sort_order as phase_order, ta.name as activity_name, ap.status
+            FROM activity_participants ap
+            JOIN trip_travelers tt ON tt.id = ap.trip_traveler_id
+            JOIN users u ON u.id = tt.user_id
+            JOIN trip_activities ta ON ta.id = ap.trip_activity_id
+            JOIN trip_phases tp ON tp.id = ta.trip_phase_id
+            WHERE tt.wetravel_trip_uuid = $1
+            ORDER BY tp.sort_order, ta.name
+        """, trip_uuid)
+
+        parts_data = [["trip_uuid", "dia", "atividade_nome", "traveler_phone", "status"]]
+        for r in part_rows:
+            day_num = r["phase_order"] - (min_phase - 1)
+            parts_data.append([trip_uuid, day_num, r["activity_name"], r["phone"], r["status"]])
+
+    finally:
+        await conn.close()
+
+    # Clear and write Tarefas Staff tab
+    sheets_svc.spreadsheets().values().clear(
+        spreadsheetId=STAFF_CONTENT_SHEET_ID, range="Tarefas Staff"
+    ).execute()
+    sheets_svc.spreadsheets().values().update(
+        spreadsheetId=STAFF_CONTENT_SHEET_ID,
+        range="Tarefas Staff!A1",
+        valueInputOption="RAW",
+        body={"values": tasks_data},
+    ).execute()
+
+    # Clear and write Participantes Atividades tab
+    sheets_svc.spreadsheets().values().clear(
+        spreadsheetId=STAFF_CONTENT_SHEET_ID, range="Participantes Atividades"
+    ).execute()
+    sheets_svc.spreadsheets().values().update(
+        spreadsheetId=STAFF_CONTENT_SHEET_ID,
+        range="Participantes Atividades!A1",
+        valueInputOption="RAW",
+        body={"values": parts_data},
+    ).execute()
+
+    return {
+        "status": "ok",
+        "trip_uuid": trip_uuid,
+        "tasks_written": len(tasks_data) - 1,
+        "participants_written": len(parts_data) - 1,
+    }
 
 
 async def admin_import_trip(trip_uuid: str) -> dict:
@@ -261,6 +521,185 @@ async def admin_reset_trip(trip_uuid: str) -> dict:
         "deleted_checklist_progress": deleted_checklist,
         "deleted_phase_progress": deleted_phase,
     }
+
+
+async def admin_import_emergency_contacts(trip_uuid: str) -> dict:
+    """Import emergency contacts from the Trip Content Google Sheet."""
+    if not TRIP_CONTENT_SHEET_ID:
+        raise ValueError("TRIP_CONTENT_SHEET_ID is not set")
+
+    sheets_svc = _build_sheets_client_adc()
+
+    from scripts.import_trip_content import filter_rows_by_trip, parse_recommendations_tab, read_tab
+
+    rows = filter_rows_by_trip(
+        read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Emergency Contacts"), trip_uuid
+    )
+    if not rows or len(rows) < 2:
+        return {"status": "skipped", "message": "No emergency contacts found"}
+
+    header = [h.strip().lower() for h in rows[0]]
+
+    def col(row, name):
+        try:
+            idx = header.index(name)
+            return row[idx].strip() if idx < len(row) else ""
+        except ValueError:
+            return ""
+
+    contacts = []
+    for row in rows[1:]:
+        name = col(row, "name")
+        if not name:
+            continue
+        try:
+            sort_order = int(col(row, "sort_order") or "0")
+        except ValueError:
+            sort_order = 0
+        contacts.append({
+            "name": name,
+            "role": col(row, "role") or None,
+            "phone": col(row, "phone") or None,
+            "sort_order": sort_order,
+        })
+
+    conn = await _get_connection()
+    try:
+        async with conn.transaction():
+            await conn.execute(
+                "DELETE FROM trip_emergency_contacts WHERE wetravel_trip_uuid = $1", trip_uuid
+            )
+            for c in contacts:
+                await conn.execute(
+                    """
+                    INSERT INTO trip_emergency_contacts
+                        (id, wetravel_trip_uuid, name, role, phone, sort_order, created_at, updated_at)
+                    VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, now(), now())
+                    """,
+                    trip_uuid, c["name"], c["role"], c["phone"], c["sort_order"],
+                )
+    finally:
+        await conn.close()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "emergency_contacts_imported": len(contacts)}
+
+
+async def admin_import_recommendations(trip_uuid: str) -> dict:
+    """Import local recommendations from the Trip Content Google Sheet."""
+    if not TRIP_CONTENT_SHEET_ID:
+        raise ValueError("TRIP_CONTENT_SHEET_ID is not set")
+
+    sheets_svc = _build_sheets_client_adc()
+
+    from scripts.import_trip_content import filter_rows_by_trip, parse_recommendations_tab, read_tab
+
+    rows = filter_rows_by_trip(
+        read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Recomendacoes"), trip_uuid
+    )
+    if not rows or len(rows) < 2:
+        return {"status": "skipped", "message": "No recommendations found"}
+
+    recs = parse_recommendations_tab(rows)
+
+    conn = await _get_connection()
+    try:
+        async with conn.transaction():
+            await conn.execute(
+                "DELETE FROM trip_recommendations WHERE wetravel_trip_uuid = $1", trip_uuid
+            )
+            for r in recs:
+                await conn.execute(
+                    """
+                    INSERT INTO trip_recommendations
+                        (
+                            id, wetravel_trip_uuid, name, description, address, photo_url,
+                            sort_order, category, neighborhood, location, highlight,
+                            price_range, rating, map_url, emoji, created_at, updated_at
+                        )
+                    VALUES (
+                        gen_random_uuid(), $1, $2, $3, $4, $5,
+                        $6, $7, $8, $9, $10,
+                        $11, $12, $13, $14, now(), now()
+                    )
+                    """,
+                    trip_uuid,
+                    r.name,
+                    r.description,
+                    r.address,
+                    r.photo_url,
+                    r.sort_order,
+                    r.category,
+                    r.neighborhood,
+                    r.location,
+                    r.highlight,
+                    r.price_range,
+                    r.rating,
+                    r.map_url,
+                    r.emoji,
+                )
+    finally:
+        await conn.close()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "recommendations_imported": len(recs)}
+
+
+async def _import_simple_tab(trip_uuid: str, tab_name: str, table_name: str, columns: list[str]) -> dict:
+    """Generic import for simple tabs — delete existing rows and insert fresh."""
+    if not TRIP_CONTENT_SHEET_ID:
+        raise ValueError("TRIP_CONTENT_SHEET_ID is not set")
+
+    sheets_svc = _build_sheets_client_adc()
+    from scripts.import_trip_content import filter_rows_by_trip, read_tab
+    rows = filter_rows_by_trip(read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, tab_name), trip_uuid)
+    if not rows or len(rows) < 2:
+        return {"status": "skipped", "message": f"No data found in tab '{tab_name}'"}
+
+    header = [h.strip().lower() for h in rows[0]]
+
+    def col(row, name):
+        try:
+            idx = header.index(name)
+            return row[idx].strip() if idx < len(row) else ""
+        except ValueError:
+            return ""
+
+    records = []
+    for row in rows[1:]:
+        if not any(row):
+            continue
+        try:
+            sort_order = int(col(row, "sort_order") or "0")
+        except ValueError:
+            sort_order = 0
+        record = {c: col(row, c) or None for c in columns if c != "sort_order"}
+        record["sort_order"] = sort_order
+        if all(v is None for k, v in record.items() if k != "sort_order"):
+            continue
+        records.append(record)
+
+    conn = await _get_connection()
+    try:
+        async with conn.transaction():
+            await conn.execute(f"DELETE FROM {table_name} WHERE wetravel_trip_uuid = $1", trip_uuid)
+            for r in records:
+                cols = ["id", "wetravel_trip_uuid"] + list(r.keys()) + ["created_at", "updated_at"]
+                placeholders = ["gen_random_uuid()", "$1"] + [f"${i+2}" for i in range(len(r))] + ["now()", "now()"]
+                await conn.execute(
+                    f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join(placeholders)})",
+                    trip_uuid, *r.values(),
+                )
+    finally:
+        await conn.close()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "imported": len(records)}
+
+
+async def admin_import_faq(trip_uuid: str) -> dict:
+    return await _import_simple_tab(trip_uuid, "FAQ", "trip_faqs", ["question", "answer", "sort_order"])
+
+
+async def admin_import_cancellation_policy(trip_uuid: str) -> dict:
+    return await _import_simple_tab(trip_uuid, "Cancellation Policy", "trip_cancellation_policies", ["title", "body", "sort_order"])
 
 
 async def admin_import_contacts(trip_uuid: str) -> dict:

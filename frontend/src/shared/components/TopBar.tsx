@@ -1,10 +1,15 @@
+import { Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
 interface TopBarProps {
   title?: string;
 }
 
 export default function TopBar({ title }: TopBarProps) {
+  const navigate = useNavigate();
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+    <header className="fixed top-0 left-0 right-0 z-[60] bg-white/90 backdrop-blur-md border-b border-gray-100">
       <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
         <div className="w-10" aria-hidden="true" />
 
@@ -15,7 +20,13 @@ export default function TopBar({ title }: TopBarProps) {
           </h1>
         </div>
 
-        <div className="w-10" aria-hidden="true" />
+        <button
+          onClick={() => navigate('/notifications')}
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+          aria-label="Notifications"
+        >
+          <Bell size={20} className="text-gray-500" />
+        </button>
       </div>
     </header>
   );

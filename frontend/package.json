@@ -11,15 +11,16 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sentry/react": "^10.68.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.364.0",
+    "posthog-js": "^1.407.2",
     "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.13.1",
-    "recharts": "^2.12.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7"
   },

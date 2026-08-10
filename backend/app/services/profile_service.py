@@ -48,6 +48,7 @@ PROFILE_FIELD_DEFAULTS = {
     "departure_date": None,
     "departure_time": None,
     "departure_flight": None,
+    "avatar_url": None,
 }
 
 SUPPORTED_UPDATE_FIELDS = {
@@ -71,6 +72,7 @@ SUPPORTED_UPDATE_FIELDS = {
     "intl_flights_help_details",
     "travel_insurance_help_yn",
     "unforgettable_trip_details",
+    "avatar_url",
 }
 
 
@@ -185,6 +187,18 @@ async def get_profile(
     except Exception:
         pass
 
+    # Room type from traveler_products (populated by WeTravel extraction)
+    room_type_row = None
+    try:
+        async with session.begin_nested():
+            room_type_result = await session.execute(
+                text("SELECT room_type FROM traveler_products WHERE trip_traveler_id = :ttid LIMIT 1"),
+                {"ttid": str(trip_traveler.id)},
+            )
+            room_type_row = room_type_result.mappings().first()
+    except Exception:
+        pass
+
     profile_dict = dict(PROFILE_FIELD_DEFAULTS)
     profile_dict["email"] = user.email
 
@@ -194,6 +208,9 @@ async def get_profile(
         paid = wetravel_row["paid_amount"]
         if paid is not None:
             profile_dict["usd_amount"] = float(paid) / 100
+
+    if room_type_row and room_type_row["room_type"]:
+        profile_dict["transfer_platform"] = room_type_row["room_type"]
 
     if profile:
         profile_dict["preferred_name"] = profile.preferred_name
@@ -215,6 +232,7 @@ async def get_profile(
         profile_dict["intl_flights_help_details"] = profile.flight_help_details
         profile_dict["travel_insurance_help_yn"] = _encode_yes_no(profile.needs_travel_insurance_help_flag)
         profile_dict["unforgettable_trip_details"] = profile.unforgettable_trip_details
+        profile_dict["avatar_url"] = profile.avatar_url
 
     return {
         "user_id": user_id,
@@ -314,6 +332,9 @@ async def update_profile(
     if "unforgettable_trip_details" in update_data:
         profile.unforgettable_trip_details = update_data["unforgettable_trip_details"]
         updated_fields.append("unforgettable_trip_details")
+    if "avatar_url" in update_data:
+        profile.avatar_url = update_data["avatar_url"]
+        updated_fields.append("avatar_url")
     if "email" in update_data:
         user.email = update_data["email"]
         updated_fields.append("email")

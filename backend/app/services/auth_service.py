@@ -23,6 +23,7 @@ from app.core.config import (
     WHATSAPP_TEMPLATE_LANGUAGE,
     WHATSAPP_TEMPLATE_NAME,
 )
+from app.core.logger import log, log_erro
 from app.db.models.auth import OTPCode
 from app.db.models.user import User
 
@@ -87,14 +88,14 @@ async def send_whatsapp_otp(phone: str, code: str) -> bool:
                 timeout=10.0,
             )
     except Exception as exc:
-        print(f"[WhatsApp] request exception: {exc}")
+        log_erro("whatsapp_excecao", telefone=phone, erro=str(exc))
         return False
 
     if response.status_code != 200:
-        print(f"[WhatsApp] API error {response.status_code}: {response.text}")
+        log_erro("whatsapp_falhou", telefone=phone, status_http=response.status_code)
         return False
 
-    print(f"[WhatsApp] API 200 OK: {response.text}")
+    log("whatsapp_enviado", telefone=phone)
     return True
 
 
@@ -107,6 +108,7 @@ async def request_otp(
     """Generate an OTP, persist it and attempt WhatsApp delivery."""
     authorized = await session.scalar(select(User).where(User.phone == phone))
     if not authorized:
+        log("login_numero_nao_autorizado", telefone=phone)
         raise HTTPException(status_code=403, detail="Phone number not authorized")
 
     generator = code_generator or (lambda: str(random.randint(100000, 999999)))
@@ -116,6 +118,7 @@ async def request_otp(
     session.add(OTPCode(phone=phone, code=code, expires_at=expires_at))
     await session.commit()
 
+    log("otp_gerado", telefone=phone)
     whatsapp_sent = await otp_sender(phone, code)
     response_data = {"message": "OTP sent successfully"}
     if not whatsapp_sent:
@@ -144,9 +147,11 @@ async def verify_otp(
         .limit(1)
     )
     if not otp:
+        log("otp_invalido", telefone=phone)
         raise HTTPException(status_code=400, detail="Invalid OTP code")
 
     if otp.expires_at < datetime.now(UTC):
+        log("otp_expirado", telefone=phone)
         raise HTTPException(status_code=400, detail="OTP code expired")
 
     otp.used = True
@@ -165,6 +170,7 @@ async def verify_otp(
     await session.commit()
     await session.refresh(user)
 
+    log("login_ok", telefone=phone, usuario_id=str(user.id), papel=user.role)
     access_token = _create_access_token(str(user.id), user.phone, user.role)
 
     return {

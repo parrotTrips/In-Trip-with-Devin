@@ -8,6 +8,7 @@ from scripts.import_trip_content import (
     ChecklistItem,
     PhaseLink,
     filter_rows_by_trip,
+    parse_recommendations_tab,
     parse_fases_tab,
     parse_checklist_tab,
     parse_links_tab,
@@ -44,6 +45,45 @@ def test_filter_rows_by_trip_no_match():
     ]
     result = filter_rows_by_trip(rows, "gsb-nye-2026")
     assert result == [rows[0]]
+
+
+# ---------------------------------------------------------------------------
+# parse_recommendations_tab
+# ---------------------------------------------------------------------------
+
+def test_parse_recommendations_tab_reads_rich_fields_and_preserves_legacy_fallbacks():
+    rows = [
+        [
+            "trip_uuid", "name", "description", "address", "photo_url", "sort_order",
+            "category", "neighborhood", "location", "highlight", "price_range",
+            "rating", "map_url", "emoji",
+        ],
+        [
+            "gsb-nye-2026", "Babbo Osteria", "Upscale Italian cuisine", "Rua Barao da Torre",
+            "https://example.com/babbo.jpg", "2", "restaurants", "Ipanema", "rio",
+            "Near the hotel", "$$$", "4.7", "https://maps.example/babbo", "🍝",
+        ],
+        [
+            "gsb-nye-2026", "Ipanema Beach", "Classic beach", "Ipanema, Rio", "", "bad",
+            "", "", "", "", "", "not-a-rating", "", "",
+        ],
+    ]
+
+    recs = parse_recommendations_tab(rows)
+
+    assert recs[0].name == "Babbo Osteria"
+    assert recs[0].category == "restaurants"
+    assert recs[0].neighborhood == "Ipanema"
+    assert recs[0].location == "rio"
+    assert recs[0].highlight == "Near the hotel"
+    assert recs[0].price_range == "$$$"
+    assert recs[0].rating == 4.7
+    assert recs[0].map_url == "https://maps.example/babbo"
+    assert recs[0].emoji == "🍝"
+    assert recs[0].sort_order == 2
+    assert recs[1].category is None
+    assert recs[1].rating is None
+    assert recs[1].sort_order == 0
 
 
 # ---------------------------------------------------------------------------

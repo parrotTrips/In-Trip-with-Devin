@@ -1,10 +1,11 @@
-import { Map, QrCode, User } from 'lucide-react';
+import { Map, User, Info } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import posthog from 'posthog-js';
 
 const navItems = [
-  { path: '/', icon: Map, label: 'Map' },
-  { path: '/qr-code', icon: QrCode, label: 'QR Code' },
+  { path: '/', icon: Map, label: 'Journey' },
   { path: '/profile', icon: User, label: 'My Profile' },
+  { path: '/information', icon: Info, label: 'Information' },
 ];
 
 export default function BottomNav() {
@@ -22,7 +23,7 @@ export default function BottomNav() {
           return (
             <button
               key={path}
-              onClick={() => navigate(path)}
+              onClick={() => { posthog.capture('aba_nav_clicada', { aba: label }); navigate(path); }}
               className={`flex flex-col items-center justify-center w-full h-full transition-colors ${
                 isActive ? 'text-emerald-700' : 'text-gray-400 hover:text-gray-600'
               }`}

@@ -1,10 +1,13 @@
 """Trip HTTP routes."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
+from app.db.models.staff import TripAnnouncement, TripStaff
+from app.db.models.trip import TripCancellationPolicy, TripEmergencyContact, TripFaq, TripRecommendation, TripTraveler
+from app.db.models.user import User
 from app.services.qr_service import create_traveler_qr_payload
 from app.services.service_agreement_service import resolve_service_agreement_url
 from app.services.trip_service import (
@@ -132,3 +135,223 @@ async def get_my_trip_travelers(
 ):
     """Retorna todos os viajantes do mesmo trip com fase atual de cada um."""
     return await get_trip_travelers(request.state.user_id, session)
+
+
+async def _get_traveler_trip_uuid(user_id: str, session: AsyncSession) -> str:
+    result = await session.execute(
+        text("""
+            SELECT tt.wetravel_trip_uuid
+            FROM trip_travelers tt
+            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+            WHERE tt.user_id = CAST(:user_id AS uuid)
+              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
+            ORDER BY wt.start_date ASC
+            LIMIT 1
+        """),
+        {"user_id": user_id},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No active trip found")
+    return row["wetravel_trip_uuid"]
+
+
+@router.get("/me/announcements")
+async def get_my_announcements(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return trip announcements for the authenticated traveler, newest first."""
+    user_id = request.state.user_id
+    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+
+    rows = (await session.execute(
+        select(TripAnnouncement, User.full_name)
+        .join(User, User.id == TripAnnouncement.sent_by_user_id)
+        .where(TripAnnouncement.wetravel_trip_uuid == trip_uuid)
+        .order_by(TripAnnouncement.created_at.desc())
+    )).all()
+
+    return {
+        "announcements": [
+            {
+                "id": str(ann.id),
+                "title": ann.title,
+                "body": ann.body,
+                "sent_by": None if ann.is_anonymous else name,
+                "created_at": ann.created_at.isoformat(),
+            }
+            for ann, name in rows
+        ]
+    }
+
+
+@router.get("/me/team")
+async def get_my_team(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return Parrot staff members assigned to the traveler's active trip."""
+    user_id = request.state.user_id
+    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+
+    # Primary: read from trip_staff (has function, photo_url, bio)
+    staff_rows = (await session.execute(
+        select(TripStaff, User.full_name, User.phone)
+        .join(User, User.id == TripStaff.user_id)
+        .where(TripStaff.wetravel_trip_uuid == trip_uuid)
+        .order_by(User.full_name)
+    )).all()
+
+    if staff_rows:
+        return {
+            "team": [
+                {
+                    "id": str(ts.id),
+                    "name": name,
+                    "function": ts.function,
+                    "phone": phone,
+                    "photo_url": ts.photo_url,
+                    "bio": ts.bio,
+                }
+                for ts, name, phone in staff_rows
+            ]
+        }
+
+@router.get("/me/emergency-contacts")
+async def get_my_emergency_contacts(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return emergency contacts for the traveler's active trip."""
+    user_id = request.state.user_id
+    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+
+    rows = (await session.execute(
+        select(TripEmergencyContact)
+        .where(TripEmergencyContact.wetravel_trip_uuid == trip_uuid)
+        .order_by(TripEmergencyContact.sort_order)
+    )).scalars().all()
+
+    return {
+        "emergency_contacts": [
+            {
+                "id": str(r.id),
+                "name": r.name,
+                "role": r.role,
+                "phone": r.phone,
+                "sort_order": r.sort_order,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/me/recommendations")
+async def get_my_recommendations(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return local recommendations for the traveler's active trip."""
+    user_id = request.state.user_id
+    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+
+    rows = (await session.execute(
+        select(TripRecommendation)
+        .where(TripRecommendation.wetravel_trip_uuid == trip_uuid)
+        .order_by(TripRecommendation.sort_order)
+    )).scalars().all()
+
+    return {
+        "recommendations": [
+            {
+                "id": str(r.id),
+                "name": r.name,
+                "description": r.description,
+                "address": r.address,
+                "photo_url": r.photo_url,
+                "sort_order": r.sort_order,
+                "category": r.category,
+                "neighborhood": r.neighborhood,
+                "location": r.location,
+                "highlight": r.highlight,
+                "price_range": r.price_range,
+                "rating": float(r.rating) if r.rating is not None else None,
+                "map_url": r.map_url,
+                "emoji": r.emoji,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/me/faq")
+async def get_my_faq(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return FAQ items for the traveler's active trip."""
+    user_id = request.state.user_id
+    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+
+    rows = (await session.execute(
+        select(TripFaq)
+        .where(TripFaq.wetravel_trip_uuid == trip_uuid)
+        .order_by(TripFaq.sort_order)
+    )).scalars().all()
+
+    return {
+        "faq": [
+            {"id": str(r.id), "question": r.question, "answer": r.answer, "sort_order": r.sort_order}
+            for r in rows
+        ]
+    }
+
+
+@router.get("/me/cancellation-policy")
+async def get_my_cancellation_policy(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return cancellation policy items for the traveler's active trip."""
+    user_id = request.state.user_id
+    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+
+    rows = (await session.execute(
+        select(TripCancellationPolicy)
+        .where(TripCancellationPolicy.wetravel_trip_uuid == trip_uuid)
+        .order_by(TripCancellationPolicy.sort_order)
+    )).scalars().all()
+
+    return {
+        "cancellation_policy": [
+            {"id": str(r.id), "title": r.title, "body": r.body, "sort_order": r.sort_order}
+            for r in rows
+        ]
+    }
+
+
+    # Fallback: trip_staff empty, use trip_travelers with role=staff
+    traveler_rows = (await session.execute(
+        select(TripTraveler, User.full_name, User.phone)
+        .join(User, User.id == TripTraveler.user_id)
+        .where(
+            TripTraveler.wetravel_trip_uuid == trip_uuid,
+            User.role == "staff",
+        )
+        .order_by(User.full_name)
+    )).all()
+
+    return {
+        "team": [
+            {
+                "id": str(tt.id),
+                "name": name,
+                "function": None,
+                "phone": phone,
+                "photo_url": None,
+                "bio": None,
+            }
+            for tt, name, phone in traveler_rows
+        ]
+    }

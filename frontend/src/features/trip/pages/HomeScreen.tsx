@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import { useTripContext } from '../../../app/providers/trip-context';
 import { useAuth } from '../../../app/providers/auth-context';
+import { useStaffView } from '../../../app/providers/staff-view-context';
 import { type TripPhase } from '../services/trip-api';
 import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
 import ProgressBar from '../../../shared/components/ProgressBar';
-import TopBar from '../../../shared/components/TopBar';
+import AppHeader from '../../../shared/components/AppHeader';
 import {
   FileText,
   Syringe,
@@ -50,6 +51,7 @@ function formatDateRange(start: string, end: string): string {
 export default function HomeScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { onSwitchToStaffView } = useStaffView();
   const { tripInfo, phases, travelers, idealPacePhaseId, loading, error } = useTripContext();
 
   const currentUserPhaseId = travelers.find(t => t.id === user?.userId)?.current_phase_id ?? null;
@@ -94,7 +96,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-emerald-50 pb-20">
-        <TopBar title="Carregando..." />
+        <AppHeader title="Carregando..." />
         <div className="pt-14 flex flex-col items-center justify-center h-64 gap-3">
           <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-gray-400 text-sm">Carregando sua viagem...</p>
@@ -106,7 +108,7 @@ export default function HomeScreen() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-emerald-50 pb-20">
-        <TopBar title="Parrot Trips" />
+        <AppHeader title="Parrot Trips" />
         <div className="pt-14 flex flex-col items-center justify-center h-64 gap-4 px-6">
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center text-2xl">⚠️</div>
           <p className="text-gray-700 font-semibold text-center">Não conseguimos carregar sua viagem</p>
@@ -118,7 +120,7 @@ export default function HomeScreen() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-emerald-50 pb-20">
-      <TopBar title={displayTitle} />
+      <AppHeader title={displayTitle} />
 
       {/* Hero Section */}
       <div className="pt-14">
@@ -126,11 +128,21 @@ export default function HomeScreen() {
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/30 rounded-full -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-teal-500/20 rounded-full translate-y-1/2 -translate-x-1/2" />
 
-          <div className="relative z-10">
-            <h2 className="text-2xl font-bold text-white font-[Fredoka] leading-tight">
-              {displayTitle || 'Sua Viagem'}
-            </h2>
-            {displayDates && <p className="text-emerald-100 text-sm mt-1">{displayDates}</p>}
+          <div className="relative z-10 flex items-start justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-white font-[Fredoka] leading-tight">
+                {displayTitle || 'Sua Viagem'}
+              </h2>
+              {displayDates && <p className="text-emerald-100 text-sm mt-1">{displayDates}</p>}
+            </div>
+            {onSwitchToStaffView && (
+              <button
+                onClick={onSwitchToStaffView}
+                className="inline-flex items-center gap-1.5 rounded-full bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold text-white transition-colors shrink-0 ml-3 mt-1"
+              >
+                Staff view
+              </button>
+            )}
           </div>
 
           <div className="relative z-10 mt-1">

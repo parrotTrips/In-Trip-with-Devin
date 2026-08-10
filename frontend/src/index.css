@@ -22,10 +22,21 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  html {
+    min-height: 100%;
+  }
+
   body {
     font-family: 'Inter', sans-serif;
     background-color: #FAFBFC;
     overflow-x: hidden;
+    min-height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  #root {
+    min-height: 100dvh;
   }
 
   h1, h2, h3, h4, h5, h6 {

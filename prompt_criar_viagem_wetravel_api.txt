@@ -1,0 +1,415 @@
+PROMPT PARA USAR NO REPOSITORIO DE INTEGRACAO COM A API DA WETRAVEL
+
+Contexto:
+Voce esta em um repositorio que se conecta com a API da WeTravel. Quero criar uma viagem de teste completa para alimentar o app Parrot Trips. A viagem deve ser criada via API da WeTravel sempre que o repositorio ja tiver suporte para isso.
+
+Importante:
+- Nao invente endpoints, nomes de campos ou payloads da WeTravel.
+- Antes de implementar, leia o codigo do repositorio, README, exemplos, testes, schemas, clients e qualquer documentacao local da API.
+- Se houver ambiente sandbox/test, use sandbox/test.
+- Se houver flag dry-run, rode dry-run primeiro.
+- Se a API nao suportar algum campo deste dataset, registre a lacuna e proponha onde esse dado deve ser criado depois no app Parrot Trips/Supabase.
+- Nao use dados reais de pessoas. Os telefones e emails abaixo sao ficticios.
+- Preserve os nomes exatamente quando eles forem usados como chave por outros imports: trip_uuid, nomes de atividades, telefones e nomes de fases.
+
+Objetivo:
+Criar via WeTravel API uma viagem teste chamada "Parrot Rio Full App Simulation" e retornar todos os IDs/URLs gerados, especialmente:
+- WeTravel trip id / trip_uuid equivalente;
+- URL publica/admin da viagem;
+- package ids;
+- addon ids;
+- booking/order ids criados, se aplicavel;
+- participant ids criados, se aplicavel;
+- qualquer payload exportado que sera sincronizado para Supabase;
+- lista de campos que a WeTravel API nao aceitou e precisam ser preenchidos fora da WeTravel.
+
+Dataset alvo:
+
+1. Trip
+
+preferred_internal_trip_uuid:
+PARROT-RIO-FULL-TEST-2026
+
+title:
+Parrot Rio Full App Simulation
+
+destination:
+Rio de Janeiro, Brazil
+
+start_date:
+2026-09-18
+
+end_date:
+2026-09-19
+
+timezone:
+America/Sao_Paulo
+
+trip_status:
+private/test/draft, conforme suportado pela API
+
+public_url_slug_sugerido:
+parrot-rio-full-app-simulation
+
+service_agreement_url_sugerido:
+https://parrottrips.com/test/service-agreement-parrot-rio-full-app-simulation.pdf
+
+description:
+Full Parrot Trips app simulation in Rio de Janeiro to validate traveler login, profile, packages, itinerary, pre-trip progress, in-trip progress, QR check-in, restricted activities, staff workflow, notifications, contacts, FAQ, recommendations and operational feedback.
+
+2. Packages
+
+Crie pelo menos estes packages ou equivalentes:
+
+Package 1:
+- name: Rio Test Package - Single Room
+- room_type: Single Room
+- base_price_usd: 1250
+- capacity_note: 1 traveler
+
+Package 2:
+- name: Rio Test Package - Double Room
+- room_type: Double Room
+- base_price_usd: 2200
+- capacity_note: 2 travelers
+
+Package 3:
+- name: Rio Test Package - Twin Shared Room
+- room_type: Twin Shared Room
+- base_price_usd: 1100
+- capacity_note: 1 traveler in shared room
+
+3. Add-ons / options
+
+Crie estes add-ons se a API suportar:
+
+- Sunset Boat Add-on, price_usd: 250
+- Samba Night, price_usd: 90
+- Staff Shadow Add-on, price_usd: 0
+- QR Ops Add-on, price_usd: 0
+- Local Food Add-on, price_usd: 75
+- Airport Fast Track, price_usd: 60
+- Boat Add-on, price_usd: 250
+
+4. Participants / travelers
+
+Se a API permite criar reservas/participantes, crie participantes ficticios com estes dados.
+Se a API exige comprador separado de participante, use o proprio participante como buyer quando nao houver outro requisito.
+
+Traveler 1:
+- full_name: Ana Martins
+- preferred_name: Ana
+- phone: +15550001001
+- email: ana.martins@example.com
+- group: founders
+- package: Rio Test Package - Single Room
+- room_type: Single Room
+- paid_amount_usd: 1250
+- addons: Sunset Boat Add-on
+
+Traveler 2:
+- full_name: Bruno Lee
+- preferred_name: Bruno
+- phone: +15550001002
+- email: bruno.lee@example.com
+- group: founders
+- package: Rio Test Package - Double Room
+- room_type: Double Room
+- paid_amount_usd: 2200
+- addons: Sunset Boat Add-on, Samba Night
+
+Traveler 3:
+- full_name: Camila Rocha
+- preferred_name: Camila
+- phone: +15550001003
+- email: camila.rocha@example.com
+- group: operations
+- package: Rio Test Package - Twin Shared Room
+- room_type: Twin Shared Room
+- paid_amount_usd: 1100
+- addons: Staff Shadow Add-on
+
+Traveler 4:
+- full_name: Daniel Kim
+- preferred_name: Daniel
+- phone: +15550001004
+- email: daniel.kim@example.com
+- group: operations
+- package: Rio Test Package - Twin Shared Room
+- room_type: Twin Shared Room
+- paid_amount_usd: 1100
+- addons: QR Ops Add-on
+
+Traveler 5:
+- full_name: Elena Costa
+- preferred_name: Elena
+- phone: +15550001005
+- email: elena.costa@example.com
+- group: guests
+- package: Rio Test Package - Single Room
+- room_type: Single Room
+- paid_amount_usd: 1250
+- addons: Local Food Add-on
+
+Traveler 6:
+- full_name: Felipe Santos
+- preferred_name: Felipe
+- phone: +15550001006
+- email: felipe.santos@example.com
+- group: guests
+- package: Rio Test Package - Double Room
+- room_type: Double Room
+- paid_amount_usd: 2200
+- addons: none
+
+Traveler 7:
+- full_name: Gabriela Torres
+- preferred_name: Gabi
+- phone: +15550001007
+- email: gabriela.torres@example.com
+- group: guests
+- package: Rio Test Package - Single Room
+- room_type: Single Room
+- paid_amount_usd: 1250
+- addons: Airport Fast Track
+
+Traveler 8:
+- full_name: Hugo Almeida
+- preferred_name: Hugo
+- phone: +15550001008
+- email: hugo.almeida@example.com
+- group: guests
+- package: Rio Test Package - Twin Shared Room
+- room_type: Twin Shared Room
+- paid_amount_usd: 1100
+- addons: Boat Add-on
+
+5. Informacoes de perfil que talvez nao existam na WeTravel
+
+Se a WeTravel API tiver custom questions/form fields, crie perguntas ou campos equivalentes. Se nao tiver, registre como "post-WeTravel Supabase data".
+
+Campos de perfil para sincronizar depois:
+
+- preferred_name
+- dob
+- gender
+- passport_first_name
+- passport_last_name
+- passport_country
+- passport_number
+- passport_issue_date
+- passport_expiration_date
+- dietary_restrictions_yn
+- dietary_restrictions_desc
+- seasickness_yn
+- plus_one_yn
+- plus_one_name
+- plus_one_email
+- intl_flights_help_yn
+- intl_flights_help_details
+- travel_insurance_help_yn
+- unforgettable_trip_details
+- avatar_url
+
+6. Roteiro que deve existir no app Parrot Trips depois da criacao
+
+Se a WeTravel API tiver itinerary/day/activity fields, tente criar estes dados la.
+Se nao tiver, apenas gere um arquivo de saida para importar no Parrot Trips depois.
+
+Pre-trip phases:
+
+Phase 1:
+- key: pretrip_documentos
+- title: Documents & Access
+- subtitle: Passport, app login and service agreement
+- icon: passport
+- short_description: Confirm your access and travel basics before the test.
+- checklist:
+  - Log in with WhatsApp OTP
+  - Open and verify Service Agreement
+  - Confirm passport fields in profile
+  - Confirm email and preferred name
+
+Phase 2:
+- key: pretrip_checklist_operacional
+- title: Operational Checklist
+- subtitle: Health, dietary, QR and profile completion
+- icon: file-text
+- ideal_pace: true
+- short_description: Complete the information needed for operations and QR check-in.
+- checklist:
+  - Fill dietary restrictions
+  - Fill seasickness answer
+  - Open My QR Code section
+  - Confirm add-ons shown correctly
+
+Phase 3:
+- key: pretrip_rio_ready
+- title: Rio Ready
+- subtitle: Safety, weather, packing and arrival logistics
+- icon: luggage
+- short_description: Review Rio logistics, emergency numbers and what to bring.
+- checklist:
+  - Save Parrot emergency contact
+  - Review Rio emergency numbers
+  - Review airport arrival instructions
+  - Pack sunscreen, ID and light rain jacket
+
+In-trip Day 1:
+- date: 2026-09-18
+- title: Day 1 - Arrival & Rio Icons
+- subtitle: Airport, hotel, Selaron and Sugarloaf
+- icon: plane-landing
+- activities:
+  1. Airport pickup - Santos Dumont
+     type: logistics
+     time: 09:00
+     duration_minutes: 90
+     address: Praca Senador Salgado Filho, s/n - Centro, Rio de Janeiro - RJ
+     max_checkins: 1
+  2. Hotel check-in and profile audit
+     type: logistics
+     time: 11:00
+     duration_minutes: 60
+     address: Copacabana, Rio de Janeiro - RJ
+     max_checkins: 1
+  3. Internal Parrot Ops Briefing
+     type: included
+     time: 12:30
+     duration_minutes: 75
+     restricted: true
+     allowed_travelers: +15550001001, +15550001002, +15550001003, +15550001004
+     max_checkins: 2
+  4. Escadaria Selaron Photo Stop
+     type: suggested
+     time: 15:00
+     duration_minutes: 60
+     address: Rua Manuel Carneiro, Santa Teresa, Rio de Janeiro - RJ
+     max_checkins: 1
+  5. Sugarloaf Sunset Test
+     type: optional
+     time: 17:00
+     duration_minutes: 150
+     address: Avenida Pasteur, 520 - Urca, Rio de Janeiro - RJ
+     price_brl: 180
+     restricted: true
+     allowed_travelers: +15550001001, +15550001002, +15550001003, +15550001004, +15550001005
+     max_checkins: 1
+  6. Anonymous notification drill
+     type: logistics
+     time: 20:00
+     duration_minutes: 20
+     max_checkins: 1
+
+In-trip Day 2:
+- date: 2026-09-19
+- title: Day 2 - Corcovado, Boat & Wrap-up
+- subtitle: Christ the Redeemer, controlled boat check-in and final feedback
+- icon: sun
+- activities:
+  1. Corcovado early departure
+     type: logistics
+     time: 08:15
+     duration_minutes: 45
+     address: Copacabana, Rio de Janeiro - RJ
+     max_checkins: 1
+  2. Christ the Redeemer Visit
+     type: included
+     time: 09:30
+     duration_minutes: 120
+     address: Corcovado Mountain, Tijuca National Park, Rio de Janeiro - RJ
+     max_checkins: 1
+  3. Restricted Boat Boarding
+     type: optional
+     time: 14:00
+     duration_minutes: 180
+     address: Marina da Gloria, Rio de Janeiro - RJ
+     price_brl: 250
+     restricted: true
+     allowed_travelers: +15550001001, +15550001002, +15550001008
+     max_checkins: 2
+  4. Free time in Ipanema
+     type: suggested
+     time: 17:30
+     duration_minutes: 90
+     address: Ipanema, Rio de Janeiro - RJ
+     max_checkins: 1
+  5. Final feedback circle
+     type: included
+     time: 19:30
+     duration_minutes: 60
+     address: Copacabana, Rio de Janeiro - RJ
+     max_checkins: 1
+
+7. Staff Parrot
+
+Se a WeTravel API tem staff/team/host/cohost support, tente criar ou vincular estes usuarios. Se nao tiver, gere saida para import posterior no Parrot Trips.
+
+- Marcelo Fazio, phone +15550002001, function Product / Trip Lead
+- Ana Parrot, phone +15550002002, function Traveler Support
+- Bruno Parrot, phone +15550002003, function Operations Lead
+- Clara Parrot, phone +15550002004, function Content Manager
+- Diego Parrot, phone +15550002005, function QR Scanner
+- Elisa Parrot, phone +15550002006, function Emergency Contact
+
+8. Dados operacionais que provavelmente sao fora da WeTravel
+
+Mesmo que a WeTravel trip seja criada com sucesso, estes dados provavelmente precisam ser gerados para o app Parrot Trips/Supabase:
+
+- trip_settings.mode = pre-trip
+- trip_settings.ideal_pace_phase_id = pretrip_checklist_operacional depois do import
+- trip_phase_checklist_items
+- trip_phase_links
+- trip_activities se a WeTravel nao tiver roteiro estruturado compativel
+- activity_participants para atividades restritas
+- trip_staff
+- staff_tasks
+- trip_contacts
+- trip_emergency_contacts
+- trip_recommendations
+- trip_faqs
+- trip_cancellation_policies
+- QR payloads reais dos viajantes
+
+9. Saida esperada do trabalho
+
+Ao final, entregue:
+
+1. Resumo do que foi criado via WeTravel API.
+2. IDs gerados:
+   - trip_id / trip_uuid
+   - package_ids
+   - addon_ids
+   - booking/order ids
+   - participant ids
+3. URL da viagem.
+4. Payloads usados nas chamadas, removendo tokens/segredos.
+5. Comandos executados.
+6. Lista de campos aceitos pela WeTravel.
+7. Lista de campos nao suportados pela WeTravel.
+8. Arquivo JSON ou CSV de export para o Parrot Trips com:
+   - travelers
+   - packages/addons
+   - trip mapping
+   - campos pendentes para Supabase
+9. Plano de rollback ou cleanup da viagem teste, se a API suportar delete/archive/cancel.
+
+10. Regras de seguranca
+
+- Nunca commitar tokens, API keys, cookies ou credenciais.
+- Se precisar rodar chamadas reais contra producao, pedir confirmacao antes.
+- Preferir dry-run/sandbox quando disponivel.
+- Nao sobrescrever viagens existentes.
+- Antes de criar, procurar se ja existe uma viagem com title "Parrot Rio Full App Simulation" ou slug "parrot-rio-full-app-simulation".
+- Se existir, nao criar duplicata sem confirmacao; em vez disso, listar o registro existente e perguntar se deve atualizar, arquivar ou reutilizar.
+
+11. Criterios de pronto
+
+Considerar pronto quando:
+
+- A viagem existir na WeTravel ou houver um bloqueio documentado.
+- Packages/add-ons estiverem criados ou documentados como nao suportados.
+- Participantes estiverem criados ou exportados para import posterior.
+- Todos os IDs necessarios estiverem registrados.
+- Houver um arquivo de saida que permita sincronizar a viagem com o app Parrot Trips.
+- Houver um resumo claro dos gaps entre WeTravel e Parrot Trips.

@@ -152,11 +152,31 @@ class Activity:
     name: str
     activity_type: str
     horario: str
+    starts_at: datetime | None
     duration_minutes: int | None
     short_description: str
     practical_info: str
+    address: str | None
+    max_checkins: int
     amount_brl: float | None
     sort_order: int
+
+
+@dataclass
+class Recommendation:
+    name: str
+    description: str | None
+    address: str | None
+    photo_url: str | None
+    sort_order: int
+    category: str | None
+    neighborhood: str | None
+    location: str | None
+    highlight: str | None
+    price_range: str | None
+    rating: float | None
+    map_url: str | None
+    emoji: str | None
 
 
 @dataclass
@@ -174,6 +194,67 @@ class InTripDay:
 # ---------------------------------------------------------------------------
 # Parsers
 # ---------------------------------------------------------------------------
+
+def _header_lookup(rows: list[list[str]]) -> dict[str, int]:
+    if not rows:
+        return {}
+    return {h.strip().lower(): idx for idx, h in enumerate(rows[0])}
+
+
+def _col(row: list[str], header: dict[str, int], name: str) -> str:
+    idx = header.get(name)
+    if idx is None or idx >= len(row):
+        return ""
+    return row[idx].strip()
+
+
+def _parse_int(value: str, default: int = 0) -> int:
+    try:
+        return int(value or str(default))
+    except ValueError:
+        return default
+
+
+def _parse_float(value: str) -> float | None:
+    if not value:
+        return None
+    try:
+        return float(value.replace(",", "."))
+    except ValueError:
+        return None
+
+
+def parse_recommendations_tab(rows: list[list[str]]) -> list[Recommendation]:
+    """Parse Recomendacoes tab rows after filtering by trip_uuid.
+
+    Required legacy columns: trip_uuid, name, description, address, photo_url, sort_order.
+    Optional rich UI columns: category, neighborhood, location, highlight, price_range,
+    rating, map_url, emoji.
+    """
+    header = _header_lookup(rows)
+    recs: list[Recommendation] = []
+
+    for row in rows[1:]:
+        name = _col(row, header, "name")
+        if not name:
+            continue
+        recs.append(Recommendation(
+            name=name,
+            description=_col(row, header, "description") or None,
+            address=_col(row, header, "address") or None,
+            photo_url=_col(row, header, "photo_url") or None,
+            sort_order=_parse_int(_col(row, header, "sort_order")),
+            category=_col(row, header, "category") or None,
+            neighborhood=_col(row, header, "neighborhood") or None,
+            location=_col(row, header, "location") or None,
+            highlight=_col(row, header, "highlight") or None,
+            price_range=_col(row, header, "price_range") or None,
+            rating=_parse_float(_col(row, header, "rating")),
+            map_url=_col(row, header, "map_url") or None,
+            emoji=_col(row, header, "emoji") or None,
+        ))
+
+    return recs
 
 def parse_fases_tab(rows: list[list[str]]) -> list[PreTripPhase]:
     """Parse Fases tab (already filtered by trip_uuid). Each row is one complete phase.
@@ -284,31 +365,27 @@ def parse_links_tab(rows: list[list[str]], phases: list[PreTripPhase]) -> None:
             ))
 
 
-_ROTEIRO_COLS = [
-    "trip_uuid",
-    "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon",
-    "dia_descricao_curta", "dia_descricao_completa",
-    "atividade_nome", "atividade_tipo", "atividade_horario",
-    "atividade_duracao_min", "atividade_descricao_curta",
-    "atividade_info_pratica", "atividade_preco_brl",
-]
-
-
-def _cell(row: list[str], col: str) -> str:
-    try:
-        idx = _ROTEIRO_COLS.index(col)
-        return row[idx].strip() if idx < len(row) else ""
-    except ValueError:
-        return ""
+def _make_cell(header: list[str]):
+    """Return a cell accessor that looks up columns by name from the actual header row."""
+    index = {h.strip().lower(): i for i, h in enumerate(header)}
+    def _cell(row: list[str], col: str) -> str:
+        idx = index.get(col.strip().lower(), -1)
+        if idx < 0 or idx >= len(row):
+            return ""
+        return row[idx].strip()
+    return _cell
 
 
 def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
     """Parse Roteiro tab rows (already filtered by trip_uuid)."""
+    if not rows:
+        return []
+    _cell = _make_cell(rows[0])
     days: dict[int, InTripDay] = {}
     activity_counters: dict[int, int] = {}
 
     for row in rows[1:]:  # skip header
-        if len(row) < 9:
+        if len(row) < 2:
             continue
         dia_str = _cell(row, "dia")
         if not dia_str.isdigit():
@@ -342,13 +419,34 @@ def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
         except ValueError:
             pass
 
+        # Build starts_at from day date + activity time (e.g. "08:00" or "08:00:00")
+        activity_starts_at: datetime | None = None
+        horario = _cell(row, "atividade_horario")
+        day_data = _cell(row, "data")
+        if horario and day_data:
+            for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    activity_starts_at = datetime.strptime(f"{day_data} {horario}", fmt).replace(tzinfo=UTC)
+                    break
+                except ValueError:
+                    pass
+
+        max_scans_str = _cell(row, "atividade_max_scans")
+        try:
+            max_checkins = max(1, int(max_scans_str)) if max_scans_str else 1
+        except ValueError:
+            max_checkins = 1
+
         days[dia].activities.append(Activity(
             name=atividade_nome,
             activity_type=_cell(row, "atividade_tipo"),
-            horario=_cell(row, "atividade_horario"),
+            horario=horario,
+            starts_at=activity_starts_at,
             duration_minutes=duration_minutes,
             short_description=_cell(row, "atividade_descricao_curta"),
             practical_info=_cell(row, "atividade_info_pratica"),
+            address=_cell(row, "atividade_endereco") or None,
+            max_checkins=max_checkins,
             amount_brl=amount_brl,
             sort_order=activity_counters[dia],
         ))
@@ -383,6 +481,19 @@ async def write_to_db(
                 await conn.execute(
                     "DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[])",
                     tt_ids,
+                )
+            activity_ids = [str(r["id"]) for r in await conn.fetch(
+                "SELECT id FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", ids
+            )]
+            if activity_ids:
+                await conn.execute(
+                    "DELETE FROM activity_participants WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
+                )
+                await conn.execute(
+                    "DELETE FROM activity_checkins WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
+                )
+                await conn.execute(
+                    "DELETE FROM staff_tasks WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
                 )
             await conn.execute(
                 "DELETE FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", ids
@@ -461,13 +572,14 @@ async def write_to_db(
                     """
                     INSERT INTO trip_activities
                         (id, trip_phase_id, name, activity_type,
-                         duration_minutes, short_description, practical_info,
-                         amount_brl, sort_order, created_at, updated_at)
-                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())
+                         starts_at, duration_minutes, short_description, practical_info,
+                         address, max_checkins, amount_brl, sort_order, created_at, updated_at)
+                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),now())
                     """,
                     str(uuid.uuid4()), phase_id, act.name, act.activity_type,
-                    act.duration_minutes, act.short_description,
-                    act.practical_info or None, act.amount_brl, act.sort_order,
+                    act.starts_at, act.duration_minutes, act.short_description,
+                    act.practical_info or None, act.address, act.max_checkins,
+                    act.amount_brl, act.sort_order,
                 )
 
         # 4. Save ideal_pace_phase_id in trip_settings (preserve mode if already set)

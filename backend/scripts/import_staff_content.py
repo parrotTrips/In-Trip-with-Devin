@@ -90,7 +90,12 @@ def filter_rows_by_trip(rows: list[list[str]], trip_uuid: str) -> list[list[str]
     if not rows:
         return []
     header = rows[0]
-    matching = [row for row in rows[1:] if row and row[0].strip() == trip_uuid]
+    # Find trip_uuid column by name (fallback to column 0)
+    try:
+        uuid_col = [h.strip().lower() for h in header].index("trip_uuid")
+    except ValueError:
+        uuid_col = 0
+    matching = [row for row in rows[1:] if len(row) > uuid_col and row[uuid_col].strip() == trip_uuid]
     return [header] + matching
 
 
@@ -433,6 +438,8 @@ def parse_staff_tab(rows: list[list[str]]) -> list[dict]:
             "nome": col(row, "nome") or None,
             "funcao": col(row, "funcao") or None,
             "trip_uuid": col(row, "trip_uuid"),
+            "photo_url": col(row, "photo_url") or None,
+            "bio": col(row, "bio") or None,
         })
     return members
 
@@ -483,6 +490,17 @@ async def write_staff(conn: asyncpg.Connection, trip_uuid: str, members: list[di
                     user_id, trip_uuid,
                 )
                 linked += 1
+
+            # Upsert trip_staff with function, photo_url and bio
+            await conn.execute(
+                """
+                INSERT INTO trip_staff (id, wetravel_trip_uuid, user_id, function, photo_url, bio, created_at, updated_at)
+                VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, now(), now())
+                ON CONFLICT (wetravel_trip_uuid, user_id)
+                DO UPDATE SET function = $3, photo_url = $4, bio = $5, updated_at = now()
+                """,
+                trip_uuid, user_id, m["funcao"], m["photo_url"], m["bio"],
+            )
 
     return {"created": created, "updated": updated, "linked": linked}
 

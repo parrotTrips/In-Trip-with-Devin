@@ -35,6 +35,7 @@ export interface ProfileData {
   departure_date: string | null;
   departure_time: string | null;
   departure_flight: string | null;
+  avatar_url: string | null;
 }
 
 export interface ProfileResponse {

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from sqlalchemy import select
 
-from app.db.models.trip import TripPhase, TripTraveler
+from app.db.models.trip import TripPhase, TripRecommendation, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import decode_traveler_qr_payload
 
@@ -30,8 +30,8 @@ async def _seed_trip(session_factory, *, user_phone: str, trip_uuid: str = TEST_
                 "uuid": trip_uuid,
                 "title": "Test Trip",
                 "dest": "Brazil",
-                "sd": date(2026, 7, 1),
-                "ed": date(2026, 7, 10),
+                "sd": date(2027, 7, 1),
+                "ed": date(2027, 7, 10),
             },
         )
         user = User(phone=user_phone, full_name="Trip Tester", status="active")
@@ -288,3 +288,48 @@ def test_get_my_trip_travelers_includes_current_phase_id(seeded_client, session_
     for traveler in travelers:
         assert "current_phase_id" in traveler
         assert traveler["current_phase_id"] is not None
+
+
+def test_get_my_recommendations_returns_rich_filter_fields(seeded_client, session_factory):
+    """GET /me/recommendations exposes the sheet-backed fields needed by the rich UI."""
+    phone = "+5511333000013"
+    trip_uuid = "trip-rich-recommendations-001"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+
+    async def _seed_recommendation():
+        async with session_factory() as session:
+            session.add(
+                TripRecommendation(
+                    wetravel_trip_uuid=trip_uuid,
+                    name="Babbo Osteria",
+                    description="Upscale Italian cuisine",
+                    address="Rua Barao da Torre, Ipanema",
+                    photo_url="https://example.com/babbo.jpg",
+                    sort_order=1,
+                    category="restaurants",
+                    neighborhood="Ipanema",
+                    location="rio",
+                    highlight="Near the hotel",
+                    price_range="$$$",
+                    rating=4.7,
+                    map_url="https://maps.example/babbo",
+                    emoji="🍝",
+                )
+            )
+            await session.commit()
+
+    asyncio.run(_seed_recommendation())
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.get("/me/recommendations", headers=headers)
+
+    assert response.status_code == 200
+    rec = response.json()["recommendations"][0]
+    assert rec["category"] == "restaurants"
+    assert rec["neighborhood"] == "Ipanema"
+    assert rec["location"] == "rio"
+    assert rec["highlight"] == "Near the hotel"
+    assert rec["price_range"] == "$$$"
+    assert rec["rating"] == 4.7
+    assert rec["map_url"] == "https://maps.example/babbo"
+    assert rec["emoji"] == "🍝"

@@ -7,16 +7,20 @@ var BACKEND_URL = "https://parrot-trips-backend-428743191336.southamerica-east1.
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🦜 Parrot Trips")
-    .addItem("🔄 Sync Trips from Supabase", "syncTrips")
+    .addItem("🔄 Sync Trips from App", "syncTrips")
     .addSeparator()
-    .addItem("Import Trip Content → Supabase", "importTrip")
+    .addItem("🚀 Export Trip Content to App", "importTrip")
+    .addItem("🆘 Export Emergency Contacts to App", "importEmergencyContacts")
+    .addItem("📍 Export Recommendations to App", "importRecommendations")
+    .addItem("❓ Export FAQ to App", "importFaq")
+    .addItem("📄 Export Cancellation Policy to App", "importCancellationPolicy")
     .addSeparator()
-    .addItem("🚀 Iniciar Viagem → In-Trip", "startTrip")
-    .addItem("🔁 Reset Trip → Pre-Trip (testes)", "resetTrip")
+    .addItem("▶️ Start Trip", "startTrip")
+    .addItem("🔁 Reset Trip to Pre-Trip", "resetTrip")
     .addSeparator()
-    .addItem("Reset Trip Content (apaga fases e atividades)", "resetContent")
+    .addItem("🗑️ Clear Trip Content", "resetContent")
     .addSeparator()
-    .addItem("🔧 Setup Sheet Headers (primeira vez)", "setupSheetHeaders")
+    .addItem("🔧 Setup Sheet Headers", "setupSheetHeaders")
     .addToUi();
 }
 
@@ -144,6 +148,46 @@ function importTrip() {
   }
 }
 
+function importEmergencyContacts() {
+  var trip_uuid = promptForTrip("🆘 Export Emergency Contacts to App");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/import-emergency-contacts", trip_uuid));
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
+  }
+}
+
+function importRecommendations() {
+  var trip_uuid = promptForTrip("📍 Export Recommendations to App");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/import-recommendations", trip_uuid));
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
+  }
+}
+
+function importFaq() {
+  var trip_uuid = promptForTrip("❓ Export FAQ to App");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/import-faq", trip_uuid));
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
+  }
+}
+
+function importCancellationPolicy() {
+  var trip_uuid = promptForTrip("📄 Export Cancellation Policy to App");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/import-cancellation-policy", trip_uuid));
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
+  }
+}
+
 function startTrip() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
@@ -205,8 +249,28 @@ function setupSheetHeaders() {
     },
     {
       name: "Roteiro",
-      headers: ["trip_uuid", "dia", "data", "titulo", "subtitulo", "icone", "descricao_curta", "descricao_completa", "atividade", "tipo", "horario", "duracao_min", "descricao_atividade", "info_pratica", "valor_brl"],
+      headers: ["trip_uuid", "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon", "dia_descricao_curta", "dia_descricao_completa", "atividade_nome", "atividade_tipo", "atividade_horario", "atividade_duracao_min", "atividade_descricao_curta", "atividade_info_pratica", "atividade_endereco", "atividade_preco_brl", "max_scans"],
       note: ""
+    },
+    {
+      name: "Emergency Contacts",
+      headers: ["trip_uuid", "name", "role", "phone", "sort_order"],
+      note: "Emergency contacts shown to travelers — police, SAMU, hotel, hospital, etc."
+    },
+    {
+      name: "Recomendacoes",
+      headers: ["trip_uuid", "name", "description", "address", "photo_url", "sort_order", "category", "neighborhood", "location", "highlight", "price_range", "rating", "map_url", "emoji"],
+      note: "Local recommendations. category examples: restaurants, bars, cafes, beaches, wellness, shopping. location examples: rio, ilha-grande. rating is optional."
+    },
+    {
+      name: "FAQ",
+      headers: ["trip_uuid", "question", "answer", "sort_order"],
+      note: "Frequently asked questions shown to travelers in the Information section."
+    },
+    {
+      name: "Cancellation Policy",
+      headers: ["trip_uuid", "title", "body", "sort_order"],
+      note: "Cancellation policy sections. Each row is one policy block with a title and body text."
     }
   ];
 

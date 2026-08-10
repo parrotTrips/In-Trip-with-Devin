@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import posthog from 'posthog-js';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -75,6 +76,11 @@ export default function PhaseDetails() {
     if (!item || !user || !phaseId || !tripInfo) return;
     const newCompleted = !item.completed;
     setChecklist(prev => prev.map(i => i.id === itemId ? { ...i, completed: newCompleted } : i));
+    posthog.capture(newCompleted ? 'checklist_item_marcado' : 'checklist_item_desmarcado', {
+      item_label: item.label,
+      fase_id: phaseId,
+      fase_titulo: phase?.title,
+    });
     try {
       await apiUpdateChecklist(user.userId, tripInfo.wetravel_trip_uuid, phaseId, itemId, newCompleted);
     } catch {
@@ -86,6 +92,7 @@ export default function PhaseDetails() {
     if (!user || !phaseId || !tripInfo) return;
     const newVal = !isCompleted;
     setIsCompleted(newVal);
+    if (newVal) posthog.capture('fase_concluida', { fase_id: phaseId, fase_titulo: phase?.title });
     try {
       await updatePhaseCompletion(user.userId, tripInfo.wetravel_trip_uuid, phaseId, newVal);
       refetch();
@@ -118,7 +125,7 @@ export default function PhaseDetails() {
   const checklistProgress = checklist.length > 0 ? Math.round((completedCount / checklist.length) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
       {/* Header */}
       <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-600 text-white">
         <div className="flex items-center gap-3 px-4 pt-12 pb-4">

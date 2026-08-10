@@ -5,11 +5,32 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+
+class TripAnnouncement(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "trip_announcements"
+    __table_args__ = (
+        Index("ix_trip_announcements_trip_uuid", "wetravel_trip_uuid"),
+    )
+
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    sent_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
+    )
+    is_anonymous: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
 
 
 class TripContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -32,6 +53,8 @@ class TripStaff(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
     function: Mapped[str | None] = mapped_column(Text)
+    photo_url: Mapped[str | None] = mapped_column(Text)
+    bio: Mapped[str | None] = mapped_column(Text)
 
 
 class StaffTask(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -55,7 +78,7 @@ class StaffTask(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 class ActivityCheckin(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "activity_checkins"
     __table_args__ = (
-        UniqueConstraint("trip_activity_id", "trip_traveler_id"),
+        UniqueConstraint("trip_activity_id", "trip_traveler_id", "scan_number", name="uq_activity_checkins_activity_traveler_step"),
         Index("ix_activity_checkins_trip_activity_id", "trip_activity_id"),
         Index("ix_activity_checkins_trip_traveler_id", "trip_traveler_id"),
     )
@@ -69,6 +92,7 @@ class ActivityCheckin(UUIDPrimaryKeyMixin, Base):
     scanned_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
+    scan_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     checked_in_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

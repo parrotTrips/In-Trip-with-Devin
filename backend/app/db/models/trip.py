@@ -86,8 +86,57 @@ class TripActivity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     duration_minutes: Mapped[int | None] = mapped_column(Integer)
     short_description: Mapped[str] = mapped_column(Text, nullable=False)
     practical_info: Mapped[str | None] = mapped_column(Text)
+    address: Mapped[str | None] = mapped_column(Text)
+    max_checkins: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     amount_brl: Mapped[float | None] = mapped_column(Numeric(12, 2))
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class TripEmergencyContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "trip_emergency_contacts"
+
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class TripRecommendation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "trip_recommendations"
+
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    address: Mapped[str | None] = mapped_column(Text)
+    photo_url: Mapped[str | None] = mapped_column(Text)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    category: Mapped[str | None] = mapped_column(Text)
+    neighborhood: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(Text)
+    highlight: Mapped[str | None] = mapped_column(Text)
+    price_range: Mapped[str | None] = mapped_column(Text)
+    rating: Mapped[float | None] = mapped_column(Numeric(3, 1))
+    map_url: Mapped[str | None] = mapped_column(Text)
+    emoji: Mapped[str | None] = mapped_column(Text)
+
+
+class TripFaq(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "trip_faqs"
+
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class TripCancellationPolicy(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "trip_cancellation_policies"
+
+    wetravel_trip_uuid: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class TripSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):

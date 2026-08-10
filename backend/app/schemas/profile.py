@@ -42,3 +42,4 @@ class ProfileUpdate(BaseModel):
     departure_date: Optional[str] = None
     departure_time: Optional[str] = None
     departure_flight: Optional[str] = None
+    avatar_url: Optional[str] = None

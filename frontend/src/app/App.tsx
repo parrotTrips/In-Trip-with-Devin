@@ -1,6 +1,5 @@
 import '../App.css';
-import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import LoginScreen from '../features/auth/pages/LoginScreen';
 import StaffScreen from '../features/staff/pages/StaffScreen';
@@ -9,27 +8,30 @@ import DevUserSwitcher from '../features/dev/DevUserSwitcher';
 import { AuthProvider } from './providers/AuthProvider';
 import { TripProvider } from './providers/TripProvider';
 import { useAuth } from './providers/auth-context';
+import { StaffViewContext } from './providers/staff-view-context';
+import { AvatarContext, loadStoredAvatar, persistAvatar } from './providers/avatar-context';
 import AppRouter from './router';
-
-function TravelerPreviewExitButton({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="fixed top-0 left-1/2 z-[70] flex h-14 w-full max-w-lg -translate-x-1/2 items-center justify-end px-4 pointer-events-none">
-      <button
-        onClick={onBack}
-        className="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-gray-800"
-        title="Voltar ao staff"
-        aria-label="Voltar ao staff"
-      >
-        <ArrowLeft size={14} />
-        <span>Staff</span>
-      </button>
-    </div>
-  );
-}
 
 function AppContent() {
   const { isLoggedIn, user } = useAuth();
   const [viewingAsTraveler, setViewingAsTraveler] = useState(false);
+  const userId = user?.userId ?? '';
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
+    userId ? loadStoredAvatar(userId) : null
+  );
+
+  useEffect(() => {
+    if (userId) {
+      setAvatarUrl(loadStoredAvatar(userId));
+    } else {
+      setAvatarUrl(null);
+    }
+  }, [userId]);
+
+  const handleSetAvatarUrl = (url: string | null) => {
+    if (userId) persistAvatar(userId, url);
+    setAvatarUrl(url);
+  };
 
   if (!isLoggedIn) {
     return <LoginScreen />;
@@ -41,10 +43,13 @@ function AppContent() {
 
   return (
     <TripProvider>
-      {user?.role === 'staff' && viewingAsTraveler && (
-        <TravelerPreviewExitButton onBack={() => setViewingAsTraveler(false)} />
-      )}
-      <AppRouter />
+      <StaffViewContext.Provider value={{
+        onSwitchToStaffView: user?.role === 'staff' ? () => setViewingAsTraveler(false) : null,
+      }}>
+        <AvatarContext.Provider value={{ avatarUrl, setAvatarUrl: handleSetAvatarUrl }}>
+          <AppRouter />
+        </AvatarContext.Provider>
+      </StaffViewContext.Provider>
     </TripProvider>
   );
 }

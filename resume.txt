@@ -1,0 +1,7 @@
+claude --resume 95d0f7cf-23ca-4f90-b5fb-ae905ce09532
+claude --resume 90a5da29-4279-4b79-9343-2d56402b2953
+codex resume 019ed4f1-8585-7682-9e12-a7726644cdfe1.
+claude --resume 90977cf2-e52e-4213-9876-83dab5159a7f
+claude --resume ab28f725-b105-45f6-ac5e-2c8b37ec6761      <- Observabilidadecee
+codex resume 019fc25c-9846-7542-8eea-fc9e9de4b18e <- Data Request Casamento | Viagem da Parrot pela API
+codex resume 019fdd68-b019-7d20-9144-98481e3a9072 <- Link de cancelamento de pacote e sessao de feedback na viagem de teste

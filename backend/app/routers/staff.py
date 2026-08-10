@@ -16,6 +16,7 @@ from app.db.models.staff import (
     ActivityCheckinScanEvent,
     ActivityParticipant,
     StaffTask,
+    TripAnnouncement,
     TripContact,
 )
 from app.db.models.trip import TripActivity, TripPhase, TripTraveler
@@ -27,6 +28,12 @@ router = APIRouter(prefix="/me/staff", tags=["staff"])
 
 class StaffCheckinScanRequest(BaseModel):
     qr_payload: str
+
+
+class AnnouncementRequest(BaseModel):
+    title: str
+    body: str
+    is_anonymous: bool = False
 
 
 def _payload_hash(payload: str) -> str:
@@ -148,20 +155,35 @@ async def get_staff_trip(
                 "sort_order": task.sort_order,
             })
 
+        # Per-step checkin details: name, traveler_id, checked_in_at
         checkins_result = await session.execute(
-            select(
-                ActivityCheckin.trip_activity_id,
-                func.count(func.distinct(ActivityCheckin.trip_traveler_id)),
-            )
-            .where(ActivityCheckin.trip_activity_id.in_(activity_ids))
-            .group_by(ActivityCheckin.trip_activity_id)
+            text("""
+                SELECT ac.trip_activity_id, ac.scan_number, ac.trip_traveler_id,
+                       u.full_name as traveler_name,
+                       ac.checked_in_at
+                FROM activity_checkins ac
+                JOIN trip_travelers tt ON tt.id = ac.trip_traveler_id
+                JOIN users u ON u.id = tt.user_id
+                WHERE ac.trip_activity_id = ANY(:ids)
+                ORDER BY ac.trip_activity_id, ac.scan_number, ac.checked_in_at
+            """),
+            {"ids": activity_ids},
         )
-        checkin_counts_by_activity = {
-            activity_id: count
-            for activity_id, count in checkins_result.all()
-        }
+        # Build: {activity_id: {step: [{name, checked_in_at}]}} and set of checked-in traveler_ids per activity
+        checkin_steps_by_activity: dict = {}
+        checked_in_traveler_ids_by_activity: dict = {}
+        for row in checkins_result.mappings():
+            act_id = row["trip_activity_id"]
+            step = row["scan_number"]
+            name = row["traveler_name"] or "Unknown"
+            checked_in_at = row["checked_in_at"].isoformat() if row["checked_in_at"] else None
+            traveler_id = str(row["trip_traveler_id"])
+            checkin_steps_by_activity.setdefault(act_id, {}).setdefault(step, []).append(
+                {"name": name, "checked_in_at": checked_in_at}
+            )
+            checked_in_traveler_ids_by_activity.setdefault(act_id, set()).add(traveler_id)
 
-    traveler_count = await session.scalar(
+    total_traveler_count = await session.scalar(
         text("""
             SELECT COUNT(*)
             FROM trip_travelers tt
@@ -172,8 +194,68 @@ async def get_staff_trip(
         {"uuid": trip_uuid},
     )
 
+    # Per-activity allowed participant counts (only for controlled activities)
+    activity_ids = [act.id for act in activities]
+    controlled_counts_result = await session.execute(
+        text("""
+            SELECT trip_activity_id, COUNT(*) as cnt
+            FROM activity_participants
+            WHERE trip_activity_id = ANY(:ids)
+              AND status = 'allowed'
+            GROUP BY trip_activity_id
+        """),
+        {"ids": activity_ids},
+    )
+    controlled_counts = {row.trip_activity_id: row.cnt for row in controlled_counts_result}
+
+    # All traveler names for the trip (for absent list)
+    all_travelers_result = await session.execute(
+        text("""
+            SELECT tt.id as traveler_id, u.full_name
+            FROM trip_travelers tt
+            JOIN users u ON u.id = tt.user_id
+            WHERE tt.wetravel_trip_uuid = :uuid AND u.role = 'traveler'
+            ORDER BY u.full_name
+        """),
+        {"uuid": trip_uuid},
+    )
+    all_travelers = [
+        {"id": str(r.traveler_id), "name": r.full_name or "Unknown"}
+        for r in all_travelers_result.mappings()
+    ]
+
+    # Per-activity allowed participants (for controlled activities)
+    allowed_travelers_result = await session.execute(
+        text("""
+            SELECT ap.trip_activity_id, tt.id as traveler_id, u.full_name
+            FROM activity_participants ap
+            JOIN trip_travelers tt ON tt.id = ap.trip_traveler_id
+            JOIN users u ON u.id = tt.user_id
+            WHERE ap.trip_activity_id = ANY(:ids) AND ap.status = 'allowed'
+            ORDER BY u.full_name
+        """),
+        {"ids": activity_ids},
+    )
+    allowed_by_activity: dict = {}
+    for row in allowed_travelers_result.mappings():
+        allowed_by_activity.setdefault(str(row.trip_activity_id), []).append(
+            {"id": str(row.traveler_id), "name": row.full_name or "Unknown"}
+        )
+
     activities_by_phase: dict = {}
     for act in activities:
+        act_id_str = str(act.id)
+        is_controlled = act_id_str in allowed_by_activity
+        expected_travelers = allowed_by_activity[act_id_str] if is_controlled else all_travelers
+        traveler_count = controlled_counts.get(act.id, total_traveler_count or 0)
+
+        steps_data = checkin_steps_by_activity.get(act.id, {})
+        checked_in_ids = checked_in_traveler_ids_by_activity.get(act.id, set())
+        checkin_steps = [
+            {"step": step, "count": len(entries), "travelers": [e["name"] for e in entries], "details": entries}
+            for step, entries in sorted(steps_data.items())
+        ]
+        absent_travelers = [t["name"] for t in expected_travelers if t["id"] not in checked_in_ids]
         activities_by_phase.setdefault(act.trip_phase_id, []).append({
             "id": str(act.id),
             "name": act.name,
@@ -184,8 +266,11 @@ async def get_staff_trip(
             "practical_info": act.practical_info,
             "amount_brl": float(act.amount_brl) if act.amount_brl else None,
             "sort_order": act.sort_order,
-            "checkin_count": checkin_counts_by_activity.get(act.id, 0),
-            "traveler_count": traveler_count or 0,
+            "address": act.address,
+            "max_checkins": act.max_checkins,
+            "checkin_steps": checkin_steps,
+            "absent_travelers": absent_travelers,
+            "traveler_count": traveler_count,
             "staff_tasks": tasks_by_activity.get(act.id, []),
         })
 
@@ -242,6 +327,179 @@ async def get_staff_contacts(
             for cat, items in grouped.items()
         ],
     }
+
+
+@router.post("/announcements")
+async def create_announcement(
+    body: AnnouncementRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Send a trip announcement to all travelers. Staff only."""
+    staff_user_id = uuid.UUID(str(request.state.user_id))
+    trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
+
+    ann = TripAnnouncement(
+        id=uuid.uuid4(),
+        wetravel_trip_uuid=trip_uuid,
+        title=body.title.strip(),
+        body=body.body.strip(),
+        sent_by_user_id=staff_user_id,
+        is_anonymous=body.is_anonymous,
+    )
+    session.add(ann)
+    await session.commit()
+
+    return {
+        "id": str(ann.id),
+        "title": ann.title,
+        "body": ann.body,
+        "created_at": ann.created_at.isoformat(),
+    }
+
+
+@router.get("/announcements")
+async def list_announcements(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """List all announcements for the staff's active trip, newest first."""
+    staff_user_id = str(request.state.user_id)
+    trip_uuid = await _get_staff_trip_uuid(staff_user_id, session)
+
+    rows = (await session.execute(
+        select(TripAnnouncement, User.full_name)
+        .join(User, User.id == TripAnnouncement.sent_by_user_id)
+        .where(TripAnnouncement.wetravel_trip_uuid == trip_uuid)
+        .order_by(TripAnnouncement.created_at.desc())
+    )).all()
+
+    return {
+        "announcements": [
+            {
+                "id": str(ann.id),
+                "title": ann.title,
+                "body": ann.body,
+                "sent_by": name,
+                "sent_by_user_id": str(ann.sent_by_user_id),
+                "is_anonymous": ann.is_anonymous,
+                "created_at": ann.created_at.isoformat(),
+            }
+            for ann, name in rows
+        ]
+    }
+
+
+class AnnouncementUpdateRequest(BaseModel):
+    title: str
+    body: str
+
+
+@router.put("/announcements/{announcement_id}")
+async def update_announcement(
+    announcement_id: uuid.UUID,
+    body: AnnouncementUpdateRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Edit an announcement. Only the original sender can edit."""
+    staff_user_id = uuid.UUID(str(request.state.user_id))
+
+    ann = await session.scalar(
+        select(TripAnnouncement).where(TripAnnouncement.id == announcement_id)
+    )
+    if ann is None:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    if ann.sent_by_user_id != staff_user_id:
+        raise HTTPException(status_code=403, detail="You can only edit your own announcements")
+
+    ann.title = body.title.strip()
+    ann.body = body.body.strip()
+    await session.commit()
+
+    return {"id": str(ann.id), "title": ann.title, "body": ann.body}
+
+
+@router.delete("/announcements/{announcement_id}")
+async def delete_announcement(
+    announcement_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Delete an announcement. Only the original sender can delete."""
+    staff_user_id = uuid.UUID(str(request.state.user_id))
+
+    ann = await session.scalar(
+        select(TripAnnouncement).where(TripAnnouncement.id == announcement_id)
+    )
+    if ann is None:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    if ann.sent_by_user_id != staff_user_id:
+        raise HTTPException(status_code=403, detail="You can only delete your own announcements")
+
+    await session.delete(ann)
+    await session.commit()
+
+    return {"status": "deleted"}
+
+
+@router.get("/activities/{activity_id}/travelers")
+async def get_activity_travelers(
+    activity_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return travelers eligible for check-in in this activity, with pre-generated QR payloads."""
+    from app.services.qr_service import create_traveler_qr_payload
+
+    staff_user_id = str(request.state.user_id)
+    staff_trip_uuid = await _get_staff_trip_uuid(staff_user_id, session)
+
+    # Check if controlled activity
+    participant_count = await session.scalar(
+        select(func.count())
+        .select_from(ActivityParticipant)
+        .where(ActivityParticipant.trip_activity_id == activity_id)
+    )
+
+    if participant_count:
+        # Controlled — return only allowed participants
+        rows = await session.execute(
+            text("""
+                SELECT tt.id as traveler_id, u.full_name
+                FROM activity_participants ap
+                JOIN trip_travelers tt ON tt.id = ap.trip_traveler_id
+                JOIN users u ON u.id = tt.user_id
+                WHERE ap.trip_activity_id = :act_id AND ap.status = 'allowed'
+                ORDER BY u.full_name
+            """),
+            {"act_id": str(activity_id)},
+        )
+    else:
+        # Open — return all travelers in the trip
+        rows = await session.execute(
+            text("""
+                SELECT tt.id as traveler_id, u.full_name
+                FROM trip_travelers tt
+                JOIN users u ON u.id = tt.user_id
+                WHERE tt.wetravel_trip_uuid = :trip_uuid AND u.role = 'traveler'
+                ORDER BY u.full_name
+            """),
+            {"trip_uuid": staff_trip_uuid},
+        )
+
+    travelers = []
+    for row in rows.mappings():
+        qr_payload = create_traveler_qr_payload(
+            str(row["traveler_id"]), staff_trip_uuid
+        )
+        travelers.append({
+            "id": str(row["traveler_id"]),
+            "name": row["full_name"] or "Unknown",
+            "qr_payload": qr_payload,
+        })
+
+    return {"travelers": travelers}
 
 
 @router.post("/activities/{activity_id}/checkins/scan")
@@ -371,73 +629,88 @@ async def scan_activity_checkin(
             await session.commit()
             raise HTTPException(status_code=403, detail="Traveler is not authorized for this activity")
 
-    result = await session.execute(
-        insert(ActivityCheckin)
-        .values(
-            trip_activity_id=activity_id,
-            trip_traveler_id=trip_traveler_id,
-            scanned_by_user_id=staff_user_id,
+    # Fetch activity to get max_checkins
+    activity = await session.scalar(select(TripActivity).where(TripActivity.id == activity_id))
+    if activity is None:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    max_checkins = activity.max_checkins or 1
+
+    # Count how many scans this traveler already has for this activity
+    existing_scans = await session.execute(
+        select(ActivityCheckin)
+        .where(
+            ActivityCheckin.trip_activity_id == activity_id,
+            ActivityCheckin.trip_traveler_id == trip_traveler_id,
         )
-        .on_conflict_do_nothing(
-            index_elements=["trip_activity_id", "trip_traveler_id"],
-        )
-        .returning(
-            ActivityCheckin.id,
-            ActivityCheckin.trip_activity_id,
-            ActivityCheckin.trip_traveler_id,
-            ActivityCheckin.checked_in_at,
-            ActivityCheckin.scanned_by_user_id,
-        )
+        .order_by(ActivityCheckin.scan_number)
     )
-    inserted = result.mappings().first()
-    if inserted:
+    existing_checkins = existing_scans.scalars().all()
+    next_scan_number = len(existing_checkins) + 1
+
+    if next_scan_number > max_checkins:
         await _record_scan_event(
             session,
             trip_activity_id=activity_id,
             trip_traveler_id=trip_traveler_id,
             scanned_by_user_id=staff_user_id,
-            status="checked_in",
+            status="already_checked_in",
             raw_payload=body.qr_payload,
         )
         await session.commit()
+        traveler_name_row = await session.execute(
+            select(User.full_name)
+            .join(TripTraveler, TripTraveler.user_id == User.id)
+            .where(TripTraveler.id == trip_traveler_id)
+        )
+        traveler_name = traveler_name_row.scalar()
+        last = existing_checkins[-1]
+        scanned_by_row = await session.scalar(select(User.full_name).where(User.id == last.scanned_by_user_id))
         return {
-            "status": "checked_in",
-            "checkin_id": str(inserted["id"]),
-            "trip_activity_id": str(inserted["trip_activity_id"]),
-            "trip_traveler_id": str(inserted["trip_traveler_id"]),
-            "checked_in_at": inserted["checked_in_at"].isoformat(),
-            "scanned_by_user_id": str(inserted["scanned_by_user_id"]),
+            "status": "already_checked_in",
+            "checkin_id": str(last.id),
+            "trip_activity_id": str(last.trip_activity_id),
+            "trip_traveler_id": str(last.trip_traveler_id),
+            "checked_in_at": last.checked_in_at.isoformat(),
+            "scanned_by_user_id": str(last.scanned_by_user_id),
+            "scanned_by_name": scanned_by_row,
+            "scan_number": last.scan_number,
+            "max_checkins": max_checkins,
+            "traveler_name": traveler_name,
         }
 
-    existing = (
-        await session.execute(
-            select(ActivityCheckin, User.full_name)
-            .join(User, User.id == ActivityCheckin.scanned_by_user_id)
-            .where(
-                ActivityCheckin.trip_activity_id == activity_id,
-                ActivityCheckin.trip_traveler_id == trip_traveler_id,
-            )
-        )
-    ).first()
-    if existing is None:
-        raise HTTPException(status_code=500, detail="Check-in conflict could not be resolved")
-
-    checkin, scanned_by_name = existing
+    new_checkin = ActivityCheckin(
+        trip_activity_id=activity_id,
+        trip_traveler_id=trip_traveler_id,
+        scanned_by_user_id=staff_user_id,
+        scan_number=next_scan_number,
+    )
+    session.add(new_checkin)
+    await session.flush()
     await _record_scan_event(
         session,
         trip_activity_id=activity_id,
         trip_traveler_id=trip_traveler_id,
         scanned_by_user_id=staff_user_id,
-        status="already_checked_in",
+        status="checked_in",
         raw_payload=body.qr_payload,
     )
     await session.commit()
+
+    traveler_name_row = await session.execute(
+        select(User.full_name)
+        .join(TripTraveler, TripTraveler.user_id == User.id)
+        .where(TripTraveler.id == trip_traveler_id)
+    )
+    traveler_name = traveler_name_row.scalar()
     return {
-        "status": "already_checked_in",
-        "checkin_id": str(checkin.id),
-        "trip_activity_id": str(checkin.trip_activity_id),
-        "trip_traveler_id": str(checkin.trip_traveler_id),
-        "checked_in_at": checkin.checked_in_at.isoformat(),
-        "scanned_by_user_id": str(checkin.scanned_by_user_id),
-        "scanned_by_name": scanned_by_name,
+        "status": "checked_in",
+        "checkin_id": str(new_checkin.id),
+        "trip_activity_id": str(new_checkin.trip_activity_id),
+        "trip_traveler_id": str(new_checkin.trip_traveler_id),
+        "checked_in_at": new_checkin.checked_in_at.isoformat(),
+        "scanned_by_user_id": str(new_checkin.scanned_by_user_id),
+        "scan_number": next_scan_number,
+        "max_checkins": max_checkins,
+        "traveler_name": traveler_name,
     }
+

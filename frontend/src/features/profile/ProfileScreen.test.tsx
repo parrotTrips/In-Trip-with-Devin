@@ -32,6 +32,13 @@ describe('ProfileScreen', () => {
       http.get('http://localhost:8000/trip/ross26/travelers', () =>
         HttpResponse.json({ trip_id: 'ross26', travelers: [] })
       ),
+      http.get('http://localhost:8000/me/qr-code', () =>
+        HttpResponse.json({
+          trip_uuid: 'test-trip-001',
+          trip_traveler_id: 'trip-traveler-001',
+          qr_payload: 'parrot-trip-checkin:test-trip-001:trip-traveler-001',
+        })
+      ),
       http.put('http://localhost:8000/profile/1', async ({ request }) => {
         savedPayload = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json({ message: 'Profile updated' });
@@ -48,13 +55,21 @@ describe('ProfileScreen', () => {
 
     await screen.findByText('My Profile');
     await userEvent.click(screen.getByRole('button', { name: /registration details/i }));
-    expect(screen.getByRole('button', { name: /products & payment/i })).toBeInTheDocument();
+    const packagesButton = screen.getByRole('button', { name: /packages/i });
+    expect(packagesButton).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /service agreement/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /esim/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /roommate/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /flight information/i })).not.toBeInTheDocument();
     const preferredNameInput = await screen.findByLabelText('Preferred Name');
     expect(preferredNameInput).toHaveValue('Alice');
+
+    await userEvent.click(packagesButton);
+    const packageTransferLink = screen.getByRole('link', { name: /transfer or cancel your package/i });
+    expect(packageTransferLink).toHaveAttribute(
+      'href',
+      'https://package-transfer-116789457910.southamerica-east1.run.app'
+    );
 
     await userEvent.clear(preferredNameInput);
     await userEvent.type(preferredNameInput, 'Bea');
