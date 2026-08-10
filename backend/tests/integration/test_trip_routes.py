@@ -126,6 +126,14 @@ def test_get_my_trip_phases_returns_phases_with_correct_shape(seeded_client, ses
         assert isinstance(phase["links"], list)
 
 
+def test_health_alias_is_public(seeded_client):
+    """GET /health is usable by Cloud Run and external monitors without JWT."""
+    response = seeded_client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_get_my_trip_returns_signed_service_agreement_url_for_gcs_uri(seeded_client, session_factory):
     """GET /me/trip resolves private GCS service agreements into signed URLs."""
     phone = "+5511333000012"
