@@ -178,7 +178,7 @@ export default function InformationScreen() {
               </p>
               <Link
                 to="/recommendations"
-                className="flex items-center justify-center gap-2 w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-medium text-sm transition-colors"
+                className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-colors"
               >
                 Open recommendations
                 <ExternalLink size={14} />

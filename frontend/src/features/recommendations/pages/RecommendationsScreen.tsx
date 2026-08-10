@@ -53,18 +53,18 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
   return (
     <article className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
       {rec.photo_url && (
-        <img src={rec.photo_url} alt={rec.name} className="w-full h-40 object-cover bg-amber-50" />
+        <img src={rec.photo_url} alt={rec.name} className="w-full h-40 object-cover bg-emerald-50" />
       )}
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-xl shrink-0">
+          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-xl shrink-0">
             {rec.emoji || '📍'}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm font-semibold text-gray-800">{rec.name}</h2>
               {rec.highlight && (
-                <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">
                   {rec.highlight}
                 </span>
               )}
@@ -78,7 +78,7 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
               )}
               {rec.price_range && <span className="text-xs text-gray-400">{rec.price_range}</span>}
               {rec.rating !== null && (
-                <span className="text-xs text-amber-500 flex items-center gap-0.5">
+                <span className="text-xs text-emerald-600 flex items-center gap-0.5">
                   <Star size={10} fill="currentColor" />
                   {rec.rating.toFixed(1)}
                 </span>
@@ -92,7 +92,7 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
                 href={mapUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 font-medium mt-3"
+                className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium mt-3"
                 onClick={() => posthog.capture('recommendation_opened', { recommendation_id: rec.id, name: rec.name })}
               >
                 <ExternalLink size={12} />
@@ -126,17 +126,17 @@ export default function RecommendationsScreen() {
   }), [activeCategory, activeLocation, recommendations]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50 via-white to-orange-50" style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }}>
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-gray-50" style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }}>
       <AppHeader title="Recommendations" />
       <div className="pt-14">
-        <section className="bg-gradient-to-br from-amber-600 via-orange-500 to-red-500 px-5 py-6 text-white">
+        <section className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 px-5 py-6 text-white">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
               📍
             </div>
             <div>
               <h1 className="text-xl font-bold font-[Fredoka]">Local Recommendations</h1>
-              <p className="text-amber-100 text-sm">Curated spots by the Parrot Trips team</p>
+              <p className="text-emerald-100 text-sm">Curated spots by the Parrot Trips team</p>
             </div>
           </div>
         </section>
@@ -148,7 +148,7 @@ export default function RecommendationsScreen() {
               onClick={() => setActiveLocation(loc.key)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                 activeLocation === loc.key
-                  ? 'bg-amber-600 text-white shadow-sm'
+                  ? 'bg-emerald-700 text-white shadow-sm'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -165,7 +165,7 @@ export default function RecommendationsScreen() {
                 onClick={() => setActiveCategory(cat.key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                   activeCategory === cat.key
-                    ? 'bg-gray-800 text-white shadow-sm'
+                    ? 'bg-emerald-700 text-white shadow-sm'
                     : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}
               >
@@ -179,7 +179,7 @@ export default function RecommendationsScreen() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="animate-spin text-amber-600" size={28} />
+          <Loader2 className="animate-spin text-emerald-600" size={28} />
         </div>
       ) : (
         <>
