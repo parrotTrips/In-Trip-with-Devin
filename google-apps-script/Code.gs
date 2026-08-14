@@ -249,7 +249,7 @@ function setupSheetHeaders() {
     },
     {
       name: "Roteiro",
-      headers: ["trip_uuid", "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon", "dia_descricao_curta", "dia_descricao_completa", "atividade_nome", "atividade_tipo", "atividade_horario", "atividade_duracao_min", "atividade_descricao_curta", "atividade_info_pratica", "atividade_endereco", "atividade_preco_brl", "max_scans"],
+      headers: ["trip_uuid", "dia", "data", "dia_titulo", "dia_subtitulo", "dia_icon", "dia_descricao_curta", "dia_descricao_completa", "atividade_nome", "atividade_tipo", "atividade_horario", "atividade_duracao_min", "atividade_descricao_curta", "atividade_info_pratica", "atividade_preco_brl", "atividade_endereco", "atividade_max_scans"],
       note: ""
     },
     {

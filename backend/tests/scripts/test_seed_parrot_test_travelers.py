@@ -48,3 +48,27 @@ def test_qr_filename_is_stable_and_safe():
 
     assert script.qr_filename(first) == "parrot-test-01-lara-mendes.png"
 
+
+def test_managed_sheet_headers_match_import_parsers():
+    roteiro = script.MANAGED_HEADERS["Roteiro"]
+
+    assert "atividade_preco_brl" in roteiro
+    assert "atividade_endereco" in roteiro
+    assert "atividade_max_scans" in roteiro
+    assert "max_scans" not in roteiro
+
+
+def test_trip_uuid_column_is_discovered_from_header_not_assumed_first():
+    staff_header = script.MANAGED_HEADERS["Staff"]
+    row_for_target = ["+15550000001", "Name", "Role", script.TRIP_UUID]
+    row_for_other = ["+15550000002", "Name", "Role", "OTHER-TRIP"]
+
+    assert script.row_matches_trip_uuid(row_for_target, staff_header)
+    assert not script.row_matches_trip_uuid(row_for_other, staff_header)
+
+
+def test_content_managed_headers_include_all_apps_script_import_tabs():
+    assert "FAQ" in script.MANAGED_HEADERS
+    assert "Cancellation Policy" in script.MANAGED_HEADERS
+    assert script.MANAGED_HEADERS["FAQ"] == ["trip_uuid", "question", "answer", "sort_order"]
+    assert script.MANAGED_HEADERS["Cancellation Policy"] == ["trip_uuid", "title", "body", "sort_order"]

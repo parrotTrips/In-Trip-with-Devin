@@ -48,6 +48,69 @@ GOOGLE_SCOPES = [
 ]
 OAUTH_TOKEN_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-token.json"
 OAUTH_CLIENT_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-credentials.json"
+MANAGED_HEADERS: dict[str, list[str]] = {
+    "Viagens": ["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim", "service_agreement_url"],
+    "Emergency Contacts": ["trip_uuid", "name", "role", "phone", "sort_order"],
+    "Recomendacoes": [
+        "trip_uuid",
+        "name",
+        "description",
+        "address",
+        "photo_url",
+        "sort_order",
+        "category",
+        "neighborhood",
+        "location",
+        "highlight",
+        "price_range",
+        "rating",
+        "map_url",
+        "emoji",
+    ],
+    "Fases": ["trip_uuid", "ordem", "fase", "titulo", "subtitulo", "icone", "descricao_curta", "descricao_completa", "ideal_pace"],
+    "Checklist": ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
+    "Links": ["trip_uuid", "fase", "ordem", "label", "url"],
+    "Roteiro": [
+        "trip_uuid",
+        "dia",
+        "data",
+        "dia_titulo",
+        "dia_subtitulo",
+        "dia_icon",
+        "dia_descricao_curta",
+        "dia_descricao_completa",
+        "atividade_nome",
+        "atividade_tipo",
+        "atividade_horario",
+        "atividade_duracao_min",
+        "atividade_descricao_curta",
+        "atividade_info_pratica",
+        "atividade_preco_brl",
+        "atividade_endereco",
+        "atividade_max_scans",
+    ],
+    "FAQ": ["trip_uuid", "question", "answer", "sort_order"],
+    "Cancellation Policy": ["trip_uuid", "title", "body", "sort_order"],
+    "Contatos": ["trip_uuid", "category", "name", "role", "phone", "sort_order"],
+    "Staff": ["phone", "nome", "funcao", "trip_uuid", "photo_url", "bio"],
+    "Tarefas Staff": ["trip_uuid", "dia", "atividade_nome", "staff_phone", "titulo", "descricao", "sort_order"],
+    "Participantes Atividades": ["trip_uuid", "dia", "atividade_nome", "traveler_phone", "status"],
+    AUDIT_TAB: [
+        "trip_uuid",
+        "full_name",
+        "preferred_name",
+        "phone",
+        "email",
+        "package_name",
+        "room_type",
+        "paid_amount_usd",
+        "addons",
+        "user_id",
+        "trip_traveler_id",
+        "qr_filename",
+        "qr_drive_url",
+    ],
+}
 
 
 def _profile(
@@ -758,6 +821,14 @@ async def fetch_sheet_payload(conn: asyncpg.Connection, seeded: list[dict[str, A
         """,
         TRIP_UUID,
     )
+    faqs = await conn.fetch(
+        "select question,answer,sort_order from trip_faqs where wetravel_trip_uuid=$1 order by sort_order",
+        TRIP_UUID,
+    )
+    cancellation_policies = await conn.fetch(
+        "select title,body,sort_order from trip_cancellation_policies where wetravel_trip_uuid=$1 order by sort_order",
+        TRIP_UUID,
+    )
     contacts = await conn.fetch(
         "select category,name,role,phone,sort_order from trip_contacts where wetravel_trip_uuid=$1 order by category,sort_order",
         TRIP_UUID,
@@ -826,6 +897,8 @@ async def fetch_sheet_payload(conn: asyncpg.Connection, seeded: list[dict[str, A
         "activities": [dict(row) for row in activities],
         "emergency": [dict(row) for row in emergency],
         "recommendations": [dict(row) for row in recommendations],
+        "faqs": [dict(row) for row in faqs],
+        "cancellation_policies": [dict(row) for row in cancellation_policies],
         "contacts": [dict(row) for row in contacts],
         "staff": [dict(row) for row in staff],
         "tasks": [dict(row) for row in tasks],
@@ -934,6 +1007,14 @@ def build_sheet_rows(payload: dict[str, Any]) -> dict[str, dict[str, list[list[A
             ]
             for row in payload["activities"]
         ],
+        "FAQ": [
+            [TRIP_UUID, row["question"], row["answer"], row["sort_order"]]
+            for row in payload["faqs"]
+        ],
+        "Cancellation Policy": [
+            [TRIP_UUID, row["title"], row["body"], row["sort_order"]]
+            for row in payload["cancellation_policies"]
+        ],
         AUDIT_TAB: payload["traveler_rows"],
     }
     staff_rows = {
@@ -967,21 +1048,7 @@ def build_sheet_rows(payload: dict[str, Any]) -> dict[str, dict[str, list[list[A
     return {"content": content_rows, "staff": staff_rows}
 
 
-AUDIT_HEADER = [
-    "trip_uuid",
-    "full_name",
-    "preferred_name",
-    "phone",
-    "email",
-    "package_name",
-    "room_type",
-    "paid_amount_usd",
-    "addons",
-    "user_id",
-    "trip_traveler_id",
-    "qr_filename",
-    "qr_drive_url",
-]
+AUDIT_HEADER = MANAGED_HEADERS[AUDIT_TAB]
 
 
 def ensure_tab(sheets, spreadsheet_id: str, tab: str) -> None:
@@ -998,15 +1065,9 @@ def ensure_tab(sheets, spreadsheet_id: str, tab: str) -> None:
 def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list[Any]]) -> None:
     ensure_tab(sheets, spreadsheet_id, tab)
     values = sheets.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=f"'{tab}'!A:Z").execute().get("values", [])
-    if values:
-        header = values[0]
-        body = values[1:]
-    else:
-        header = AUDIT_HEADER if tab == AUDIT_TAB else []
-        body = []
-    if tab == AUDIT_TAB:
-        header = AUDIT_HEADER
-    kept = [row for row in body if not row or row[0] != TRIP_UUID]
+    header = MANAGED_HEADERS.get(tab) or (values[0] if values else [])
+    body = values[1:] if values else []
+    kept = [row for row in body if not row_matches_trip_uuid(row, header)]
     merged = normalize_sheet_values([header] + kept + new_rows)
     sheets.spreadsheets().values().clear(spreadsheetId=spreadsheet_id, range=f"'{tab}'!A:Z").execute()
     sheets.spreadsheets().values().update(
@@ -1015,6 +1076,17 @@ def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list
         valueInputOption="RAW",
         body={"values": merged},
     ).execute()
+
+
+def row_matches_trip_uuid(row: list[Any], header: list[str]) -> bool:
+    normalized_header = [str(value).strip().lower() for value in header]
+    try:
+        trip_uuid_index = normalized_header.index("trip_uuid")
+    except ValueError:
+        return False
+    if trip_uuid_index >= len(row):
+        return False
+    return str(row[trip_uuid_index]).strip() == TRIP_UUID
 
 
 def normalize_sheet_values(rows: list[list[Any]]) -> list[list[Any]]:

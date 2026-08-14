@@ -12,6 +12,7 @@ function onOpen() {
     .addItem("Import Staff → Supabase", "importStaff")
     .addItem("Import Contacts → Supabase", "importContacts")
     .addItem("Import Staff Tasks → Supabase", "importStaffTasks")
+    .addItem("Import Activity Participants → Supabase", "importActivityParticipants")
     .addSeparator()
     .addItem("🔧 Setup Sheet Headers (primeira vez)", "setupSheetHeaders")
     .addToUi();
@@ -146,6 +147,16 @@ function importStaffTasks() {
   }
 }
 
+function importActivityParticipants() {
+  var trip_uuid = promptForTrip("🦜 Import Activity Participants → Supabase");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/import-activity-participants", { trip_uuid: trip_uuid }));
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
+  }
+}
+
 function setupSheetHeaders() {
   var ui = SpreadsheetApp.getUi();
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -170,6 +181,11 @@ function setupSheetHeaders() {
       name: "Tarefas Staff",
       headers: ["trip_uuid", "dia", "atividade_nome", "staff_phone", "titulo", "descricao", "sort_order"],
       note: "Uma linha por tarefa operacional de um staff dentro de uma atividade do roteiro"
+    },
+    {
+      name: "Participantes Atividades",
+      headers: ["trip_uuid", "dia", "atividade_nome", "traveler_phone", "status"],
+      note: "Allowlist para atividades controladas por QR. status deve ser 'allowed'."
     }
   ];
 
