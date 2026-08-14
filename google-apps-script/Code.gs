@@ -7,7 +7,7 @@ var BACKEND_URL = "https://parrot-trips-backend-428743191336.southamerica-east1.
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🦜 Parrot Trips")
-    .addItem("🔄 Sync Trips from App", "syncTrips")
+    .addItem("⬇️ Import Trips from App", "syncTrips")
     .addSeparator()
     .addItem("🚀 Export Trip Content to App", "importTrip")
     .addItem("🆘 Export Emergency Contacts to App", "importEmergencyContacts")
@@ -132,14 +132,14 @@ function syncTrips() {
       sheet.getRange(2, 1, rows.length, 5).setValues(rows);
     }
 
-    ui.alert("✅ Synced " + trips.length + " active trip(s) to the Viagens tab.");
+    ui.alert("✅ Imported " + trips.length + " active trip(s) from the App to the Viagens tab.");
   } catch (e) {
-    ui.alert("❌ Sync failed: " + e.message);
+    ui.alert("❌ Import from App failed: " + e.message);
   }
 }
 
 function importTrip() {
-  var trip_uuid = promptForTrip("🦜 Import Trip Content → Supabase");
+  var trip_uuid = promptForTrip("🦜 Export Trip Content to App");
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/import", trip_uuid));
@@ -316,7 +316,7 @@ function setupSheetHeaders() {
   if (created.length) msg += "✅ Created: " + created.join(", ") + "\n";
   if (updated.length) msg += "🟡 Updated: " + updated.join(", ") + "\n";
   if (skipped.length) msg += "⬜ Already OK: " + skipped.join(", ") + "\n";
-  msg += "\nNow you can fill in the content and run Import Trip Content.";
+  msg += "\nNow you can fill in the content and run Export Trip Content to App.";
 
   ui.alert("🔧 Sheet Setup Complete", msg, ui.ButtonSet.OK);
 }

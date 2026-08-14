@@ -7,12 +7,12 @@ var BACKEND_URL = "https://parrot-trips-backend-428743191336.southamerica-east1.
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("🦜 Parrot Staff")
-    .addItem("🔄 Sync Trips from Supabase", "syncTrips")
+    .addItem("⬇️ Import Trips from App", "syncTrips")
     .addSeparator()
-    .addItem("Import Staff → Supabase", "importStaff")
-    .addItem("Import Contacts → Supabase", "importContacts")
-    .addItem("Import Staff Tasks → Supabase", "importStaffTasks")
-    .addItem("Import Activity Participants → Supabase", "importActivityParticipants")
+    .addItem("⬆️ Export Staff to App", "importStaff")
+    .addItem("⬆️ Export Contacts to App", "importContacts")
+    .addItem("⬆️ Export Staff Tasks to App", "importStaffTasks")
+    .addItem("⬆️ Export Activity Participants to App", "importActivityParticipants")
     .addSeparator()
     .addItem("🔧 Setup Sheet Headers (primeira vez)", "setupSheetHeaders")
     .addToUi();
@@ -23,7 +23,7 @@ function onOpen() {
 function getTripList() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Viagens");
   if (!sheet) {
-    SpreadsheetApp.getUi().alert("Aba 'Viagens' não encontrada. Run 'Sync Trips' first.");
+    SpreadsheetApp.getUi().alert("Aba 'Viagens' não encontrada. Run 'Import Trips from App' first.");
     return null;
   }
   var data = sheet.getDataRange().getValues();
@@ -67,7 +67,7 @@ function promptForTrip(title) {
   var ui = SpreadsheetApp.getUi();
   var trips = getTripList();
   if (!trips || trips.length === 0) {
-    ui.alert("No trips found. Run 'Sync Trips' first.");
+    ui.alert("No trips found. Run 'Import Trips from App' first.");
     return null;
   }
   var list = trips.map(function(t, i) {
@@ -104,21 +104,21 @@ function syncTrips() {
     sheet.getRange(1, 1, 1, 4).setFontWeight("bold");
     if (rows.length > 0) sheet.getRange(2, 1, rows.length, 4).setValues(rows);
 
-    ui.alert("✅ Synced " + trips.length + " active trip(s) to the Viagens tab.");
+    ui.alert("✅ Imported " + trips.length + " active trip(s) from the App to the Viagens tab.");
   } catch (e) {
-    ui.alert("❌ Sync failed: " + e.message);
+    ui.alert("❌ Import from App failed: " + e.message);
   }
 }
 
 function importStaff() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
-    "Import Staff → Supabase",
+    "Export Staff to App",
     "This will:\n• Create staff users that don't exist yet (role=staff)\n• Update name and role for existing users\n• Link each staff member to their trip\n\nData comes from the 'Staff' tab.\n\nContinue?",
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
-  var trip_uuid = promptForTrip("🦜 Import Staff — choose trip");
+  var trip_uuid = promptForTrip("🦜 Export Staff to App — choose trip");
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/import-staff", { trip_uuid: trip_uuid }));
@@ -128,7 +128,7 @@ function importStaff() {
 }
 
 function importContacts() {
-  var trip_uuid = promptForTrip("🦜 Import Contacts → Supabase");
+  var trip_uuid = promptForTrip("🦜 Export Contacts to App");
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/import-contacts", { trip_uuid: trip_uuid }));
@@ -138,7 +138,7 @@ function importContacts() {
 }
 
 function importStaffTasks() {
-  var trip_uuid = promptForTrip("🦜 Import Staff Tasks → Supabase");
+  var trip_uuid = promptForTrip("🦜 Export Staff Tasks to App");
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/import-staff-tasks", { trip_uuid: trip_uuid }));
@@ -148,7 +148,7 @@ function importStaffTasks() {
 }
 
 function importActivityParticipants() {
-  var trip_uuid = promptForTrip("🦜 Import Activity Participants → Supabase");
+  var trip_uuid = promptForTrip("🦜 Export Activity Participants to App");
   if (!trip_uuid) return;
   try {
     showResult(callBackend("/admin/trips/import-activity-participants", { trip_uuid: trip_uuid }));
@@ -165,7 +165,7 @@ function setupSheetHeaders() {
     {
       name: "Viagens",
       headers: ["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim"],
-      note: "Populado automaticamente pelo Sync Trips"
+      note: "Populado automaticamente pelo Import Trips from App"
     },
     {
       name: "Contatos",
@@ -229,7 +229,7 @@ function setupSheetHeaders() {
   if (created.length) msg += "✅ Created: " + created.join(", ") + "\n";
   if (updated.length) msg += "🟡 Updated: " + updated.join(", ") + "\n";
   if (skipped.length) msg += "⬜ Already OK: " + skipped.join(", ") + "\n";
-  msg += "\nFill in the Contatos and Tarefas Staff tabs, then run the matching import menu action.";
+  msg += "\nFill in the Contatos and Tarefas Staff tabs, then run the matching export menu action.";
 
   ui.alert("🔧 Sheet Setup Complete", msg, ui.ButtonSet.OK);
 }
