@@ -10,6 +10,7 @@ import { TripProvider } from './providers/TripProvider';
 import { useAuth } from './providers/auth-context';
 import { StaffViewContext } from './providers/staff-view-context';
 import { AvatarContext, loadStoredAvatar, persistAvatar } from './providers/avatar-context';
+import { NotificationProvider } from './providers/notification-context';
 import AppRouter from './router';
 
 function AppContent() {
@@ -47,7 +48,9 @@ function AppContent() {
         onSwitchToStaffView: user?.role === 'staff' ? () => setViewingAsTraveler(false) : null,
       }}>
         <AvatarContext.Provider value={{ avatarUrl, setAvatarUrl: handleSetAvatarUrl }}>
-          <AppRouter />
+          <NotificationProvider>
+            <AppRouter />
+          </NotificationProvider>
         </AvatarContext.Provider>
       </StaffViewContext.Provider>
     </TripProvider>

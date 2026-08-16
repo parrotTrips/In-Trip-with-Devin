@@ -1,6 +1,7 @@
 import { Bell, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAvatar } from '../../app/providers/avatar-context';
+import { useNotifications } from '../../app/providers/notification-context';
 
 interface AppHeaderProps {
   title: string;
@@ -9,6 +10,7 @@ interface AppHeaderProps {
 export default function AppHeader({ title }: AppHeaderProps) {
   const navigate = useNavigate();
   const { avatarUrl } = useAvatar();
+  const { unreadCount } = useNotifications();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-[60] bg-white/90 backdrop-blur-md border-b border-gray-100">
@@ -32,10 +34,16 @@ export default function AppHeader({ title }: AppHeaderProps) {
 
         <button
           onClick={() => navigate('/notifications')}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+          className="relative w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           aria-label="Notifications"
         >
           <Bell size={20} className="text-gray-500" />
+          {unreadCount > 0 && (
+            <span
+              aria-label="Unread notifications"
+              className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"
+            />
+          )}
         </button>
       </div>
     </header>

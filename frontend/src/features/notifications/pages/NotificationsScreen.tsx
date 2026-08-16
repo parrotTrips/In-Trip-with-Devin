@@ -2,6 +2,7 @@ import { Bell, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getMyAnnouncements, markAnnouncementRead, type Announcement } from '../../trip/services/trip-api';
 import AppHeader from '../../../shared/components/AppHeader';
+import { useNotifications } from '../../../app/providers/notification-context';
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -60,20 +61,28 @@ export default function NotificationsScreen() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { setUnreadCount, decrementUnreadCount } = useNotifications();
 
   useEffect(() => {
     getMyAnnouncements()
-      .then(r => setAnnouncements(r.announcements))
+      .then(r => {
+        setAnnouncements(r.announcements);
+        setUnreadCount(r.unread_count);
+      })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load notifications'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [setUnreadCount]);
 
   async function handleReadAnnouncement(id: string) {
+    const announcement = announcements.find(ann => ann.id === id);
+    if (!announcement || announcement.is_read) return;
+
     try {
       await markAnnouncementRead(id);
       setAnnouncements(current =>
         current.map(ann => ann.id === id ? { ...ann, is_read: true } : ann)
       );
+      decrementUnreadCount();
     } catch {
       // Keep the card unread so expanding it again can retry the read receipt.
     }
