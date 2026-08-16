@@ -75,6 +75,7 @@ export interface Announcement {
   body: string;
   sent_by: string;
   created_at: string;
+  is_read: boolean;
 }
 
 export interface TeamMember {
@@ -107,7 +108,13 @@ export async function getMyQrCode() {
 }
 
 export async function getMyAnnouncements() {
-  return request<{ announcements: Announcement[] }>('/me/announcements');
+  return request<{ announcements: Announcement[]; unread_count: number }>('/me/announcements');
+}
+
+export async function markAnnouncementRead(id: string) {
+  return request<{ status: string; announcement_id: string }>(`/me/announcements/${id}/read`, {
+    method: 'POST',
+  });
 }
 
 export async function getMyTeam() {
