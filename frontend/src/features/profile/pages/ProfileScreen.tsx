@@ -503,6 +503,42 @@ export default function ProfileScreen() {
                 <TextAreaField label="What would make this trip unforgettable?" value={form.unforgettable_trip_details} onChange={v => setField('unforgettable_trip_details', v)} placeholder="Share your ideas..." />
               </div>
             </div>
+
+            <div className="border-t border-gray-100 pt-3">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  saveError
+                    ? 'bg-red-500 text-white'
+                    : saved
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                }`}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : saveError ? (
+                  <>
+                    <Save size={18} />
+                    Error saving — try again
+                  </>
+                ) : saved ? (
+                  <>
+                    <Save size={18} />
+                    Saved!
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </CollapsibleSection>
 
@@ -524,7 +560,16 @@ export default function ProfileScreen() {
             </div>
             <div>
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Package Changes</p>
-              <div className="bg-gray-50 rounded-xl p-4">
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                <a
+                  href="https://www.wetravel.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-medium text-sm transition-colors"
+                >
+                  Manage My Payments
+                  <ExternalLink size={14} />
+                </a>
                 <a
                   href="https://package-transfer-116789457910.southamerica-east1.run.app"
                   target="_blank"
@@ -575,43 +620,9 @@ export default function ProfileScreen() {
         </CollapsibleSection>
       </div>
 
-      {/* Save and Sign Out buttons */}
+      {/* Sign Out button */}
       <div className="px-4 pt-4">
         <div className="space-y-2">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={`w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
-              saveError
-                ? 'bg-red-500 text-white'
-                : saved
-                ? 'bg-emerald-500 text-white'
-                : 'bg-emerald-700 hover:bg-emerald-800 text-white'
-            }`}
-          >
-            {saving ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                Saving...
-              </>
-            ) : saveError ? (
-              <>
-                <Save size={18} />
-                Error saving — try again
-              </>
-            ) : saved ? (
-              <>
-                <Save size={18} />
-                Saved!
-              </>
-            ) : (
-              <>
-                <Save size={18} />
-                Save Profile
-              </>
-            )}
-          </button>
-
           <button
             onClick={logout}
             className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-red-500 bg-red-50 hover:bg-red-100 transition-colors"

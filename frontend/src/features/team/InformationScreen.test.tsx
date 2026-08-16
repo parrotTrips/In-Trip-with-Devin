@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
+import { vi } from 'vitest';
 
 import { TripContext } from '../../app/providers/trip-context';
 import { server } from '../../test/server';
@@ -42,43 +43,64 @@ function renderInformationScreen(tripUuid: string) {
 }
 
 describe('InformationScreen', () => {
+  const cancellationPolicyRequest = vi.fn();
+
   beforeEach(() => {
+    cancellationPolicyRequest.mockClear();
     server.use(
       http.get('http://localhost:8000/me/team', () => HttpResponse.json({ team: [] })),
       http.get('http://localhost:8000/me/emergency-contacts', () => HttpResponse.json({ emergency_contacts: [] })),
       http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({ recommendations: [] })),
       http.get('http://localhost:8000/me/faq', () => HttpResponse.json({ faq: [] })),
-      http.get('http://localhost:8000/me/cancellation-policy', () => HttpResponse.json({ cancellation_policy: [] }))
+      http.get('http://localhost:8000/me/cancellation-policy', () => {
+        cancellationPolicyRequest();
+        return HttpResponse.json({ cancellation_policy: [] });
+      }),
+      http.get('http://localhost:8000/me/app-feedback', () => HttpResponse.json({ feedback: null }))
     );
   });
 
-  test('shows the app feedback form link for the test trip', async () => {
-    renderInformationScreen('TEST-2026-FULL');
+  test('lets travelers edit app feedback inside the app', async () => {
+    let savedPayload: unknown = null;
+    server.use(
+      http.get('http://localhost:8000/me/app-feedback', () => HttpResponse.json({ feedback: 'Loved the daily checklist.' })),
+      http.put('http://localhost:8000/me/app-feedback', async ({ request }) => {
+        savedPayload = await request.json();
+        return HttpResponse.json({ feedback: 'The app made the trip easier.', updated_at: '2026-08-16T12:00:00Z' });
+      })
+    );
+
+    renderInformationScreen('OTHER-TRIP');
 
     const feedbackButton = await screen.findByRole('button', { name: /feedback/i });
     await userEvent.click(feedbackButton);
 
-    const feedbackLink = screen.getByRole('link', { name: /enviar feedback/i });
-    expect(feedbackLink).toHaveAttribute(
-      'href',
-      'https://docs.google.com/forms/d/e/1FAIpQLScp8ytsEyAKioMH86yWrqDANVCAS-NIM0Je075N-a4bhNk1iA/viewform?usp=publish-editor'
-    );
+    const feedbackField = screen.getByRole('textbox', { name: /app feedback/i });
+    expect(feedbackField).toHaveValue('Loved the daily checklist.');
+    expect(screen.queryByRole('link', { name: /enviar feedback/i })).not.toBeInTheDocument();
+
+    await userEvent.clear(feedbackField);
+    await userEvent.type(feedbackField, 'The app made the trip easier.');
+    await userEvent.click(screen.getByRole('button', { name: /save feedback/i }));
+
+    expect(savedPayload).toEqual({ feedback: 'The app made the trip easier.' });
+    expect(await screen.findByText(/feedback saved/i)).toBeInTheDocument();
   });
 
-  test('hides the app feedback form link for other trips', async () => {
+  test('links local recommendations directly to the dedicated recommendations page', async () => {
+    renderInformationScreen('OTHER-TRIP');
+
+    const recommendationsLink = await screen.findByRole('link', { name: /local recommendations/i });
+    expect(recommendationsLink).toHaveAttribute('href', '/recommendations');
+    expect(screen.queryByRole('button', { name: /local recommendations/i })).not.toBeInTheDocument();
+  });
+
+  test('does not show or load cancellation policy in Information', async () => {
     renderInformationScreen('OTHER-TRIP');
 
     await screen.findByRole('button', { name: /parrot team/i });
 
-    expect(screen.queryByRole('button', { name: /feedback/i })).not.toBeInTheDocument();
-  });
-
-  test('links local recommendations to the dedicated recommendations page', async () => {
-    renderInformationScreen('OTHER-TRIP');
-
-    const recommendationsButton = await screen.findByRole('button', { name: /local recommendations/i });
-    await userEvent.click(recommendationsButton);
-
-    expect(screen.getByRole('link', { name: /open recommendations/i })).toHaveAttribute('href', '/recommendations');
+    expect(screen.queryByRole('button', { name: /cancellation policy/i })).not.toBeInTheDocument();
+    expect(cancellationPolicyRequest).not.toHaveBeenCalled();
   });
 });

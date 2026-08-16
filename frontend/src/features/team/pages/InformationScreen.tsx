@@ -6,14 +6,13 @@ import {
   getMyTeam,
   getMyEmergencyContacts,
   getMyFaq,
-  getMyCancellationPolicy,
+  getMyAppFeedback,
+  updateMyAppFeedback,
   type TeamMember,
   type EmergencyContact,
   type FaqItem,
-  type CancellationPolicyItem,
 } from '../../trip/services/trip-api';
 import AppHeader from '../../../shared/components/AppHeader';
-import { useTripContext } from '../../../app/providers/trip-context';
 
 // ── CollapsibleSection (same pattern as ProfileScreen) ─────────────────────────
 
@@ -104,48 +103,50 @@ function FaqRow({ item }: { item: FaqItem }) {
   );
 }
 
-// ── Cancellation Policy ────────────────────────────────────────────────────────
-
-function PolicyRow({ item }: { item: CancellationPolicyItem }) {
-  return (
-    <div className="py-3 border-b border-gray-50 last:border-0">
-      <p className="text-sm font-semibold text-gray-800 mb-1">{item.title}</p>
-      <p className="text-sm text-gray-600 leading-relaxed">{item.body}</p>
-    </div>
-  );
-}
-
 // ── Empty ──────────────────────────────────────────────────────────────────────
 
 function Empty({ label }: { label: string }) {
   return <p className="text-sm text-gray-400 py-4 text-center">{label}</p>;
 }
 
-const APP_FEEDBACK_FORMS_BY_TRIP_UUID: Record<string, string> = {
-  'TEST-2026-FULL': 'https://docs.google.com/forms/d/e/1FAIpQLScp8ytsEyAKioMH86yWrqDANVCAS-NIM0Je075N-a4bhNk1iA/viewform?usp=publish-editor',
-};
-
 // ── Main screen ────────────────────────────────────────────────────────────────
 
 export default function InformationScreen() {
-  const { tripInfo } = useTripContext();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [emergency, setEmergency] = useState<EmergencyContact[]>([]);
   const [faq, setFaq] = useState<FaqItem[]>([]);
-  const [cancellation, setCancellation] = useState<CancellationPolicyItem[]>([]);
+  const [appFeedback, setAppFeedback] = useState('');
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [feedbackSaved, setFeedbackSaved] = useState(false);
+  const [feedbackError, setFeedbackError] = useState(false);
   const [loading, setLoading] = useState(true);
-  const feedbackFormUrl = tripInfo ? APP_FEEDBACK_FORMS_BY_TRIP_UUID[tripInfo.wetravel_trip_uuid] : null;
 
   useEffect(() => {
     Promise.all([
       getMyTeam().then(r => setTeam(r.team)),
       getMyEmergencyContacts().then(r => setEmergency(r.emergency_contacts)),
       getMyFaq().then(r => setFaq(r.faq)),
-      getMyCancellationPolicy().then(r => setCancellation(r.cancellation_policy)),
+      getMyAppFeedback().then(r => setAppFeedback(r.feedback ?? '')),
     ])
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleFeedbackSave() {
+    setFeedbackSaving(true);
+    setFeedbackSaved(false);
+    setFeedbackError(false);
+    try {
+      const response = await updateMyAppFeedback(appFeedback);
+      setAppFeedback(response.feedback);
+      setFeedbackSaved(true);
+      posthog.capture('app_feedback_saved');
+    } catch {
+      setFeedbackError(true);
+    } finally {
+      setFeedbackSaving(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-gray-50" style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }}>
@@ -171,20 +172,19 @@ export default function InformationScreen() {
               : emergency.map(c => <EmergencyRow key={c.id} contact={c} />)}
           </CollapsibleSection>
 
-          <CollapsibleSection title="Local Recommendations" emoji="📍">
-            <div className="pt-3 space-y-3">
-              <p className="text-sm text-gray-600 leading-relaxed">
-                Curated places, food, beaches, shops, and local tips for this trip.
-              </p>
-              <Link
-                to="/recommendations"
-                className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-colors"
-              >
-                Open recommendations
-                <ExternalLink size={14} />
-              </Link>
+          <Link
+            to="/recommendations"
+            onClick={() => posthog.capture('secao_informacao_aberta', { secao: 'Local Recommendations' })}
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-lg">
+                📍
+              </div>
+              <h3 className="text-sm font-semibold text-gray-800">Local Recommendations</h3>
             </div>
-          </CollapsibleSection>
+            <ExternalLink size={18} className="text-gray-400" />
+          </Link>
 
           <CollapsibleSection title="FAQ" emoji="❓">
             {faq.length === 0
@@ -192,29 +192,42 @@ export default function InformationScreen() {
               : faq.map(item => <FaqRow key={item.id} item={item} />)}
           </CollapsibleSection>
 
-          {feedbackFormUrl && (
-            <CollapsibleSection title="Feedback" emoji="💬">
-              <div className="pt-3 space-y-3">
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Conte para a gente o que funcionou bem no aplicativo e o que podemos melhorar nesta viagem.
-                </p>
-                <a
-                  href={feedbackFormUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium text-sm transition-colors"
-                >
-                  Enviar feedback
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-            </CollapsibleSection>
-          )}
-
-          <CollapsibleSection title="Cancellation Policy" emoji="📄">
-            {cancellation.length === 0
-              ? <Empty label="No cancellation policy yet" />
-              : cancellation.map(item => <PolicyRow key={item.id} item={item} />)}
+          <CollapsibleSection title="Feedback" emoji="💬">
+            <div className="pt-3 space-y-3">
+              <p className="text-sm text-gray-600 leading-relaxed">
+                Conte para a gente o que funcionou bem no aplicativo e o que podemos melhorar nesta viagem.
+              </p>
+              <label className="block">
+                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">App Feedback</span>
+                <textarea
+                  value={appFeedback}
+                  onChange={event => {
+                    setAppFeedback(event.target.value);
+                    setFeedbackSaved(false);
+                    setFeedbackError(false);
+                  }}
+                  maxLength={5000}
+                  rows={5}
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  placeholder="Share your feedback about the app..."
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleFeedbackSave}
+                disabled={feedbackSaving}
+                className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl font-medium text-sm transition-colors"
+              >
+                {feedbackSaving ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : 'Save Feedback'}
+              </button>
+              {feedbackSaved && <p className="text-xs font-medium text-emerald-600">Feedback saved</p>}
+              {feedbackError && <p className="text-xs font-medium text-red-500">Could not save feedback. Try again.</p>}
+            </div>
           </CollapsibleSection>
 
         </div>

@@ -75,7 +75,7 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
                   {config.icon}
                   {config.label}
                 </span>
-                {activity.amount_brl !== null && (
+                {activity.amount_brl !== null && activity.activity_type !== 'optional' && (
                   <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
                     <DollarSign size={12} />
                     R$ {activity.amount_brl}
@@ -100,11 +100,6 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
                     <Info size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
                     <div className="whitespace-pre-line">{activity.practical_info}</div>
                   </div>
-                  {activity.amount_brl !== null && activity.activity_type === 'optional' && (
-                    <button className="mt-3 w-full py-2.5 bg-amber-500 text-white rounded-xl font-semibold text-sm hover:bg-amber-600 transition-colors">
-                      Book Now — R$ {activity.amount_brl}
-                    </button>
-                  )}
                 </div>
               )}
 

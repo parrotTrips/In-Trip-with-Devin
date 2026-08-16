@@ -14,6 +14,7 @@ from app.db.models.staff import (
 )
 from app.db.models.traveler import TravelerProfile
 from app.db.models.trip import (
+    TravelerAppFeedback,
     TripActivity,
     TripCancellationPolicy,
     TripEmergencyContact,
@@ -33,6 +34,7 @@ __all__ = [
     "ActivityParticipant",
     "StaffTask",
     "TravelerChecklistProgress",
+    "TravelerAppFeedback",
     "TravelerPhaseProgress",
     "TravelerProfile",
     "TripActivity",

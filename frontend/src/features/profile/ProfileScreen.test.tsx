@@ -65,6 +65,8 @@ describe('ProfileScreen', () => {
     expect(preferredNameInput).toHaveValue('Alice');
 
     await userEvent.click(packagesButton);
+    const managePaymentsLink = screen.getByRole('link', { name: /manage my payments/i });
+    expect(managePaymentsLink).toHaveAttribute('href', 'https://www.wetravel.com/');
     const packageTransferLink = screen.getByRole('link', { name: /transfer or cancel your package/i });
     expect(packageTransferLink).toHaveAttribute(
       'href',
@@ -73,7 +75,8 @@ describe('ProfileScreen', () => {
 
     await userEvent.clear(preferredNameInput);
     await userEvent.type(preferredNameInput, 'Bea');
-    await userEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    expect(screen.queryByRole('button', { name: /save profile/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
       expect(savedPayload).toMatchObject({

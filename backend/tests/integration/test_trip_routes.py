@@ -8,7 +8,7 @@ from unittest.mock import patch
 from sqlalchemy import func, select
 
 from app.db.models.staff import TripAnnouncement, TripAnnouncementRead
-from app.db.models.trip import TripPhase, TripRecommendation, TripTraveler
+from app.db.models.trip import TravelerAppFeedback, TripPhase, TripRecommendation, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import decode_traveler_qr_payload
 
@@ -89,7 +89,7 @@ async def _seed_phases(session_factory, *, trip_uuid: str = TEST_TRIP_UUID):
         await session.commit()
 
 
-async def _seed_announcements(session_factory, *, trip_uuid: str, count: int = 2):
+async def _seed_announcements(session_factory, *, trip_uuid: str, count: int = 2, is_anonymous: bool = False):
     async with session_factory() as session:
         sender = User(phone=f"+5511777{trip_uuid[-6:]}", full_name="Staff Sender", status="active", role="staff")
         session.add(sender)
@@ -101,6 +101,7 @@ async def _seed_announcements(session_factory, *, trip_uuid: str, count: int = 2
                 title=f"Update {index}",
                 body=f"Message body {index}",
                 sent_by_user_id=sender.id,
+                is_anonymous=is_anonymous,
             )
             for index in range(1, count + 1)
         ]
@@ -143,6 +144,19 @@ def test_get_my_announcements_returns_read_state_and_unread_count(seeded_client,
     assert data["unread_count"] == 2
     assert len(data["announcements"]) == 2
     assert {announcement["is_read"] for announcement in data["announcements"]} == {False}
+
+
+def test_get_my_announcements_labels_anonymous_sender_as_parrot_team(seeded_client, session_factory):
+    phone = "+5511333000019"
+    trip_uuid = "trip-announcement-anonymous"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    asyncio.run(_seed_announcements(session_factory, trip_uuid=trip_uuid, count=1, is_anonymous=True))
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.get("/me/announcements", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["announcements"][0]["sent_by"] == "Parrot Team"
 
 
 def test_mark_announcement_read_updates_only_that_announcement(seeded_client, session_factory):
@@ -201,6 +215,54 @@ def test_mark_announcement_read_rejects_other_trip(seeded_client, session_factor
     response = seeded_client.post(f"/me/announcements/{other_announcement_id}/read", headers=headers)
 
     assert response.status_code == 404
+
+
+def test_get_my_app_feedback_returns_empty_feedback(seeded_client, session_factory):
+    phone = "+5511333000017"
+    trip_uuid = "trip-app-feedback-empty"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.get("/me/app-feedback", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"feedback": None}
+
+
+def test_put_my_app_feedback_upserts_one_feedback_per_traveler(seeded_client, session_factory):
+    phone = "+5511333000018"
+    trip_uuid = "trip-app-feedback-upsert"
+    user_id = asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    headers = _auth(seeded_client, phone)
+
+    create_response = seeded_client.put("/me/app-feedback", headers=headers, json={"feedback": "The app helped a lot."})
+    update_response = seeded_client.put("/me/app-feedback", headers=headers, json={"feedback": "Updated feedback."})
+
+    assert create_response.status_code == 200
+    assert create_response.json()["feedback"] == "The app helped a lot."
+    assert update_response.status_code == 200
+    assert update_response.json()["feedback"] == "Updated feedback."
+
+    async def _stored_feedback():
+        async with session_factory() as session:
+            trip_traveler = await session.scalar(
+                select(TripTraveler).where(
+                    TripTraveler.user_id == _uuid.UUID(user_id),
+                    TripTraveler.wetravel_trip_uuid == trip_uuid,
+                )
+            )
+            rows = (await session.execute(
+                select(TravelerAppFeedback).where(TravelerAppFeedback.trip_traveler_id == trip_traveler.id)
+            )).scalars().all()
+            return rows
+
+    rows = asyncio.run(_stored_feedback())
+    assert len(rows) == 1
+    assert rows[0].feedback == "Updated feedback."
+
+    get_response = seeded_client.get("/me/app-feedback", headers=headers)
+    assert get_response.status_code == 200
+    assert get_response.json()["feedback"] == "Updated feedback."
 
 
 def test_get_my_trip_phases_returns_phases_with_correct_shape(seeded_client, session_factory):

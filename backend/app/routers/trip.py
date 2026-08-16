@@ -3,12 +3,20 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
 from app.db.models.staff import TripAnnouncement, TripAnnouncementRead, TripStaff
-from app.db.models.trip import TripCancellationPolicy, TripEmergencyContact, TripFaq, TripRecommendation, TripTraveler
+from app.db.models.trip import (
+    TravelerAppFeedback,
+    TripCancellationPolicy,
+    TripEmergencyContact,
+    TripFaq,
+    TripRecommendation,
+    TripTraveler,
+)
 from app.db.models.user import User
 from app.services.qr_service import create_traveler_qr_payload
 from app.services.service_agreement_service import resolve_service_agreement_url
@@ -19,6 +27,10 @@ from app.services.trip_service import (
 )
 
 router = APIRouter(tags=["trip"])
+
+
+class AppFeedbackRequest(BaseModel):
+    feedback: str = Field(max_length=5000)
 
 
 @router.get("/me/trip")
@@ -158,6 +170,29 @@ async def _get_traveler_trip_uuid(user_id: str, session: AsyncSession) -> str:
     return row["wetravel_trip_uuid"]
 
 
+async def _get_active_trip_traveler(user_id: str, session: AsyncSession) -> TripTraveler:
+    result = await session.execute(
+        text("""
+            SELECT tt.id
+            FROM trip_travelers tt
+            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+            WHERE tt.user_id = CAST(:user_id AS uuid)
+              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
+            ORDER BY wt.start_date ASC
+            LIMIT 1
+        """),
+        {"user_id": user_id},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="No active trip found")
+
+    trip_traveler = await session.get(TripTraveler, row["id"])
+    if trip_traveler is None:
+        raise HTTPException(status_code=404, detail="No active trip found")
+    return trip_traveler
+
+
 @router.get("/me/announcements")
 async def get_my_announcements(
     request: Request,
@@ -188,7 +223,7 @@ async def get_my_announcements(
                 "id": str(ann.id),
                 "title": ann.title,
                 "body": ann.body,
-                "sent_by": None if ann.is_anonymous else name,
+                "sent_by": "Parrot Team" if ann.is_anonymous else name,
                 "created_at": ann.created_at.isoformat(),
                 "is_read": read_id is not None,
             }
@@ -228,6 +263,48 @@ async def mark_my_announcement_read(
         await session.commit()
 
     return {"status": "read", "announcement_id": str(announcement_id)}
+
+
+@router.get("/me/app-feedback")
+async def get_my_app_feedback(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return the authenticated traveler's editable app feedback for the active trip."""
+    trip_traveler = await _get_active_trip_traveler(request.state.user_id, session)
+    feedback = await session.scalar(
+        select(TravelerAppFeedback).where(TravelerAppFeedback.trip_traveler_id == trip_traveler.id)
+    )
+
+    return {"feedback": feedback.feedback if feedback else None}
+
+
+@router.put("/me/app-feedback")
+async def update_my_app_feedback(
+    body: AppFeedbackRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Create or update one app feedback entry for the authenticated traveler and active trip."""
+    trip_traveler = await _get_active_trip_traveler(request.state.user_id, session)
+    feedback = await session.scalar(
+        select(TravelerAppFeedback).where(TravelerAppFeedback.trip_traveler_id == trip_traveler.id)
+    )
+    text_value = body.feedback.strip()
+
+    if feedback is None:
+        feedback = TravelerAppFeedback(trip_traveler_id=trip_traveler.id, feedback=text_value)
+        session.add(feedback)
+    else:
+        feedback.feedback = text_value
+
+    await session.commit()
+    await session.refresh(feedback)
+
+    return {
+        "feedback": feedback.feedback,
+        "updated_at": feedback.updated_at.isoformat(),
+    }
 
 
 @router.get("/me/team")

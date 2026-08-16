@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   Coffee,
   ExternalLink,
   Loader2,
@@ -13,6 +14,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import posthog from 'posthog-js';
+import { useNavigate } from 'react-router-dom';
 
 import AppHeader from '../../../shared/components/AppHeader';
 import { getMyRecommendations, type Recommendation } from '../../trip/services/trip-api';
@@ -107,6 +109,7 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
 }
 
 export default function RecommendationsScreen() {
+  const navigate = useNavigate();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
   const [activeLocation, setActiveLocation] = useState<LocationKey>('all');
@@ -131,6 +134,14 @@ export default function RecommendationsScreen() {
       <div className="pt-14">
         <section className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 px-5 py-6 text-white">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Back"
+              onClick={() => navigate(-1)}
+              className="w-10 h-10 bg-white/15 hover:bg-white/25 rounded-full flex items-center justify-center shrink-0 transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
             <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-2xl">
               📍
             </div>

@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -48,6 +49,17 @@ function setupHandlers() {
             amount_brl: null,
             sort_order: 0,
           },
+          {
+            id: 'act-2',
+            name: 'Sunset Sailing',
+            activity_type: 'optional',
+            starts_at: null,
+            duration_minutes: null,
+            short_description: 'Optional sailing experience',
+            practical_info: 'Bring sunscreen.',
+            amount_brl: 350,
+            sort_order: 1,
+          },
         ],
       })
     ),
@@ -79,7 +91,29 @@ describe('DayDetails', () => {
     await waitFor(() => {
       expect(screen.getByText("Today's Itinerary")).toBeInTheDocument();
     });
-    expect(screen.getByText('Group Album')).toBeInTheDocument();
     expect(screen.getByText('Airport Pickup')).toBeInTheDocument();
+  });
+
+  test('does not show prices or booking buttons for optional activities', async () => {
+    render(
+      <MemoryRouter initialEntries={[`/day/${DAY_ID}`]}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/day/:dayId" element={<DayDetails />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Sunset Sailing')).toBeInTheDocument();
+    expect(screen.queryByText(/R\$ 350/i)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Sunset Sailing'));
+
+    expect(await screen.findByText('Bring sunscreen.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /book now/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/R\$ 350/i)).not.toBeInTheDocument();
   });
 });

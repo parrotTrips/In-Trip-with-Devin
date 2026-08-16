@@ -2,9 +2,20 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
+import { vi } from 'vitest';
 
 import { server } from '../../test/server';
 import RecommendationsScreen from './pages/RecommendationsScreen';
+
+const navigateMock = vi.fn();
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
 
 function renderRecommendationsScreen() {
   return render(
@@ -15,6 +26,10 @@ function renderRecommendationsScreen() {
 }
 
 describe('RecommendationsScreen', () => {
+  beforeEach(() => {
+    navigateMock.mockClear();
+  });
+
   test('renders rich recommendations from the backend and filters by category', async () => {
     server.use(
       http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({
@@ -65,5 +80,17 @@ describe('RecommendationsScreen', () => {
 
     expect(screen.queryByText('Babbo Osteria')).not.toBeInTheDocument();
     expect(screen.getByText('Ipanema Beach')).toBeInTheDocument();
+  });
+
+  test('lets travelers go back to the previous page', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({ recommendations: [] }))
+    );
+
+    renderRecommendationsScreen();
+
+    await userEvent.click(await screen.findByRole('button', { name: /back/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith(-1);
   });
 });

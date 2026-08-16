@@ -176,6 +176,17 @@ export async function getMyCancellationPolicy() {
   return request<{ cancellation_policy: CancellationPolicyItem[] }>('/me/cancellation-policy');
 }
 
+export async function getMyAppFeedback() {
+  return request<{ feedback: string | null }>('/me/app-feedback');
+}
+
+export async function updateMyAppFeedback(feedback: string) {
+  return request<{ feedback: string; updated_at: string }>('/me/app-feedback', {
+    method: 'PUT',
+    body: JSON.stringify({ feedback }),
+  });
+}
+
 export async function updateChecklistItem(
   userId: string,
   tripId: string,
