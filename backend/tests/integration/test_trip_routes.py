@@ -101,6 +101,13 @@ def _auth(seeded_client, phone: str) -> dict:
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+def test_trip_announcement_read_model_is_registered():
+    """Announcement read receipts are available through the model registry."""
+    from app.db.models import TripAnnouncementRead
+
+    assert TripAnnouncementRead.__tablename__ == "trip_announcement_reads"
+
+
 def test_get_my_trip_phases_returns_phases_with_correct_shape(seeded_client, session_factory):
     """GET /me/trip/phases returns phases with checklist_items and links fields."""
     phone = "+5511333000003"

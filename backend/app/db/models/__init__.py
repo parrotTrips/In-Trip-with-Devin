@@ -8,6 +8,7 @@ from app.db.models.staff import (
     ActivityParticipant,
     StaffTask,
     TripAnnouncement,
+    TripAnnouncementRead,
     TripContact,
     TripStaff,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "TripPhaseLink",
     "TripRecommendation",
     "TripAnnouncement",
+    "TripAnnouncementRead",
     "TripContact",
     "TripStaff",
     "TripTraveler",

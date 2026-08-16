@@ -33,6 +33,28 @@ class TripAnnouncement(UUIDPrimaryKeyMixin, Base):
     )
 
 
+class TripAnnouncementRead(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "trip_announcement_reads"
+    __table_args__ = (
+        UniqueConstraint("announcement_id", "user_id", name="uq_trip_announcement_reads_announcement_user"),
+        Index("ix_trip_announcement_reads_announcement_id", "announcement_id"),
+        Index("ix_trip_announcement_reads_user_id", "user_id"),
+    )
+
+    announcement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("trip_announcements.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    read_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default=func.now(),
+    )
+
+
 class TripContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trip_contacts"
 
