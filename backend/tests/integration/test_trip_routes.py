@@ -5,8 +5,9 @@ import uuid as _uuid
 from datetime import date
 from unittest.mock import patch
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from app.db.models.staff import TripAnnouncement, TripAnnouncementRead
 from app.db.models.trip import TripPhase, TripRecommendation, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import decode_traveler_qr_payload
@@ -88,6 +89,26 @@ async def _seed_phases(session_factory, *, trip_uuid: str = TEST_TRIP_UUID):
         await session.commit()
 
 
+async def _seed_announcements(session_factory, *, trip_uuid: str, count: int = 2):
+    async with session_factory() as session:
+        sender = User(phone=f"+5511777{trip_uuid[-6:]}", full_name="Staff Sender", status="active", role="staff")
+        session.add(sender)
+        await session.flush()
+
+        announcements = [
+            TripAnnouncement(
+                wetravel_trip_uuid=trip_uuid,
+                title=f"Update {index}",
+                body=f"Message body {index}",
+                sent_by_user_id=sender.id,
+            )
+            for index in range(1, count + 1)
+        ]
+        session.add_all(announcements)
+        await session.commit()
+        return [str(announcement.id) for announcement in announcements]
+
+
 def _auth(seeded_client, phone: str) -> dict:
     """Return Authorization headers for the given phone."""
     otp_res = seeded_client.post("/auth/request-otp", json={"phone": phone})
@@ -106,6 +127,80 @@ def test_trip_announcement_read_model_is_registered():
     from app.db.models import TripAnnouncementRead
 
     assert TripAnnouncementRead.__tablename__ == "trip_announcement_reads"
+
+
+def test_get_my_announcements_returns_read_state_and_unread_count(seeded_client, session_factory):
+    phone = "+5511333000013"
+    trip_uuid = "trip-announcement-read-list"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    asyncio.run(_seed_announcements(session_factory, trip_uuid=trip_uuid, count=2))
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.get("/me/announcements", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["unread_count"] == 2
+    assert len(data["announcements"]) == 2
+    assert {announcement["is_read"] for announcement in data["announcements"]} == {False}
+
+
+def test_mark_announcement_read_updates_only_that_announcement(seeded_client, session_factory):
+    phone = "+5511333000014"
+    trip_uuid = "trip-announcement-read-one"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    announcement_ids = asyncio.run(_seed_announcements(session_factory, trip_uuid=trip_uuid, count=2))
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.post(f"/me/announcements/{announcement_ids[0]}/read", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["announcement_id"] == announcement_ids[0]
+
+    list_response = seeded_client.get("/me/announcements", headers=headers)
+    data = list_response.json()
+    read_by_id = {announcement["id"]: announcement["is_read"] for announcement in data["announcements"]}
+    assert data["unread_count"] == 1
+    assert read_by_id[announcement_ids[0]] is True
+    assert read_by_id[announcement_ids[1]] is False
+
+
+def test_mark_announcement_read_is_idempotent(seeded_client, session_factory):
+    phone = "+5511333000015"
+    trip_uuid = "trip-announcement-read-idem"
+    user_id = asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    announcement_id = asyncio.run(_seed_announcements(session_factory, trip_uuid=trip_uuid, count=1))[0]
+    headers = _auth(seeded_client, phone)
+
+    for _ in range(2):
+        response = seeded_client.post(f"/me/announcements/{announcement_id}/read", headers=headers)
+        assert response.status_code == 200
+
+    async def _count_reads():
+        async with session_factory() as session:
+            return await session.scalar(
+                select(func.count())
+                .select_from(TripAnnouncementRead)
+                .where(
+                    TripAnnouncementRead.announcement_id == _uuid.UUID(announcement_id),
+                    TripAnnouncementRead.user_id == _uuid.UUID(user_id),
+                )
+            )
+
+    assert asyncio.run(_count_reads()) == 1
+
+
+def test_mark_announcement_read_rejects_other_trip(seeded_client, session_factory):
+    phone = "+5511333000016"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid="trip-announcement-read-home"))
+    other_announcement_id = asyncio.run(
+        _seed_announcements(session_factory, trip_uuid="trip-announcement-read-away", count=1)
+    )[0]
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.post(f"/me/announcements/{other_announcement_id}/read", headers=headers)
+
+    assert response.status_code == 404
 
 
 def test_get_my_trip_phases_returns_phases_with_correct_shape(seeded_client, session_factory):

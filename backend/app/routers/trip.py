@@ -1,11 +1,13 @@
 """Trip HTTP routes."""
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
-from app.db.models.staff import TripAnnouncement, TripStaff
+from app.db.models.staff import TripAnnouncement, TripAnnouncementRead, TripStaff
 from app.db.models.trip import TripCancellationPolicy, TripEmergencyContact, TripFaq, TripRecommendation, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import create_traveler_qr_payload
@@ -163,16 +165,24 @@ async def get_my_announcements(
 ):
     """Return trip announcements for the authenticated traveler, newest first."""
     user_id = request.state.user_id
+    user_uuid = uuid.UUID(user_id)
     trip_uuid = await _get_traveler_trip_uuid(user_id, session)
 
     rows = (await session.execute(
-        select(TripAnnouncement, User.full_name)
+        select(TripAnnouncement, User.full_name, TripAnnouncementRead.id)
         .join(User, User.id == TripAnnouncement.sent_by_user_id)
+        .outerjoin(
+            TripAnnouncementRead,
+            (TripAnnouncementRead.announcement_id == TripAnnouncement.id)
+            & (TripAnnouncementRead.user_id == user_uuid),
+        )
         .where(TripAnnouncement.wetravel_trip_uuid == trip_uuid)
         .order_by(TripAnnouncement.created_at.desc())
     )).all()
+    unread_count = sum(1 for _, _, read_id in rows if read_id is None)
 
     return {
+        "unread_count": unread_count,
         "announcements": [
             {
                 "id": str(ann.id),
@@ -180,10 +190,44 @@ async def get_my_announcements(
                 "body": ann.body,
                 "sent_by": None if ann.is_anonymous else name,
                 "created_at": ann.created_at.isoformat(),
+                "is_read": read_id is not None,
             }
-            for ann, name in rows
+            for ann, name, read_id in rows
         ]
     }
+
+
+@router.post("/me/announcements/{announcement_id}/read")
+async def mark_my_announcement_read(
+    announcement_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Mark one announcement as read for the authenticated traveler."""
+    user_id = request.state.user_id
+    user_uuid = uuid.UUID(user_id)
+    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+
+    announcement = await session.scalar(
+        select(TripAnnouncement).where(
+            TripAnnouncement.id == announcement_id,
+            TripAnnouncement.wetravel_trip_uuid == trip_uuid,
+        )
+    )
+    if announcement is None:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+
+    existing_read = await session.scalar(
+        select(TripAnnouncementRead).where(
+            TripAnnouncementRead.announcement_id == announcement_id,
+            TripAnnouncementRead.user_id == user_uuid,
+        )
+    )
+    if existing_read is None:
+        session.add(TripAnnouncementRead(announcement_id=announcement_id, user_id=user_uuid))
+        await session.commit()
+
+    return {"status": "read", "announcement_id": str(announcement_id)}
 
 
 @router.get("/me/team")
