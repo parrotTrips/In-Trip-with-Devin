@@ -1,6 +1,6 @@
 import { Bell, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { getMyAnnouncements, type Announcement } from '../../trip/services/trip-api';
+import { getMyAnnouncements, markAnnouncementRead, type Announcement } from '../../trip/services/trip-api';
 import AppHeader from '../../../shared/components/AppHeader';
 
 function formatDate(iso: string) {
@@ -8,20 +8,36 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function AnnouncementCard({ ann, defaultOpen }: { ann: Announcement; defaultOpen: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
+function AnnouncementCard({ ann, onRead }: { ann: Announcement; onRead: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+
+  function handleToggle() {
+    const nextOpen = !open;
+    setOpen(nextOpen);
+    if (nextOpen && !ann.is_read) {
+      onRead(ann.id);
+    }
+  }
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${ann.is_read ? 'border-gray-100' : 'border-emerald-200'}`}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={handleToggle}
         className="w-full flex items-center gap-3 p-4 text-left"
       >
-        <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${ann.is_read ? 'bg-gray-50' : 'bg-emerald-50'}`}>
           <Bell size={16} className="text-emerald-600" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-gray-800 truncate">{ann.title}</h3>
+          <div className="flex items-center gap-2 min-w-0">
+            {!ann.is_read && (
+              <span
+                aria-label="Unread notification"
+                className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"
+              />
+            )}
+            <h3 className="text-sm font-semibold text-gray-800 truncate">{ann.title}</h3>
+          </div>
           <span className="text-xs text-gray-400">{formatDate(ann.created_at)}</span>
         </div>
         {open
@@ -52,6 +68,17 @@ export default function NotificationsScreen() {
       .finally(() => setLoading(false));
   }, []);
 
+  async function handleReadAnnouncement(id: string) {
+    try {
+      await markAnnouncementRead(id);
+      setAnnouncements(current =>
+        current.map(ann => ann.id === id ? { ...ann, is_read: true } : ann)
+      );
+    } catch {
+      // Keep the card unread so expanding it again can retry the read receipt.
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
       <AppHeader title="Notifications" />
@@ -80,11 +107,11 @@ export default function NotificationsScreen() {
           </div>
         )}
 
-        {announcements.map((ann, index) => (
+        {announcements.map((ann) => (
           <AnnouncementCard
             key={ann.id}
             ann={ann}
-            defaultOpen={index === 0}
+            onRead={handleReadAnnouncement}
           />
         ))}
       </div>
