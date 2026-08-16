@@ -8,7 +8,12 @@ import AppHeader from './AppHeader';
 function renderAppHeader(unreadCount: number) {
   return render(
     <MemoryRouter>
-      <NotificationContext.Provider value={{ unreadCount, setUnreadCount: () => {}, decrementUnreadCount: () => {} }}>
+      <NotificationContext.Provider value={{
+        unreadCount,
+        setUnreadCount: () => {},
+        decrementUnreadCount: () => {},
+        refreshUnreadCount: async () => {},
+      }}>
         <AvatarContext.Provider value={{ avatarUrl: null, setAvatarUrl: () => {} }}>
           <AppHeader title="Trip" />
         </AvatarContext.Provider>

@@ -34,6 +34,10 @@ function setupTripHandlers() {
     http.get('http://localhost:8000/me/trip', () => HttpResponse.json(MOCK_TRIP)),
     http.get('http://localhost:8000/me/trip/phases', () => HttpResponse.json(MOCK_PHASES)),
     http.get('http://localhost:8000/me/trip/travelers', () => HttpResponse.json(MOCK_TRAVELERS)),
+    http.get('http://localhost:8000/me/announcements', () => HttpResponse.json({
+      announcements: [],
+      unread_count: 0,
+    })),
     http.get('http://localhost:8000/me/qr-code', () =>
       HttpResponse.json({
         trip_uuid: 'test-001',
@@ -76,8 +80,8 @@ describe('App composition', () => {
     await waitFor(() => {
       expect(screen.getByText('Trip Progress')).toBeInTheDocument();
     });
-    expect(screen.getByText('Map')).toBeInTheDocument();
-    expect(screen.getByText('QR Code')).toBeInTheDocument();
+    expect(screen.getByText('Journey')).toBeInTheDocument();
+    expect(screen.getByText('Information')).toBeInTheDocument();
     expect(screen.getByText('My Profile')).toBeInTheDocument();
     expect(screen.queryByText('Secret Missions')).not.toBeInTheDocument();
     expect(screen.queryByText('Sharing XP')).not.toBeInTheDocument();
@@ -96,8 +100,8 @@ describe('App composition', () => {
     await waitFor(() => {
       expect(screen.getByText('Trip Progress')).toBeInTheDocument();
     });
-    expect(screen.getByText('Map')).toBeInTheDocument();
-    expect(screen.getByText('QR Code')).toBeInTheDocument();
+    expect(screen.getByText('Journey')).toBeInTheDocument();
+    expect(screen.getByText('Information')).toBeInTheDocument();
     expect(screen.getByText('My Profile')).toBeInTheDocument();
     expect(screen.queryByText('Secret Missions')).not.toBeInTheDocument();
     expect(screen.queryByText('Sharing XP')).not.toBeInTheDocument();
@@ -120,7 +124,7 @@ describe('App composition', () => {
     await waitFor(() => {
       expect(screen.getByText('Trip Progress')).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: 'Voltar ao staff' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Staff view' })).toBeInTheDocument();
     expect(screen.queryByText('Viewing as traveler')).not.toBeInTheDocument();
   });
 });

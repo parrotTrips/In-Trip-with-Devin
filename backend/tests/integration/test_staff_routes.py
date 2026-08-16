@@ -21,8 +21,8 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
                 "uuid": "staff-route-test",
                 "title": "Staff Route Test",
                 "dest": "Brazil",
-                "sd": date(2026, 7, 1),
-                "ed": date(2026, 7, 10),
+                "sd": date(2027, 7, 1),
+                "ed": date(2027, 7, 10),
             },
         )
         staff = User(phone="+5511888000001", full_name="Staff One", status="active", role="staff")
@@ -68,8 +68,8 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
                 "uuid": "staff-route-other-trip-test",
                 "title": "Other Staff Route Test",
                 "dest": "Argentina",
-                "sd": date(2026, 7, 1),
-                "ed": date(2026, 7, 10),
+                "sd": date(2027, 7, 1),
+                "ed": date(2027, 7, 10),
             },
         )
         other_trip_traveler = TripTraveler(
@@ -215,9 +215,9 @@ def test_get_staff_trip_activity_includes_per_activity_checkin_counters(
     assert response.status_code == 200
     activities = response.json()["days"][0]["activities"]
     activity_by_id = {activity["id"]: activity for activity in activities}
-    assert activity_by_id[seed["activity_id"]]["checkin_count"] == 1
+    assert activity_by_id[seed["activity_id"]]["checkin_steps"][0]["count"] == 1
     assert activity_by_id[seed["activity_id"]]["traveler_count"] == 2
-    assert activity_by_id[seed["second_activity_id"]]["checkin_count"] == 0
+    assert activity_by_id[seed["second_activity_id"]]["checkin_steps"] == []
     assert activity_by_id[seed["second_activity_id"]]["traveler_count"] == 2
 
 
