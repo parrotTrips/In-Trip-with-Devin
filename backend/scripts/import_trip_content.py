@@ -25,6 +25,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import asyncpg
 from dotenv import load_dotenv
@@ -54,6 +55,7 @@ PG_URL = (
 )
 
 TRIP_CONTENT_SHEET_ID = os.environ.get("TRIP_CONTENT_SHEET_ID", "")
+TRIP_LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 
 def deterministic_phase_id(trip_uuid: str, phase_type: str, phase_key: str | int) -> str:
@@ -436,7 +438,9 @@ def parse_roteiro_tab(rows: list[list[str]]) -> list[InTripDay]:
         if horario and day_data:
             for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
                 try:
-                    activity_starts_at = datetime.strptime(f"{day_data} {horario}", fmt).replace(tzinfo=UTC)
+                    activity_starts_at = datetime.strptime(f"{day_data} {horario}", fmt).replace(
+                        tzinfo=TRIP_LOCAL_TZ
+                    ).astimezone(UTC)
                     break
                 except ValueError:
                     pass
@@ -561,7 +565,7 @@ async def write_to_db(
         for day in in_trip_days:
             phase_id = deterministic_phase_id(trip_uuid, "in-trip", day.dia)
             try:
-                starts_at = datetime.strptime(day.data, "%Y-%m-%d").replace(tzinfo=UTC)
+                starts_at = datetime.strptime(day.data, "%Y-%m-%d").replace(tzinfo=TRIP_LOCAL_TZ).astimezone(UTC)
             except ValueError:
                 starts_at = None
             await conn.execute(

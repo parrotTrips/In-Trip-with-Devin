@@ -1,4 +1,5 @@
 import sys
+from datetime import UTC
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -243,6 +244,8 @@ def test_parse_roteiro_tab_basic():
     assert len(days[0].activities) == 2
     assert days[0].activities[0].name == "Transfer do Aeroporto"
     assert days[0].activities[0].activity_type == "logistics"
+    assert days[0].activities[0].starts_at is not None
+    assert days[0].activities[0].starts_at.astimezone(UTC).isoformat() == "2026-12-26T17:00:00+00:00"
     assert days[0].activities[0].duration_minutes == 120
     assert days[1].dia == 2
     assert days[1].activities[0].duration_minutes is None
