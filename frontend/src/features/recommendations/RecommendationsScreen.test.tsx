@@ -90,7 +90,7 @@ describe('RecommendationsScreen', () => {
     expect(screen.getByText('Ipanema Beach')).toBeInTheDocument();
   });
 
-  test('builds filters from wedding recommendation data and shows visual fallback without photos', async () => {
+  test('builds filters from wedding recommendation data without fake image blocks', async () => {
     server.use(
       http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({
         recommendations: [
@@ -143,7 +143,9 @@ describe('RecommendationsScreen', () => {
     expect(screen.getByRole('button', { name: /restaurants/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /esportes/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /restaurantes/i })).not.toBeInTheDocument();
-    expect(screen.getAllByTestId('recommendation-visual-fallback')).toHaveLength(2);
+    expect(screen.queryByTestId('recommendation-visual-fallback')).not.toBeInTheDocument();
+    expect(screen.queryByText('kite')).not.toBeInTheDocument();
+    expect(screen.queryByText('restaurant')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /restaurants/i }));
 

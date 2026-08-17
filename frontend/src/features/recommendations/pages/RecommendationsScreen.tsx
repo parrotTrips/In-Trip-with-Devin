@@ -82,7 +82,7 @@ function sortCategoryOptions(options: FilterOption[]): FilterOption[] {
 }
 
 function visualLabelFor(rec: Recommendation) {
-  if (rec.emoji && rec.emoji.length <= 3) return rec.emoji;
+  if (rec.emoji && /[^\x00-\x7F]/.test(rec.emoji) && rec.emoji.length <= 4) return rec.emoji;
   const category = normalize(rec.category);
   if (category.includes('restaurante') || category === 'restaurants') return '🍽️';
   if (category.includes('esporte') || category === 'sports' || category === 'beaches') return '🌊';
@@ -115,20 +115,13 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
 
   return (
     <article className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-      {rec.photo_url ? (
+      {rec.photo_url && (
         <img src={rec.photo_url} alt={rec.name} className="w-full h-40 object-cover bg-emerald-50" />
-      ) : (
-        <div
-          data-testid="recommendation-visual-fallback"
-          className="h-24 bg-gradient-to-br from-emerald-100 via-sky-50 to-amber-50 flex items-center justify-center"
-        >
-          <span className="text-4xl" aria-hidden="true">{visualLabelFor(rec)}</span>
-        </div>
       )}
       <div className="p-4">
         <div className="flex items-start gap-3">
           <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-xl shrink-0">
-            {rec.emoji || '📍'}
+            {visualLabelFor(rec)}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
