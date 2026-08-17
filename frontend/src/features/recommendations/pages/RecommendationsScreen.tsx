@@ -30,10 +30,27 @@ const categoryIcons: Record<string, ReactNode> = {
   beaches: <Waves size={14} />,
   wellness: <Sparkles size={14} />,
   shopping: <ShoppingBag size={14} />,
+  sports: <Waves size={14} />,
   esportes: <Waves size={14} />,
+  sightseeing: <MapPin size={14} />,
   turismo: <MapPin size={14} />,
+  beauty: <Sparkles size={14} />,
   beleza: <Sparkles size={14} />,
+  transportation: <MapPin size={14} />,
   transporte: <MapPin size={14} />,
+};
+
+const categoryLabels: Record<string, string> = {
+  restaurants: 'Restaurants',
+  restaurantes: 'Restaurants',
+  sports: 'Sports',
+  esportes: 'Sports',
+  sightseeing: 'Sightseeing',
+  turismo: 'Sightseeing',
+  beauty: 'Beauty',
+  beleza: 'Beauty',
+  transportation: 'Transportation',
+  transporte: 'Transportation',
 };
 
 function normalize(value: string | null | undefined) {
@@ -48,7 +65,7 @@ function firstByNormalizedKey(values: Array<string | null | undefined>): FilterO
     const key = normalize(label);
     if (!key || seen.has(key)) return;
     seen.add(key);
-    options.push({ key, label, icon: categoryIcons[key] ?? <Star size={14} /> });
+    options.push({ key, label: categoryLabels[key] ?? label, icon: categoryIcons[key] ?? <Star size={14} /> });
   });
   return options;
 }
@@ -57,10 +74,10 @@ function visualLabelFor(rec: Recommendation) {
   if (rec.emoji && rec.emoji.length <= 3) return rec.emoji;
   const category = normalize(rec.category);
   if (category.includes('restaurante') || category === 'restaurants') return '🍽️';
-  if (category.includes('esporte') || category === 'beaches') return '🌊';
-  if (category.includes('turismo')) return '🧭';
-  if (category.includes('beleza') || category === 'wellness') return '✨';
-  if (category.includes('transporte')) return '🚐';
+  if (category.includes('esporte') || category === 'sports' || category === 'beaches') return '🌊';
+  if (category.includes('turismo') || category === 'sightseeing') return '🧭';
+  if (category.includes('beleza') || category === 'beauty' || category === 'wellness') return '✨';
+  if (category.includes('transporte') || category === 'transportation') return '🚐';
   return '📍';
 }
 

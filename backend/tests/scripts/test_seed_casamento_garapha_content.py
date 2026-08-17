@@ -155,11 +155,11 @@ def test_recommendations_skip_placeholders_and_include_real_rows():
     assert all(recommendation["name"] for recommendation in recommendations)
     assert all("placeholder" not in str(recommendation["name"]).lower() for recommendation in recommendations)
     assert names >= {
-        "Aulas de Yoga, Canoa Havaiana e Kayak / Espaco Imparti",
-        "Aulas de Kitesurf - Professor Bete",
-        "Lucas - Guia e Aluguel Quadri",
-        "Ianaele - Cabelo e Maquiagem",
-        "Jimmy - Transfer Aeroporto Jeri - Prea e Taxi",
+        "Yoga, Hawaiian Canoe and Kayak Classes / Espaco Imparti",
+        "Kitesurf Lessons - Professor Bete",
+        "Lucas - Guide and ATV Rental",
+        "Ianaele - Hair and Makeup",
+        "Jimmy - Jeri Airport, Prea Transfer and Taxi",
         "Balcon",
         "Rancho do Peixe",
         "Alisios",
@@ -169,12 +169,13 @@ def test_recommendations_skip_placeholders_and_include_real_rows():
         "Restaurante Arriegua",
     }
     assert {recommendation["category"] for recommendation in recommendations} >= {
-        "Esportes",
-        "Turismo",
-        "Beleza",
-        "Transporte",
-        "Restaurantes",
+        "Sports",
+        "Sightseeing",
+        "Beauty",
+        "Transportation",
+        "Restaurants",
     }
+    assert all("Restaurante indicado" not in recommendation["description"] for recommendation in recommendations)
 
 
 def test_emergency_contacts_contains_marine_carneiro():

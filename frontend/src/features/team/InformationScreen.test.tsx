@@ -75,6 +75,8 @@ describe('InformationScreen', () => {
     const feedbackButton = await screen.findByRole('button', { name: /feedback/i });
     await userEvent.click(feedbackButton);
 
+    expect(screen.getByText(/Tell us what worked well in the app/i)).toBeInTheDocument();
+
     const feedbackField = screen.getByRole('textbox', { name: /app feedback/i });
     expect(feedbackField).toHaveValue('Loved the daily checklist.');
     expect(screen.queryByRole('link', { name: /enviar feedback/i })).not.toBeInTheDocument();

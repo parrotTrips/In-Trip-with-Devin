@@ -89,7 +89,7 @@ describe('RecommendationsScreen', () => {
           {
             id: 'rec-1',
             name: 'Aulas de Kitesurf - Professor Bete',
-            description: 'Aulas de kitesurf',
+            description: 'Kitesurf lessons',
             address: 'Prea, Cruz - CE',
             photo_url: null,
             sort_order: 1,
@@ -105,7 +105,7 @@ describe('RecommendationsScreen', () => {
           {
             id: 'rec-2',
             name: 'Balcon',
-            description: 'Restaurante indicado em Prea',
+            description: 'Recommended restaurant in Prea',
             address: 'Prea, Cruz - CE',
             photo_url: null,
             sort_order: 2,
@@ -125,11 +125,13 @@ describe('RecommendationsScreen', () => {
     renderRecommendationsScreen();
 
     expect(await screen.findByRole('button', { name: /prea, ce/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /esportes/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /restaurantes/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sports/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /restaurants/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /esportes/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /restaurantes/i })).not.toBeInTheDocument();
     expect(screen.getAllByTestId('recommendation-visual-fallback')).toHaveLength(2);
 
-    await userEvent.click(screen.getByRole('button', { name: /restaurantes/i }));
+    await userEvent.click(screen.getByRole('button', { name: /restaurants/i }));
 
     expect(screen.queryByText('Aulas de Kitesurf - Professor Bete')).not.toBeInTheDocument();
     expect(screen.getByText('Balcon')).toBeInTheDocument();

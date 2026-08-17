@@ -195,7 +195,7 @@ export default function InformationScreen() {
           <CollapsibleSection title="Feedback" emoji="💬">
             <div className="pt-3 space-y-3">
               <p className="text-sm text-gray-600 leading-relaxed">
-                Conte para a gente o que funcionou bem no aplicativo e o que podemos melhorar nesta viagem.
+                Tell us what worked well in the app and what we can improve for this trip.
               </p>
               <label className="block">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">App Feedback</span>
