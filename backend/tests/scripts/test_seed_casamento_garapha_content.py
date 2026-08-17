@@ -98,7 +98,7 @@ def test_roteiro_rows_have_import_parseable_times_and_expected_durations():
 
     expected = {
         "Jantar de Boas Vindas": ("19:00", 240),
-        "Passeio de Jangada": ("09:30", 150),
+        "Passeio de Jangada": ("10:00", 120),
         "Festa Pre Wedding": ("13:00", 360),
         "Casamento": ("15:00", 540),
     }
@@ -110,6 +110,15 @@ def test_roteiro_rows_have_import_parseable_times_and_expected_durations():
 
         assert activity["atividade_horario"] == expected_time
         assert activity["atividade_duracao_min"] == expected_duration
+
+
+def test_roteiro_preserves_arrival_and_ceremony_guidance():
+    rows = script.build_sheet_rows()["content"]["Roteiro"]
+    activities = rows_as_dicts("Roteiro", rows)
+    by_name = {activity["atividade_nome"]: activity for activity in activities}
+
+    assert "09:30" in by_name["Passeio de Jangada"]["atividade_info_pratica"]
+    assert "15:45" in by_name["Casamento"]["atividade_info_pratica"]
 
 
 def test_links_rows_have_non_empty_urls_for_import():
@@ -144,6 +153,7 @@ def test_faq_returns_three_filled_rows():
         "Que horas devo chegar para a cerimonia?",
     }
     assert all(faq["answer"] for faq in faqs)
+    assert any("15:45" in faq["answer"] for faq in faqs)
 
 
 def test_recommendations_skip_placeholders_and_include_real_rows():
