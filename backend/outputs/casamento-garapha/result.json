@@ -1,0 +1,14 @@
+{
+  "mode": "dry-run",
+  "trip_uuid": "CASAMENTO-GARAPHA-2026",
+  "would_create_or_update": {
+    "wetravel_trips": 1,
+    "trip_settings": 1,
+    "users": 2,
+    "trip_travelers": 2,
+    "traveler_profiles": 2,
+    "traveler_products": 2,
+    "sheet_trip_rows": 1,
+    "sheet_traveler_rows": 2
+  }
+}

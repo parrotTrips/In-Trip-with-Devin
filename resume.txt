@@ -5,3 +5,6 @@ claude --resume 90977cf2-e52e-4213-9876-83dab5159a7f
 claude --resume ab28f725-b105-45f6-ac5e-2c8b37ec6761      <- Observabilidadecee
 codex resume 019fc25c-9846-7542-8eea-fc9e9de4b18e <- Data Request Casamento | Viagem da Parrot pela API
 codex resume 019fdd68-b019-7d20-9144-98481e3a9072 <- Link de cancelamento de pacote e sessao de feedback na viagem de teste
+codex resume 019fd74b-5b20-7633-938d-091346ae073d <- Viagem Interna Parrot | Correção dos Usuários
+codex resume 01a0017b-c901-7830-bff2-0d28ee14d160 <- Correcoes pontuais de layout(feedback, rotas do local recommendations...)
+codex resume 01a00bf1-f5ec-7a80-add6-e5f7a028cd62 <- Alinhamento planilha e supabase
