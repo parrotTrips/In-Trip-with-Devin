@@ -513,6 +513,22 @@ def merge_trip_rows(
     return normalize_sheet_values([header] + kept + new_rows)
 
 
+def validate_managed_header(tab: str, values: list[list[Any]]) -> list[str]:
+    managed_header = MANAGED_HEADERS.get(tab)
+    if not managed_header:
+        return values[0] if values else []
+    if values and values[0] != managed_header:
+        raise ValueError(f"Header mismatch for managed tab {tab}: expected {managed_header}, found {values[0]}")
+    return managed_header
+
+
+def pad_rows_for_write(rows: list[list[Any]], row_count: int, column_count: int = 26) -> list[list[Any]]:
+    padded_rows = [list(row[:column_count]) + [""] * max(0, column_count - len(row)) for row in rows]
+    while len(padded_rows) < row_count:
+        padded_rows.append([""] * column_count)
+    return padded_rows
+
+
 def ensure_tab(sheets, spreadsheet_id: str, tab: str) -> None:
     meta = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title").execute()
     titles = {sheet["properties"]["title"] for sheet in meta.get("sheets", [])}
@@ -533,14 +549,14 @@ def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list
         .execute()
         .get("values", [])
     )
-    header = MANAGED_HEADERS.get(tab) or (values[0] if values else [])
+    header = validate_managed_header(tab, values)
     merged = merge_trip_rows(values, header, new_rows)
-    sheets.spreadsheets().values().clear(spreadsheetId=spreadsheet_id, range=f"'{tab}'!A:Z").execute()
+    write_rows = pad_rows_for_write(merged, max(len(values), len(merged)))
     sheets.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
         range=f"'{tab}'!A:Z",
         valueInputOption="RAW",
-        body={"values": merged},
+        body={"values": write_rows},
     ).execute()
 
 

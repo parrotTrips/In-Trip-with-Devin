@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 if str(BACKEND_ROOT) not in sys.path:
@@ -234,6 +236,13 @@ class FakeSheets:
         return self.spreadsheets_resource
 
 
+def trim_trailing_empty(row):
+    trimmed = list(row)
+    while trimmed and trimmed[-1] == "":
+        trimmed.pop()
+    return trimmed
+
+
 def test_merge_trip_rows_preserves_existing_rows_for_other_trips():
     header = script.MANAGED_HEADERS["FAQ"]
     other_trip_row = ["OTHER-2026", "Other question", "Other answer", 1]
@@ -252,15 +261,33 @@ def test_replace_trip_rows_removes_existing_trip_rows_before_appending_fresh_row
     header = script.MANAGED_HEADERS[tab]
     other_trip_row = ["OTHER-2026", "Other question", "Other answer", 1]
     stale_row = [script.TRIP_UUID, "Old question", "Old answer", 2]
+    second_stale_row = [script.TRIP_UUID, "Older question", "Older answer", 4]
     fresh_row = [script.TRIP_UUID, "Fresh question", "Fresh answer", 3]
     sheets.tabs[spreadsheet_id] = {tab}
-    sheets.values[(spreadsheet_id, tab)] = [header, other_trip_row, stale_row]
+    sheets.values[(spreadsheet_id, tab)] = [header, other_trip_row, stale_row, second_stale_row]
 
     script.replace_trip_rows(sheets, spreadsheet_id, tab, [fresh_row])
 
-    assert sheets.values[(spreadsheet_id, tab)] == [header, other_trip_row, fresh_row]
-    assert ("clear", spreadsheet_id, f"'{tab}'!A:Z") in sheets.calls
+    updated_rows = sheets.values[(spreadsheet_id, tab)]
+    assert [trim_trailing_empty(row) for row in updated_rows] == [header, other_trip_row, fresh_row, []]
+    assert all(len(row) == 26 for row in updated_rows)
+    assert not any(call[0] == "clear" for call in sheets.calls)
     assert any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A:Z") for call in sheets.calls)
+
+
+def test_replace_trip_rows_rejects_managed_header_mismatch_without_writing():
+    sheets = FakeSheets()
+    spreadsheet_id = "content-sheet"
+    tab = "FAQ"
+    wrong_header = ["trip_uuid", "question", "sort_order", "answer"]
+    sheets.tabs[spreadsheet_id] = {tab}
+    sheets.values[(spreadsheet_id, tab)] = [wrong_header, [script.TRIP_UUID, "Old question", 1, "Old answer"]]
+
+    with pytest.raises(ValueError, match="Header mismatch for managed tab FAQ"):
+        script.replace_trip_rows(sheets, spreadsheet_id, tab, [[script.TRIP_UUID, "Fresh question", "Fresh answer", 1]])
+
+    assert not any(call[0] == "update" for call in sheets.calls)
+    assert not any(call[0] == "clear" for call in sheets.calls)
 
 
 def test_replace_trip_rows_uses_managed_header_for_missing_tabs():
@@ -272,7 +299,11 @@ def test_replace_trip_rows_uses_managed_header_for_missing_tabs():
 
     script.replace_trip_rows(sheets, spreadsheet_id, tab, [fresh_row])
 
-    assert sheets.values[(spreadsheet_id, tab)] == [script.MANAGED_HEADERS[tab], fresh_row]
+    assert [trim_trailing_empty(row) for row in sheets.values[(spreadsheet_id, tab)]] == [
+        script.MANAGED_HEADERS[tab],
+        fresh_row,
+    ]
+    assert all(len(row) == 26 for row in sheets.values[(spreadsheet_id, tab)])
     assert ("batchUpdate", spreadsheet_id, {"requests": [{"addSheet": {"properties": {"title": tab}}}]}) in sheets.calls
     assert ("get", spreadsheet_id, f"'{tab}'!A:Z") in sheets.calls
 
