@@ -88,11 +88,125 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
     "Recomendacoes": [
         [
             TRIP_UUID,
+            "Jimmy - Jeri Airport, Prea Transfer and Taxi",
+            "Transfer from Jericoacoara Airport to Prea and local taxi rides.",
+            "Prea, Cruz - CE",
+            "",
+            1,
+            "Transportation",
+            "Prea",
+            "Prea, CE",
+            "Jeri Airport to Prea / taxi.",
+            "$$",
+            "",
+            "",
+            "transfer",
+            "+5588997755605",
+            "https://wa.me/5588997755605",
+            "Jimmy",
+        ],
+        [
+            TRIP_UUID,
+            "Sandro - Jeri Airport, Prea Transfer and Taxi",
+            "Transfer from Jericoacoara Airport to Prea and local taxi rides.",
+            "Prea, Cruz - CE",
+            "",
+            2,
+            "Transportation",
+            "Prea",
+            "Prea, CE",
+            "Jeri Airport to Prea / taxi.",
+            "$$",
+            "",
+            "",
+            "transfer",
+            "+5588981823552",
+            "https://wa.me/5588981823552",
+            "Sandro",
+        ],
+        [
+            TRIP_UUID,
+            "Irismar - Jeri Airport, Prea Transfer and Taxi",
+            "Transfer from Jericoacoara Airport to Prea and local taxi rides.",
+            "Prea, Cruz - CE",
+            "",
+            3,
+            "Transportation",
+            "Prea",
+            "Prea, CE",
+            "Jeri Airport to Prea / taxi.",
+            "$$",
+            "",
+            "",
+            "transfer",
+            "+5588981329547",
+            "https://wa.me/5588981329547",
+            "Irismar",
+        ],
+        [
+            TRIP_UUID,
+            "Flavio - Jeri Airport, Prea Transfer and Taxi",
+            "Transfer from Jericoacoara Airport to Prea and local taxi rides.",
+            "Prea, Cruz - CE",
+            "",
+            4,
+            "Transportation",
+            "Prea",
+            "Prea, CE",
+            "Jeri Airport to Prea / taxi.",
+            "$$",
+            "",
+            "",
+            "transfer",
+            "+5588981991211",
+            "https://wa.me/5588981991211",
+            "Flavio",
+        ],
+        [
+            TRIP_UUID,
+            "Ariane Turismo - Fortaleza Airport to Prea Transfer",
+            "Transfer from Fortaleza Airport to Prea.",
+            "Prea, Cruz - CE",
+            "",
+            5,
+            "Transportation",
+            "Prea",
+            "Prea, CE",
+            "Fortaleza Airport to Prea.",
+            "$$",
+            "",
+            "",
+            "transfer",
+            "+5585991096458",
+            "https://wa.me/5585991096458",
+            "Ariane Turismo",
+        ],
+        [
+            TRIP_UUID,
+            "Junior - Fortaleza Airport to Prea Transfer",
+            "Transfer from Fortaleza Airport to Prea.",
+            "Prea, Cruz - CE",
+            "",
+            6,
+            "Transportation",
+            "Prea",
+            "Prea, CE",
+            "Fortaleza Airport to Prea.",
+            "$$",
+            "",
+            "",
+            "transfer",
+            "+5585987605594",
+            "https://wa.me/5585987605594",
+            "Junior",
+        ],
+        [
+            TRIP_UUID,
             "Yoga, Hawaiian Canoe and Kayak Classes / Espaco Imparti",
             "Yoga, Hawaiian canoe, and kayak classes and experiences in Prea.",
             "Prea, Cruz - CE",
             "",
-            1,
+            7,
             "Sports",
             "Prea",
             "Prea, CE",
@@ -111,7 +225,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Kitesurf lessons with a local instructor to enjoy Prea's winds.",
             "Prea, Cruz - CE",
             "",
-            2,
+            8,
             "Sports",
             "Prea",
             "Prea, CE",
@@ -130,7 +244,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Local guide and ATV rental for tours around the region.",
             "Prea, Cruz - CE",
             "",
-            3,
+            9,
             "Sightseeing",
             "Prea",
             "Prea, CE",
@@ -149,7 +263,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Local hair and makeup service for the wedding events.",
             "Prea, Cruz - CE",
             "",
-            4,
+            10,
             "Beauty",
             "Prea",
             "Prea, CE",
@@ -164,30 +278,11 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
         ],
         [
             TRIP_UUID,
-            "Jimmy - Jeri Airport, Prea Transfer and Taxi",
-            "Transfers between Jericoacoara Airport, Prea, and local taxi rides.",
-            "Prea, Cruz - CE",
-            "",
-            5,
-            "Transportation",
-            "Prea",
-            "Prea, CE",
-            "Coordinate schedules, flights, and meeting points in advance.",
-            "$$",
-            "",
-            "",
-            "transfer",
-            "+5588997755605",
-            "https://wa.me/5588997755605",
-            "Jimmy",
-        ],
-        [
-            TRIP_UUID,
             "Balcon",
             "Recommended restaurant in Prea for meals during free days.",
             "Prea, Cruz - CE",
             "",
-            6,
+            11,
             "Restaurants",
             "Prea",
             "Prea, CE",
@@ -206,7 +301,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Restaurant and beach structure at Rancho do Peixe in Prea.",
             "Prea, Cruz - CE",
             "",
-            7,
+            12,
             "Restaurants",
             "Prea",
             "Prea, CE",
@@ -225,7 +320,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Local restaurant recommended for meals in Prea.",
             "Prea, Cruz - CE",
             "",
-            8,
+            13,
             "Restaurants",
             "Prea",
             "Prea, CE",
@@ -244,7 +339,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Local restaurant recommended for regional food.",
             "Prea, Cruz - CE",
             "",
-            9,
+            14,
             "Restaurants",
             "Prea",
             "Prea, CE",
@@ -263,7 +358,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Recommended restaurant in Prea for meals during the stay.",
             "Prea, Cruz - CE",
             "",
-            10,
+            15,
             "Restaurants",
             "Prea",
             "Prea, CE",
@@ -282,7 +377,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Local restaurant recommended in the Prea area.",
             "Prea, Cruz - CE",
             "",
-            11,
+            16,
             "Restaurants",
             "Prea",
             "Prea, CE",
@@ -301,7 +396,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Recommended restaurant for meals during the trip.",
             "Prea, Cruz - CE",
             "",
-            12,
+            17,
             "Restaurants",
             "Prea",
             "Prea, CE",
@@ -382,7 +477,12 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
         [TRIP_UUID, "informacoes_do_casamento", 2, "Local dos eventos", "https://sites.icasei.com.br/gabrielaeraphael/places/18"],
         [TRIP_UUID, "informacoes_do_casamento", 3, "Lista de presentes", "https://sites.icasei.com.br/gabrielaeraphael/pages/37083965"],
         [TRIP_UUID, "logistica_de_viagem", 1, "Mapa de Prea", "https://maps.google.com/?q=Prea,Cruz,CE"],
-        [TRIP_UUID, "logistica_de_viagem", 2, "Transport - Jimmy", "https://wa.me/5588997755605"],
+        [TRIP_UUID, "logistica_de_viagem", 2, "Transport Jeri-Prea - Jimmy", "https://wa.me/5588997755605"],
+        [TRIP_UUID, "logistica_de_viagem", 3, "Transport Jeri-Prea - Sandro", "https://wa.me/5588981823552"],
+        [TRIP_UUID, "logistica_de_viagem", 4, "Transport Jeri-Prea - Irismar", "https://wa.me/5588981329547"],
+        [TRIP_UUID, "logistica_de_viagem", 5, "Transport Jeri-Prea - Flavio", "https://wa.me/5588981991211"],
+        [TRIP_UUID, "logistica_de_viagem", 6, "Transport Fortaleza-Prea - Ariane Turismo", "https://wa.me/5585991096458"],
+        [TRIP_UUID, "logistica_de_viagem", 7, "Transport Fortaleza-Prea - Junior", "https://wa.me/5585987605594"],
     ],
     "Roteiro": [
         [
@@ -607,11 +707,7 @@ def ensure_tab(sheets, spreadsheet_id: str, tab: str) -> int:
 
 
 def find_trip_row_block(values: list[list[Any]], header: list[str], trip_uuid: str = TRIP_UUID) -> tuple[int, int]:
-    matching_indexes = [
-        row_index
-        for row_index, row in enumerate(values[1:], start=1)
-        if row_matches_trip_uuid(row, header, trip_uuid)
-    ]
+    matching_indexes = find_trip_row_indexes(values, header, trip_uuid)
     if not matching_indexes:
         return len(values), 0
 
@@ -621,6 +717,14 @@ def find_trip_row_block(values: list[list[Any]], header: list[str], trip_uuid: s
     if matching_indexes != expected_indexes:
         raise ValueError(f"Found non-contiguous rows for trip {trip_uuid} in managed sheet")
     return block_start, len(matching_indexes)
+
+
+def find_trip_row_indexes(values: list[list[Any]], header: list[str], trip_uuid: str = TRIP_UUID) -> list[int]:
+    return [
+        row_index
+        for row_index, row in enumerate(values[1:], start=1)
+        if row_matches_trip_uuid(row, header, trip_uuid)
+    ]
 
 
 def insert_sheet_rows(sheets, spreadsheet_id: str, sheet_id: int, start_index: int, row_count: int) -> None:
@@ -699,6 +803,15 @@ def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list
     column_count = len(header)
     if not values:
         update_sheet_values(sheets, spreadsheet_id, tab, 1, [header] + new_rows, column_count)
+        return
+
+    matching_indexes = find_trip_row_indexes(values, header)
+    if matching_indexes and matching_indexes != list(range(matching_indexes[0], matching_indexes[-1] + 1)):
+        block_start_index = matching_indexes[0]
+        for row_index in reversed(matching_indexes):
+            delete_sheet_rows(sheets, spreadsheet_id, sheet_id, row_index, 1)
+        insert_sheet_rows(sheets, spreadsheet_id, sheet_id, block_start_index, len(new_rows))
+        update_sheet_values(sheets, spreadsheet_id, tab, block_start_index + 1, new_rows, column_count)
         return
 
     block_start_index, existing_trip_row_count = find_trip_row_block(values, header)

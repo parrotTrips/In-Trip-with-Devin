@@ -161,8 +161,45 @@ def test_links_include_transport_whatsapp_contacts_for_travel_logistics():
     }
 
     assert transport_links == {
-        "Transport - Jimmy": "https://wa.me/5588997755605",
+        "Transport Jeri-Prea - Jimmy": "https://wa.me/5588997755605",
+        "Transport Jeri-Prea - Sandro": "https://wa.me/5588981823552",
+        "Transport Jeri-Prea - Irismar": "https://wa.me/5588981329547",
+        "Transport Jeri-Prea - Flavio": "https://wa.me/5588981991211",
+        "Transport Fortaleza-Prea - Ariane Turismo": "https://wa.me/5585991096458",
+        "Transport Fortaleza-Prea - Junior": "https://wa.me/5585987605594",
     }
+
+
+def test_recommendations_include_all_transport_contacts_first():
+    rows = script.build_sheet_rows()["content"]["Recomendacoes"]
+    recommendations = rows_as_dicts("Recomendacoes", rows)
+    transport = [rec for rec in recommendations if rec["category"] == "Transportation"]
+
+    assert [rec["name"] for rec in transport] == [
+        "Jimmy - Jeri Airport, Prea Transfer and Taxi",
+        "Sandro - Jeri Airport, Prea Transfer and Taxi",
+        "Irismar - Jeri Airport, Prea Transfer and Taxi",
+        "Flavio - Jeri Airport, Prea Transfer and Taxi",
+        "Ariane Turismo - Fortaleza Airport to Prea Transfer",
+        "Junior - Fortaleza Airport to Prea Transfer",
+    ]
+    assert [rec["phone"] for rec in transport] == [
+        "+5588997755605",
+        "+5588981823552",
+        "+5588981329547",
+        "+5588981991211",
+        "+5585991096458",
+        "+5585987605594",
+    ]
+    assert [rec["whatsapp_url"] for rec in transport] == [
+        "https://wa.me/5588997755605",
+        "https://wa.me/5588981823552",
+        "https://wa.me/5588981329547",
+        "https://wa.me/5588981991211",
+        "https://wa.me/5585991096458",
+        "https://wa.me/5585987605594",
+    ]
+    assert [rec["sort_order"] for rec in transport] == [1, 2, 3, 4, 5, 6]
 
 
 def test_roteiro_activity_types_are_importer_recognized():
@@ -512,11 +549,12 @@ def test_replace_trip_rows_deletes_only_inside_target_trip_block_when_rows_shrin
     assert not any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A:Z") for call in sheets.calls)
 
 
-def test_replace_trip_rows_rejects_non_contiguous_trip_rows_without_writing():
+def test_replace_trip_rows_recovers_non_contiguous_trip_rows():
     sheets = FakeSheets()
     spreadsheet_id = "content-sheet"
     tab = "FAQ"
     header = script.MANAGED_HEADERS[tab]
+    fresh_row = [script.TRIP_UUID, "Fresh question", "Fresh answer", 4]
     sheets.tabs[spreadsheet_id] = {tab}
     sheets.sheet_ids[(spreadsheet_id, tab)] = 7
     sheets.values[(spreadsheet_id, tab)] = [
@@ -526,15 +564,22 @@ def test_replace_trip_rows_rejects_non_contiguous_trip_rows_without_writing():
         [script.TRIP_UUID, "Older question", "Older answer", 3],
     ]
 
-    with pytest.raises(ValueError, match="non-contiguous rows"):
-        script.replace_trip_rows(sheets, spreadsheet_id, tab, [[script.TRIP_UUID, "Fresh question", "Fresh answer", 4]])
+    script.replace_trip_rows(sheets, spreadsheet_id, tab, [fresh_row])
 
-    assert not any(call[0] == "update" for call in sheets.calls)
-    assert not any(
-        call[0] == "batchUpdate"
-        and any("insertDimension" in request or "deleteDimension" in request for request in call[2]["requests"])
+    assert sheets.values[(spreadsheet_id, tab)] == [
+        header,
+        fresh_row,
+        ["OTHER-2026", "Other question", "Other answer", 2],
+    ]
+    assert any(
+        call[0] == "batchUpdate" and "deleteDimension" in call[2]["requests"][0]
         for call in sheets.calls
     )
+    assert any(
+        call[0] == "batchUpdate" and "insertDimension" in call[2]["requests"][0]
+        for call in sheets.calls
+    )
+    assert ("update", spreadsheet_id, f"'{tab}'!A2:D2", "RAW", {"values": [fresh_row]}) in sheets.calls
 
 
 def test_replace_trip_rows_rejects_managed_header_mismatch_without_writing():
