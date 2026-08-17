@@ -382,7 +382,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "2026-09-05",
             "Dia 2 - Pre Wedding",
             "Passeio de jangada e festa",
-            "party-popper",
+            "waves",
             "Dia de praia, passeio e celebracao pre wedding.",
             "Programacao de sabado com passeio de jangada e festa pre wedding.",
             "Festa Pre Wedding",
@@ -444,19 +444,23 @@ STAFF_ROWS: dict[str, list[list[Any]]] = {
 }
 
 
+def copy_rows(rows: list[list[Any]]) -> list[list[Any]]:
+    return [list(row) for row in rows]
+
+
 def build_sheet_rows() -> dict[str, dict[str, list[list[Any]]]]:
     return {
         "content": {
-            "Viagens": CONTENT_ROWS["Viagens"],
-            "Emergency Contacts": CONTENT_ROWS["Emergency Contacts"],
-            "Recomendacoes": CONTENT_ROWS["Recomendacoes"],
-            "Fases": CONTENT_ROWS["Fases"],
-            "Checklist": CONTENT_ROWS["Checklist"],
-            "Links": CONTENT_ROWS["Links"],
-            "Roteiro": CONTENT_ROWS["Roteiro"],
-            "FAQ": CONTENT_ROWS["FAQ"],
+            "Viagens": copy_rows(CONTENT_ROWS["Viagens"]),
+            "Emergency Contacts": copy_rows(CONTENT_ROWS["Emergency Contacts"]),
+            "Recomendacoes": copy_rows(CONTENT_ROWS["Recomendacoes"]),
+            "Fases": copy_rows(CONTENT_ROWS["Fases"]),
+            "Checklist": copy_rows(CONTENT_ROWS["Checklist"]),
+            "Links": copy_rows(CONTENT_ROWS["Links"]),
+            "Roteiro": copy_rows(CONTENT_ROWS["Roteiro"]),
+            "FAQ": copy_rows(CONTENT_ROWS["FAQ"]),
         },
         "staff": {
-            "Contatos": STAFF_ROWS["Contatos"],
+            "Contatos": copy_rows(STAFF_ROWS["Contatos"]),
         },
     }

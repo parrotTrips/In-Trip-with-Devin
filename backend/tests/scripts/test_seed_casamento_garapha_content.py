@@ -68,6 +68,26 @@ def test_roteiro_returns_four_activities_across_three_days():
     }
 
 
+def test_roteiro_rows_for_same_day_share_day_metadata():
+    rows = script.build_sheet_rows()["content"]["Roteiro"]
+    activities = rows_as_dicts("Roteiro", rows)
+    day_metadata_fields = [
+        "data",
+        "dia_titulo",
+        "dia_subtitulo",
+        "dia_icon",
+        "dia_descricao_curta",
+        "dia_descricao_completa",
+    ]
+
+    expected_by_day = {}
+    for activity in activities:
+        metadata = tuple(activity[field] for field in day_metadata_fields)
+        expected_by_day.setdefault(activity["dia"], metadata)
+
+        assert metadata == expected_by_day[activity["dia"]]
+
+
 def test_faq_returns_three_filled_rows():
     rows = script.build_sheet_rows()["content"]["FAQ"]
     faqs = rows_as_dicts("FAQ", rows)
@@ -125,3 +145,22 @@ def test_staff_contacts_contains_marine_carneiro():
     contacts = rows_as_dicts("Contatos", rows)
 
     assert any(contact["name"] == "Marine Carneiro" for contact in contacts)
+
+
+def test_build_sheet_rows_match_managed_header_widths():
+    sheet_rows = script.build_sheet_rows()
+
+    for sheet in sheet_rows.values():
+        for tab, rows in sheet.items():
+            header = script.MANAGED_HEADERS[tab]
+
+            assert all(len(row) == len(header) for row in rows), tab
+
+
+def test_build_sheet_rows_returns_copied_rows():
+    first_rows = script.build_sheet_rows()
+    first_rows["content"]["Viagens"][0][1] = "Mutated title"
+
+    later_rows = script.build_sheet_rows()
+
+    assert later_rows["content"]["Viagens"][0][1] == script.TRIP_TITLE
