@@ -6,7 +6,11 @@ defines constants and returns row data shaped for the existing sheet importers.
 
 from __future__ import annotations
 
+import argparse
 import os
+import sys
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -443,6 +447,10 @@ STAFF_ROWS: dict[str, list[list[Any]]] = {
     ],
 }
 
+GOOGLE_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+OAUTH_TOKEN_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-token.json"
+OAUTH_CLIENT_FILE = Path(__file__).parent.parent / "secrets" / "gcp-oauth2-credentials.json"
+
 
 def copy_rows(rows: list[list[Any]]) -> list[list[Any]]:
     return [list(row) for row in rows]
@@ -464,3 +472,134 @@ def build_sheet_rows() -> dict[str, dict[str, list[list[Any]]]]:
             "Contatos": copy_rows(STAFF_ROWS["Contatos"]),
         },
     }
+
+
+def normalize_sheet_values(rows: list[list[Any]]) -> list[list[Any]]:
+    normalized = []
+    for row in rows:
+        normalized_row = []
+        for value in row:
+            if value is None:
+                normalized_row.append("")
+            elif isinstance(value, Decimal):
+                normalized_row.append(str(value))
+            elif isinstance(value, (datetime, date)):
+                normalized_row.append(value.isoformat())
+            else:
+                normalized_row.append(value)
+        normalized.append(normalized_row)
+    return normalized
+
+
+def row_matches_trip_uuid(row: list[Any], header: list[str], trip_uuid: str = TRIP_UUID) -> bool:
+    normalized_header = [str(value).strip().lower() for value in header]
+    try:
+        trip_uuid_index = normalized_header.index("trip_uuid")
+    except ValueError:
+        return False
+    if trip_uuid_index >= len(row):
+        return False
+    return str(row[trip_uuid_index]).strip() == trip_uuid
+
+
+def merge_trip_rows(
+    existing_rows: list[list[Any]],
+    header: list[str],
+    new_rows: list[list[Any]],
+    trip_uuid: str = TRIP_UUID,
+) -> list[list[Any]]:
+    body = existing_rows[1:] if existing_rows else []
+    kept = [row for row in body if not row_matches_trip_uuid(row, header, trip_uuid)]
+    return normalize_sheet_values([header] + kept + new_rows)
+
+
+def ensure_tab(sheets, spreadsheet_id: str, tab: str) -> None:
+    meta = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title").execute()
+    titles = {sheet["properties"]["title"] for sheet in meta.get("sheets", [])}
+    if tab in titles:
+        return
+    sheets.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": [{"addSheet": {"properties": {"title": tab}}}]},
+    ).execute()
+
+
+def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list[Any]]) -> None:
+    ensure_tab(sheets, spreadsheet_id, tab)
+    values = (
+        sheets.spreadsheets()
+        .values()
+        .get(spreadsheetId=spreadsheet_id, range=f"'{tab}'!A:Z")
+        .execute()
+        .get("values", [])
+    )
+    header = MANAGED_HEADERS.get(tab) or (values[0] if values else [])
+    merged = merge_trip_rows(values, header, new_rows)
+    sheets.spreadsheets().values().clear(spreadsheetId=spreadsheet_id, range=f"'{tab}'!A:Z").execute()
+    sheets.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=f"'{tab}'!A1",
+        valueInputOption="RAW",
+        body={"values": merged},
+    ).execute()
+
+
+def update_sheets(sheets, rows: dict[str, dict[str, list[list[Any]]]]) -> dict[str, Any]:
+    for tab, tab_rows in rows["content"].items():
+        replace_trip_rows(sheets, TRIP_CONTENT_SHEET_ID, tab, tab_rows)
+    for tab, tab_rows in rows["staff"].items():
+        replace_trip_rows(sheets, STAFF_CONTENT_SHEET_ID, tab, tab_rows)
+    return {
+        "content_sheet_id": TRIP_CONTENT_SHEET_ID,
+        "staff_sheet_id": STAFF_CONTENT_SHEET_ID,
+        "updated_tabs": {"content": sorted(rows["content"]), "staff": sorted(rows["staff"])},
+    }
+
+
+def build_sheets_client():
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
+
+    credentials = None
+    if OAUTH_TOKEN_FILE.exists():
+        credentials = Credentials.from_authorized_user_file(str(OAUTH_TOKEN_FILE), GOOGLE_SCOPES)
+    if not credentials or not credentials.valid:
+        if credentials and credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+        else:
+            if not OAUTH_CLIENT_FILE.exists():
+                print(f"ERROR: OAuth2 credentials file not found: {OAUTH_CLIENT_FILE}", file=sys.stderr)
+                sys.exit(1)
+            flow = InstalledAppFlow.from_client_secrets_file(str(OAUTH_CLIENT_FILE), GOOGLE_SCOPES)
+            credentials = flow.run_local_server(port=0)
+        OAUTH_TOKEN_FILE.write_text(credentials.to_json(), encoding="utf-8")
+    return build("sheets", "v4", credentials=credentials)
+
+
+def print_counts(rows: dict[str, dict[str, list[list[Any]]]]) -> None:
+    for sheet_name in ("content", "staff"):
+        for tab in sorted(rows[sheet_name]):
+            print(f"{sheet_name}.{tab}: {len(rows[sheet_name][tab])} rows")
+
+
+def main(argv: list[str] | None = None) -> dict[str, Any] | None:
+    parser = argparse.ArgumentParser(description="Seed Casamento GaRapha content rows to Google Sheets.")
+    parser.add_argument("--execute", action="store_true", help="Write rows to Google Sheets. Defaults to dry-run.")
+    args = parser.parse_args(argv)
+
+    rows = build_sheet_rows()
+    print_counts(rows)
+    if not args.execute:
+        print("Dry run: no sheets were written")
+        return None
+
+    result = update_sheets(build_sheets_client(), rows)
+    print(f"Wrote content tabs: {', '.join(result['updated_tabs']['content'])}")
+    print(f"Wrote staff tabs: {', '.join(result['updated_tabs']['staff'])}")
+    return result
+
+
+if __name__ == "__main__":
+    main()
