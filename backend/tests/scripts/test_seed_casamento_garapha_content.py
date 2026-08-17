@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -89,6 +90,46 @@ def test_roteiro_rows_for_same_day_share_day_metadata():
         expected_by_day.setdefault(activity["dia"], metadata)
 
         assert metadata == expected_by_day[activity["dia"]]
+
+
+def test_roteiro_rows_have_import_parseable_times_and_expected_durations():
+    rows = script.build_sheet_rows()["content"]["Roteiro"]
+    activities = rows_as_dicts("Roteiro", rows)
+
+    expected = {
+        "Jantar de Boas Vindas": ("19:00", 240),
+        "Passeio de Jangada": ("09:30", 150),
+        "Festa Pre Wedding": ("13:00", 360),
+        "Casamento": ("15:00", 540),
+    }
+
+    assert {activity["atividade_nome"] for activity in activities} == set(expected)
+    for activity in activities:
+        expected_time, expected_duration = expected[str(activity["atividade_nome"])]
+        datetime.strptime(str(activity["atividade_horario"]), "%H:%M")
+
+        assert activity["atividade_horario"] == expected_time
+        assert activity["atividade_duracao_min"] == expected_duration
+
+
+def test_links_rows_have_non_empty_urls_for_import():
+    rows = script.build_sheet_rows()["content"]["Links"]
+    links = rows_as_dicts("Links", rows)
+
+    assert all(str(link["url"]).strip() for link in links)
+    assert {(link["label"], link["url"]) for link in links} >= {
+        ("Site do casamento", "https://sites.icasei.com.br/gabrielaeraphael/home"),
+        ("Local dos eventos", "https://sites.icasei.com.br/gabrielaeraphael/places/18"),
+        ("Lista de presentes", "https://sites.icasei.com.br/gabrielaeraphael/pages/37083965"),
+    }
+
+
+def test_roteiro_activity_types_are_importer_recognized():
+    rows = script.build_sheet_rows()["content"]["Roteiro"]
+    activities = rows_as_dicts("Roteiro", rows)
+    recognized_types = {"included", "optional", "suggested", "logistics"}
+
+    assert {activity["atividade_tipo"] for activity in activities} <= recognized_types
 
 
 def test_faq_returns_three_filled_rows():
