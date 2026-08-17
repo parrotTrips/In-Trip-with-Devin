@@ -46,6 +46,7 @@ function setupHandlers() {
             duration_minutes: null,
             short_description: 'Pickup from airport',
             practical_info: null,
+            address: 'Hotel lobby, Rio de Janeiro',
             amount_brl: null,
             sort_order: 0,
           },
@@ -57,6 +58,7 @@ function setupHandlers() {
             duration_minutes: null,
             short_description: 'Optional sailing experience',
             practical_info: 'Bring sunscreen.',
+            address: null,
             amount_brl: 350,
             sort_order: 1,
           },
@@ -92,6 +94,7 @@ describe('DayDetails', () => {
       expect(screen.getByText("Today's Itinerary")).toBeInTheDocument();
     });
     expect(screen.getByText('Airport Pickup')).toBeInTheDocument();
+    expect(screen.getByText('Hotel lobby, Rio de Janeiro')).toBeInTheDocument();
   });
 
   test('does not show prices or booking buttons for optional activities', async () => {

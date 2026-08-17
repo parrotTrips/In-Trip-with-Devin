@@ -8,7 +8,7 @@ from unittest.mock import patch
 from sqlalchemy import func, select
 
 from app.db.models.staff import TripAnnouncement, TripAnnouncementRead
-from app.db.models.trip import TravelerAppFeedback, TripPhase, TripRecommendation, TripTraveler
+from app.db.models.trip import TravelerAppFeedback, TripActivity, TripPhase, TripRecommendation, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import decode_traveler_qr_payload
 
@@ -263,6 +263,55 @@ def test_put_my_app_feedback_upserts_one_feedback_per_traveler(seeded_client, se
     get_response = seeded_client.get("/me/app-feedback", headers=headers)
     assert get_response.status_code == 200
     assert get_response.json()["feedback"] == "Updated feedback."
+
+
+def test_get_my_trip_phase_detail_returns_activity_address(seeded_client, session_factory):
+    phone = "+5511333000020"
+    trip_uuid = "trip-activity-address-001"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+
+    async def _seed_phase_with_activity():
+        async with session_factory() as session:
+            phase = TripPhase(
+                wetravel_trip_uuid=trip_uuid,
+                phase_type="in-trip",
+                title="Day 1",
+                subtitle="Arrival",
+                icon="plane-landing",
+                short_description="Arrival day.",
+                detailed_description=None,
+                sort_order=0,
+                starts_at=None,
+                is_locked_by_default=False,
+                is_visible=True,
+            )
+            session.add(phase)
+            await session.flush()
+            session.add(
+                TripActivity(
+                    trip_phase_id=phase.id,
+                    name="Welcome Dinner",
+                    activity_type="included",
+                    starts_at=None,
+                    duration_minutes=120,
+                    short_description="Dinner with the group.",
+                    practical_info=None,
+                    address="Rancho do Kite, Prea - CE",
+                    max_checkins=1,
+                    amount_brl=None,
+                    sort_order=0,
+                )
+            )
+            await session.commit()
+            return str(phase.id)
+
+    phase_id = asyncio.run(_seed_phase_with_activity())
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.get(f"/me/trip/phases/{phase_id}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["activities"][0]["address"] == "Rancho do Kite, Prea - CE"
 
 
 def test_get_my_trip_phases_returns_phases_with_correct_shape(seeded_client, session_factory):

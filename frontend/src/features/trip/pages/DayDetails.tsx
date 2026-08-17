@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Clock,
   Info,
+  MapPin,
   Star,
   ChevronRight,
   Check,
@@ -89,6 +90,13 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
                 <Clock size={12} />
                 <span>{formatTime(activity.starts_at, activity.duration_minutes)}</span>
               </div>
+
+              {activity.address && (
+                <div className="flex items-start gap-1 mt-2 text-xs text-gray-500">
+                  <MapPin size={12} className="mt-0.5 flex-shrink-0" />
+                  <span>{activity.address}</span>
+                </div>
+              )}
 
               <div className="text-sm text-gray-600 mt-2 leading-relaxed whitespace-pre-line">
                 {activity.short_description}

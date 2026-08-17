@@ -382,6 +382,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
         [TRIP_UUID, "informacoes_do_casamento", 2, "Local dos eventos", "https://sites.icasei.com.br/gabrielaeraphael/places/18"],
         [TRIP_UUID, "informacoes_do_casamento", 3, "Lista de presentes", "https://sites.icasei.com.br/gabrielaeraphael/pages/37083965"],
         [TRIP_UUID, "logistica_de_viagem", 1, "Mapa de Prea", "https://maps.google.com/?q=Prea,Cruz,CE"],
+        [TRIP_UUID, "logistica_de_viagem", 2, "Transport - Jimmy", "https://wa.me/5588997755605"],
     ],
     "Roteiro": [
         [
@@ -400,7 +401,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Encontro de boas vindas para convidados.",
             "Confira o local e o horario final no site do casamento ou com a organizacao.",
             "",
-            "Rancho do Kite, Prea - CE",
+            "Piscina do Rancho do Kite, Prea - CE",
             "",
         ],
         [
@@ -419,7 +420,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Passeio de jangada para convidados.",
             "Ponto de encontro no Kite Lodge as 09:30. Use roupa de praia, protetor solar e confirme condicoes do mar com a organizacao.",
             "",
-            "Prea - CE",
+            "Praia do Prea / Kite Lodge Brasil, Prea - CE",
             "",
         ],
         [
@@ -438,7 +439,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Festa pre wedding para abrir a celebracao.",
             "Confira traje, local e transporte nas informacoes oficiais do casamento.",
             "",
-            "Prea - CE",
+            "Restaurante Terral, Praia da Barrinha - CE",
             "",
         ],
         [
@@ -457,7 +458,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "Cerimonia e festa do casamento.",
             "Chegue com antecedencia. A cerimonia comeca impreterivelmente as 15:45; siga as orientacoes de transporte e traje.",
             "",
-            "Prea - CE",
+            "Hotel Kite Lodge, Prea - CE",
             "",
         ],
     ],

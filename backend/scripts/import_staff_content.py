@@ -468,8 +468,8 @@ async def write_staff(conn: asyncpg.Connection, trip_uuid: str, members: list[di
             else:
                 user_id = await conn.fetchval(
                     """
-                    INSERT INTO users (id, phone, full_name, role, created_at, updated_at)
-                    VALUES (gen_random_uuid(), $1, $2, 'staff', now(), now())
+                    INSERT INTO users (id, phone, full_name, status, role, created_at, updated_at)
+                    VALUES (gen_random_uuid(), $1, $2, 'active', 'staff', now(), now())
                     RETURNING id
                     """,
                     phone, name,

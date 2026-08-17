@@ -11,6 +11,7 @@ from scripts.import_staff_content import (
     _require_single_row,
     parse_activity_participants_tab,
     parse_staff_tasks_tab,
+    write_staff,
     write_activity_participants,
     write_staff_tasks,
 )
@@ -120,6 +121,9 @@ class _FakeConn:
         self.staff_id = uuid4()
         self.traveler_id = uuid4()
         self.activity_ids = [self.activity_id]
+        self.fetchrow_calls = []
+        self.fetchval_calls = []
+        self.execute_calls = []
 
     def transaction(self):
         return _FakeTransaction()
@@ -140,8 +144,40 @@ class _FakeConn:
             return [{"id": self.activity_id}]
         return []
 
-    async def execute(self, *args):
+    async def fetchrow(self, query, *args):
+        self.fetchrow_calls.append((query, args))
         return None
+
+    async def fetchval(self, query, *args):
+        self.fetchval_calls.append((query, args))
+        return self.staff_id
+
+    async def execute(self, *args):
+        self.execute_calls.append(args)
+        return None
+
+
+@pytest.mark.asyncio
+async def test_write_staff_creates_active_staff_user():
+    conn = _FakeConn()
+
+    await write_staff(conn, "TEST-2026-FULL", [{
+        "phone": "+558899769044",
+        "nome": "Marine",
+        "funcao": "Apoio da cerimonia",
+        "trip_uuid": "TEST-2026-FULL",
+        "photo_url": None,
+        "bio": None,
+    }])
+
+    insert_user_calls = [
+        call for call in conn.fetchval_calls
+        if "INSERT INTO users" in call[0]
+    ]
+
+    assert insert_user_calls
+    assert "status" in insert_user_calls[0][0]
+    assert "'active'" in insert_user_calls[0][0]
 
 
 @pytest.mark.asyncio

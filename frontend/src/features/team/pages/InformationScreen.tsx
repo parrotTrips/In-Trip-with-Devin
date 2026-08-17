@@ -132,7 +132,7 @@ export default function InformationScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleFeedbackSave() {
+  async function handleFeedbackSend() {
     setFeedbackSaving(true);
     setFeedbackSaved(false);
     setFeedbackError(false);
@@ -140,7 +140,7 @@ export default function InformationScreen() {
       const response = await updateMyAppFeedback(appFeedback);
       setAppFeedback(response.feedback);
       setFeedbackSaved(true);
-      posthog.capture('app_feedback_saved');
+      posthog.capture('app_feedback_sent');
     } catch {
       setFeedbackError(true);
     } finally {
@@ -214,19 +214,19 @@ export default function InformationScreen() {
               </label>
               <button
                 type="button"
-                onClick={handleFeedbackSave}
+                onClick={handleFeedbackSend}
                 disabled={feedbackSaving}
                 className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl font-medium text-sm transition-colors"
               >
                 {feedbackSaving ? (
                   <>
                     <Loader2 size={14} className="animate-spin" />
-                    Saving...
+                    Sending...
                   </>
-                ) : 'Save Feedback'}
+                ) : 'Send Feedback'}
               </button>
-              {feedbackSaved && <p className="text-xs font-medium text-emerald-600">Feedback saved</p>}
-              {feedbackError && <p className="text-xs font-medium text-red-500">Could not save feedback. Try again.</p>}
+              {feedbackSaved && <p className="text-xs font-medium text-emerald-600">Feedback sent</p>}
+              {feedbackError && <p className="text-xs font-medium text-red-500">Could not send feedback. Try again.</p>}
             </div>
           </CollapsibleSection>
 

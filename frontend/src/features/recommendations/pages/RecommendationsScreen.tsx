@@ -73,6 +73,14 @@ function firstByNormalizedKey(values: Array<string | null | undefined>): FilterO
   return options;
 }
 
+function sortCategoryOptions(options: FilterOption[]): FilterOption[] {
+  return [...options].sort((a, b) => {
+    if (a.key === 'transportation' || a.key === 'transporte') return -1;
+    if (b.key === 'transportation' || b.key === 'transporte') return 1;
+    return 0;
+  });
+}
+
 function visualLabelFor(rec: Recommendation) {
   if (rec.emoji && rec.emoji.length <= 3) return rec.emoji;
   const category = normalize(rec.category);
@@ -231,7 +239,7 @@ export default function RecommendationsScreen() {
 
   const categories = useMemo<FilterOption[]>(() => [
     { key: 'all', label: 'All', icon: categoryIcons.all },
-    ...firstByNormalizedKey(recommendations.map(rec => rec.category)),
+    ...sortCategoryOptions(firstByNormalizedKey(recommendations.map(rec => rec.category))),
   ], [recommendations]);
 
   const filtered = useMemo(() => recommendations.filter(rec => {

@@ -83,10 +83,10 @@ describe('InformationScreen', () => {
 
     await userEvent.clear(feedbackField);
     await userEvent.type(feedbackField, 'The app made the trip easier.');
-    await userEvent.click(screen.getByRole('button', { name: /save feedback/i }));
+    await userEvent.click(screen.getByRole('button', { name: /send feedback/i }));
 
     expect(savedPayload).toEqual({ feedback: 'The app made the trip easier.' });
-    expect(await screen.findByText(/feedback saved/i)).toBeInTheDocument();
+    expect(await screen.findByText(/feedback sent/i)).toBeInTheDocument();
   });
 
   test('links local recommendations directly to the dedicated recommendations page', async () => {

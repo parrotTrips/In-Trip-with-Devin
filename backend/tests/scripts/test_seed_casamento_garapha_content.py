@@ -121,6 +121,23 @@ def test_roteiro_preserves_arrival_and_ceremony_guidance():
     assert "15:45" in by_name["Casamento"]["atividade_info_pratica"]
 
 
+def test_roteiro_rows_include_specific_activity_locations():
+    rows = script.build_sheet_rows()["content"]["Roteiro"]
+    activities = rows_as_dicts("Roteiro", rows)
+
+    expected_locations = {
+        "Jantar de Boas Vindas": "Piscina do Rancho do Kite, Prea - CE",
+        "Passeio de Jangada": "Praia do Prea / Kite Lodge Brasil, Prea - CE",
+        "Festa Pre Wedding": "Restaurante Terral, Praia da Barrinha - CE",
+        "Casamento": "Hotel Kite Lodge, Prea - CE",
+    }
+
+    assert {
+        activity["atividade_nome"]: activity["atividade_endereco"]
+        for activity in activities
+    } == expected_locations
+
+
 def test_links_rows_have_non_empty_urls_for_import():
     rows = script.build_sheet_rows()["content"]["Links"]
     links = rows_as_dicts("Links", rows)
@@ -130,6 +147,21 @@ def test_links_rows_have_non_empty_urls_for_import():
         ("Site do casamento", "https://sites.icasei.com.br/gabrielaeraphael/home"),
         ("Local dos eventos", "https://sites.icasei.com.br/gabrielaeraphael/places/18"),
         ("Lista de presentes", "https://sites.icasei.com.br/gabrielaeraphael/pages/37083965"),
+    }
+
+
+def test_links_include_transport_whatsapp_contacts_for_travel_logistics():
+    rows = script.build_sheet_rows()["content"]["Links"]
+    links = rows_as_dicts("Links", rows)
+
+    transport_links = {
+        link["label"]: link["url"]
+        for link in links
+        if link["fase"] == "logistica_de_viagem" and "Transport" in link["label"]
+    }
+
+    assert transport_links == {
+        "Transport - Jimmy": "https://wa.me/5588997755605",
     }
 
 

@@ -151,6 +151,62 @@ describe('RecommendationsScreen', () => {
     expect(screen.getByText('Balcon')).toBeInTheDocument();
   });
 
+  test('shows transportation as the first category filter after all', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({
+        recommendations: [
+          {
+            id: 'rec-1',
+            name: 'Balcon',
+            description: 'Recommended restaurant in Prea',
+            address: 'Prea, Cruz - CE',
+            photo_url: null,
+            sort_order: 1,
+            category: 'Restaurants',
+            neighborhood: 'Prea',
+            location: 'Prea, CE',
+            highlight: null,
+            price_range: '$$',
+            rating: null,
+            map_url: null,
+            emoji: 'restaurant',
+            phone: null,
+            whatsapp_url: null,
+            contact_label: null,
+          },
+          {
+            id: 'rec-2',
+            name: 'Transfer Prea',
+            description: 'Private transfer contact',
+            address: 'Prea, Cruz - CE',
+            photo_url: null,
+            sort_order: 2,
+            category: 'Transportation',
+            neighborhood: 'Prea',
+            location: 'Prea, CE',
+            highlight: null,
+            price_range: '$$',
+            rating: null,
+            map_url: null,
+            emoji: 'transport',
+            phone: '+5588999999999',
+            whatsapp_url: 'https://wa.me/5588999999999',
+            contact_label: 'Transfer Prea',
+          },
+        ],
+      }))
+    );
+
+    renderRecommendationsScreen();
+
+    const allButton = await screen.findByRole('button', { name: /^all$/i });
+    const transportationButton = screen.getByRole('button', { name: /transportation/i });
+    const restaurantsButton = screen.getByRole('button', { name: /restaurants/i });
+
+    expect(allButton.compareDocumentPosition(transportationButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(transportationButton.compareDocumentPosition(restaurantsButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   test('lets travelers go back to the previous page', async () => {
     server.use(
       http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({ recommendations: [] }))

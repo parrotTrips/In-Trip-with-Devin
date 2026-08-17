@@ -207,6 +207,7 @@ async def get_trip_phase_detail(user_id: str, phase_id: str, session: AsyncSessi
                 "duration_minutes": a.duration_minutes,
                 "short_description": a.short_description,
                 "practical_info": a.practical_info,
+                "address": a.address,
                 "amount_brl": float(a.amount_brl) if a.amount_brl is not None else None,
                 "sort_order": a.sort_order,
             }

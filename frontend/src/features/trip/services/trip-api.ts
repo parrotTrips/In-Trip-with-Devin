@@ -33,6 +33,7 @@ export interface Activity {
   duration_minutes: number | null;
   short_description: string;
   practical_info: string | null;
+  address: string | null;
   amount_brl: number | null;
   sort_order: number;
 }
