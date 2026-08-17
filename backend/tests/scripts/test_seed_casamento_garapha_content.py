@@ -181,14 +181,18 @@ def test_emergency_contacts_contains_marine_carneiro():
     rows = script.build_sheet_rows()["content"]["Emergency Contacts"]
     contacts = rows_as_dicts("Emergency Contacts", rows)
 
-    assert any(contact["name"] == "Marine Carneiro" for contact in contacts)
+    marine = next(contact for contact in contacts if contact["name"] == "Marine Carneiro")
+
+    assert marine["phone"] == "+558899769044"
 
 
 def test_staff_contacts_contains_marine_carneiro():
     rows = script.build_sheet_rows()["staff"]["Contatos"]
     contacts = rows_as_dicts("Contatos", rows)
 
-    assert any(contact["name"] == "Marine Carneiro" for contact in contacts)
+    marine = next(contact for contact in contacts if contact["name"] == "Marine Carneiro")
+
+    assert marine["phone"] == "+558899769044"
 
 
 def test_build_sheet_rows_match_managed_header_widths():

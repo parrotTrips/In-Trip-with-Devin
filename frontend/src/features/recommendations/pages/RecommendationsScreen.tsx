@@ -19,27 +19,49 @@ import { useNavigate } from 'react-router-dom';
 import AppHeader from '../../../shared/components/AppHeader';
 import { getMyRecommendations, type Recommendation } from '../../trip/services/trip-api';
 
-type CategoryKey = 'all' | 'restaurants' | 'bars' | 'cafes' | 'beaches' | 'wellness' | 'shopping';
-type LocationKey = 'all' | 'rio' | 'ilha-grande';
+type FilterOption = { key: string; label: string; icon?: ReactNode };
 
-const categories: { key: CategoryKey; label: string; icon: ReactNode }[] = [
-  { key: 'all', label: 'All', icon: <Star size={14} /> },
-  { key: 'restaurants', label: 'Food', icon: <Utensils size={14} /> },
-  { key: 'bars', label: 'Bars', icon: <Wine size={14} /> },
-  { key: 'cafes', label: 'Cafes', icon: <Coffee size={14} /> },
-  { key: 'beaches', label: 'Beaches', icon: <Waves size={14} /> },
-  { key: 'wellness', label: 'Wellness', icon: <Sparkles size={14} /> },
-  { key: 'shopping', label: 'Shopping', icon: <ShoppingBag size={14} /> },
-];
-
-const locations: { key: LocationKey; label: string }[] = [
-  { key: 'all', label: 'All Locations' },
-  { key: 'rio', label: 'Rio de Janeiro' },
-  { key: 'ilha-grande', label: 'Ilha Grande' },
-];
+const categoryIcons: Record<string, ReactNode> = {
+  all: <Star size={14} />,
+  restaurants: <Utensils size={14} />,
+  restaurantes: <Utensils size={14} />,
+  bars: <Wine size={14} />,
+  cafes: <Coffee size={14} />,
+  beaches: <Waves size={14} />,
+  wellness: <Sparkles size={14} />,
+  shopping: <ShoppingBag size={14} />,
+  esportes: <Waves size={14} />,
+  turismo: <MapPin size={14} />,
+  beleza: <Sparkles size={14} />,
+  transporte: <MapPin size={14} />,
+};
 
 function normalize(value: string | null | undefined) {
   return (value || '').trim().toLowerCase();
+}
+
+function firstByNormalizedKey(values: Array<string | null | undefined>): FilterOption[] {
+  const options: FilterOption[] = [];
+  const seen = new Set<string>();
+  values.forEach(value => {
+    const label = (value || '').trim();
+    const key = normalize(label);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    options.push({ key, label, icon: categoryIcons[key] ?? <Star size={14} /> });
+  });
+  return options;
+}
+
+function visualLabelFor(rec: Recommendation) {
+  if (rec.emoji && rec.emoji.length <= 3) return rec.emoji;
+  const category = normalize(rec.category);
+  if (category.includes('restaurante') || category === 'restaurants') return '🍽️';
+  if (category.includes('esporte') || category === 'beaches') return '🌊';
+  if (category.includes('turismo')) return '🧭';
+  if (category.includes('beleza') || category === 'wellness') return '✨';
+  if (category.includes('transporte')) return '🚐';
+  return '📍';
 }
 
 function mapUrlFor(rec: Recommendation) {
@@ -54,8 +76,15 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
 
   return (
     <article className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-      {rec.photo_url && (
+      {rec.photo_url ? (
         <img src={rec.photo_url} alt={rec.name} className="w-full h-40 object-cover bg-emerald-50" />
+      ) : (
+        <div
+          data-testid="recommendation-visual-fallback"
+          className="h-24 bg-gradient-to-br from-emerald-100 via-sky-50 to-amber-50 flex items-center justify-center"
+        >
+          <span className="text-4xl" aria-hidden="true">{visualLabelFor(rec)}</span>
+        </div>
       )}
       <div className="p-4">
         <div className="flex items-start gap-3">
@@ -111,8 +140,8 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
 export default function RecommendationsScreen() {
   const navigate = useNavigate();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
-  const [activeCategory, setActiveCategory] = useState<CategoryKey>('all');
-  const [activeLocation, setActiveLocation] = useState<LocationKey>('all');
+  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeLocation, setActiveLocation] = useState('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -121,6 +150,16 @@ export default function RecommendationsScreen() {
       .catch(() => setRecommendations([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const locations = useMemo<FilterOption[]>(() => [
+    { key: 'all', label: 'All Locations' },
+    ...firstByNormalizedKey(recommendations.map(rec => rec.location)),
+  ], [recommendations]);
+
+  const categories = useMemo<FilterOption[]>(() => [
+    { key: 'all', label: 'All', icon: categoryIcons.all },
+    ...firstByNormalizedKey(recommendations.map(rec => rec.category)),
+  ], [recommendations]);
 
   const filtered = useMemo(() => recommendations.filter(rec => {
     if (activeCategory !== 'all' && normalize(rec.category) !== activeCategory) return false;

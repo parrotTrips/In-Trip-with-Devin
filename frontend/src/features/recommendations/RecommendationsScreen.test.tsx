@@ -82,6 +82,59 @@ describe('RecommendationsScreen', () => {
     expect(screen.getByText('Ipanema Beach')).toBeInTheDocument();
   });
 
+  test('builds filters from wedding recommendation data and shows visual fallback without photos', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({
+        recommendations: [
+          {
+            id: 'rec-1',
+            name: 'Aulas de Kitesurf - Professor Bete',
+            description: 'Aulas de kitesurf',
+            address: 'Prea, Cruz - CE',
+            photo_url: null,
+            sort_order: 1,
+            category: 'Esportes',
+            neighborhood: 'Prea',
+            location: 'Prea, CE',
+            highlight: null,
+            price_range: '$$$',
+            rating: null,
+            map_url: null,
+            emoji: 'kite',
+          },
+          {
+            id: 'rec-2',
+            name: 'Balcon',
+            description: 'Restaurante indicado em Prea',
+            address: 'Prea, Cruz - CE',
+            photo_url: null,
+            sort_order: 2,
+            category: 'Restaurantes',
+            neighborhood: 'Prea',
+            location: 'Prea, CE',
+            highlight: null,
+            price_range: '$$',
+            rating: null,
+            map_url: null,
+            emoji: 'restaurant',
+          },
+        ],
+      }))
+    );
+
+    renderRecommendationsScreen();
+
+    expect(await screen.findByRole('button', { name: /prea, ce/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /esportes/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /restaurantes/i })).toBeInTheDocument();
+    expect(screen.getAllByTestId('recommendation-visual-fallback')).toHaveLength(2);
+
+    await userEvent.click(screen.getByRole('button', { name: /restaurantes/i }));
+
+    expect(screen.queryByText('Aulas de Kitesurf - Professor Bete')).not.toBeInTheDocument();
+    expect(screen.getByText('Balcon')).toBeInTheDocument();
+  });
+
   test('lets travelers go back to the previous page', async () => {
     server.use(
       http.get('http://localhost:8000/me/recommendations', () => HttpResponse.json({ recommendations: [] }))

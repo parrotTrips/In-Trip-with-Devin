@@ -22,6 +22,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 TRIP_UUID = "CASAMENTO-GARAPHA-2026"
 TRIP_TITLE = "Casamento GaRapha"
+MARINE_PHONE = "+558899769044"
 TRIP_CONTENT_SHEET_ID = os.environ.get(
     "TRIP_CONTENT_SHEET_ID",
     "1N1B66s1-K4DDf2_863frmhnpF6LRZB_ww60uax0gKZM",
@@ -79,7 +80,7 @@ MANAGED_HEADERS: dict[str, list[str]] = {
 CONTENT_ROWS: dict[str, list[list[Any]]] = {
     "Viagens": [[TRIP_UUID, TRIP_TITLE, "2026-09-04", "2026-09-06", ""]],
     "Emergency Contacts": [
-        [TRIP_UUID, "Marine Carneiro", "Apoio da cerimonia", "", 1],
+        [TRIP_UUID, "Marine Carneiro", "Apoio da cerimonia", MARINE_PHONE, 1],
     ],
     "Recomendacoes": [
         [
@@ -445,7 +446,7 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
 
 STAFF_ROWS: dict[str, list[list[Any]]] = {
     "Contatos": [
-        [TRIP_UUID, "Cerimonia", "Marine Carneiro", "Apoio da cerimonia", "", 1],
+        [TRIP_UUID, "Cerimonia", "Marine Carneiro", "Apoio da cerimonia", MARINE_PHONE, 1],
     ],
 }
 
