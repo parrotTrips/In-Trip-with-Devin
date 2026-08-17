@@ -50,6 +50,9 @@ MANAGED_HEADERS: dict[str, list[str]] = {
         "rating",
         "map_url",
         "emoji",
+        "phone",
+        "whatsapp_url",
+        "contact_label",
     ],
     "Fases": ["trip_uuid", "ordem", "fase", "titulo", "subtitulo", "icone", "descricao_curta", "descricao_completa", "ideal_pace"],
     "Checklist": ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
@@ -98,6 +101,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "yoga",
+            "+5588981659580",
+            "https://wa.me/5588981659580",
+            "Espaco Imparti",
         ],
         [
             TRIP_UUID,
@@ -114,6 +120,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "kite",
+            "+5588996439775",
+            "https://wa.me/5588996439775",
+            "Professor Bete",
         ],
         [
             TRIP_UUID,
@@ -130,6 +139,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "quad",
+            "+5588981866421",
+            "https://wa.me/5588981866421",
+            "Lucas",
         ],
         [
             TRIP_UUID,
@@ -146,6 +158,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "makeup",
+            "+5588997177444",
+            "https://wa.me/5588997177444",
+            "Ianaele",
         ],
         [
             TRIP_UUID,
@@ -162,6 +177,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "transfer",
+            "+5588997755605",
+            "https://wa.me/5588997755605",
+            "Jimmy",
         ],
         [
             TRIP_UUID,
@@ -178,6 +196,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "restaurant",
+            "",
+            "",
+            "",
         ],
         [
             TRIP_UUID,
@@ -194,6 +215,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "restaurant",
+            "",
+            "",
+            "",
         ],
         [
             TRIP_UUID,
@@ -210,6 +234,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "restaurant",
+            "",
+            "",
+            "",
         ],
         [
             TRIP_UUID,
@@ -226,6 +253,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "restaurant",
+            "",
+            "",
+            "",
         ],
         [
             TRIP_UUID,
@@ -242,6 +272,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "restaurant",
+            "",
+            "",
+            "",
         ],
         [
             TRIP_UUID,
@@ -258,6 +291,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "restaurant",
+            "",
+            "",
+            "",
         ],
         [
             TRIP_UUID,
@@ -274,6 +310,9 @@ CONTENT_ROWS: dict[str, list[list[Any]]] = {
             "",
             "",
             "restaurant",
+            "",
+            "",
+            "",
         ],
     ],
     "Fases": [
@@ -750,12 +789,14 @@ async def import_recommendations(sheets_svc, conn) -> dict[str, Any]:
                     (
                         id, wetravel_trip_uuid, name, description, address, photo_url,
                         sort_order, category, neighborhood, location, highlight,
-                        price_range, rating, map_url, emoji, created_at, updated_at
+                        price_range, rating, map_url, emoji,
+                        phone, whatsapp_url, contact_label, created_at, updated_at
                     )
                 VALUES (
                     gen_random_uuid(), $1, $2, $3, $4, $5,
                     $6, $7, $8, $9, $10,
-                    $11, $12, $13, $14, now(), now()
+                    $11, $12, $13, $14,
+                    $15, $16, $17, now(), now()
                 )
                 """,
                 TRIP_UUID,
@@ -772,6 +813,9 @@ async def import_recommendations(sheets_svc, conn) -> dict[str, Any]:
                 recommendation.rating,
                 recommendation.map_url,
                 recommendation.emoji,
+                recommendation.phone,
+                recommendation.whatsapp_url,
+                recommendation.contact_label,
             )
 
     return {"status": "ok", "trip_uuid": TRIP_UUID, "recommendations_imported": len(recommendations)}

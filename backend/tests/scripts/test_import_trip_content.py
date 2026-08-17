@@ -67,16 +67,17 @@ def test_parse_recommendations_tab_reads_rich_fields_and_preserves_legacy_fallba
         [
             "trip_uuid", "name", "description", "address", "photo_url", "sort_order",
             "category", "neighborhood", "location", "highlight", "price_range",
-            "rating", "map_url", "emoji",
+            "rating", "map_url", "emoji", "phone", "whatsapp_url", "contact_label",
         ],
         [
             "gsb-nye-2026", "Babbo Osteria", "Upscale Italian cuisine", "Rua Barao da Torre",
             "https://example.com/babbo.jpg", "2", "restaurants", "Ipanema", "rio",
             "Near the hotel", "$$$", "4.7", "https://maps.example/babbo", "🍝",
+            "+5521999999999", "https://wa.me/5521999999999", "Concierge",
         ],
         [
             "gsb-nye-2026", "Ipanema Beach", "Classic beach", "Ipanema, Rio", "", "bad",
-            "", "", "", "", "", "not-a-rating", "", "",
+            "", "", "", "", "", "not-a-rating", "", "", "", "", "",
         ],
     ]
 
@@ -91,9 +92,13 @@ def test_parse_recommendations_tab_reads_rich_fields_and_preserves_legacy_fallba
     assert recs[0].rating == 4.7
     assert recs[0].map_url == "https://maps.example/babbo"
     assert recs[0].emoji == "🍝"
+    assert recs[0].phone == "+5521999999999"
+    assert recs[0].whatsapp_url == "https://wa.me/5521999999999"
+    assert recs[0].contact_label == "Concierge"
     assert recs[0].sort_order == 2
     assert recs[1].category is None
     assert recs[1].rating is None
+    assert recs[1].phone is None
     assert recs[1].sort_order == 0
 
 

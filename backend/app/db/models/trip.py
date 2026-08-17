@@ -131,6 +131,9 @@ class TripRecommendation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     rating: Mapped[float | None] = mapped_column(Numeric(3, 1))
     map_url: Mapped[str | None] = mapped_column(Text)
     emoji: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(Text)
+    whatsapp_url: Mapped[str | None] = mapped_column(Text)
+    contact_label: Mapped[str | None] = mapped_column(Text)
 
 
 class TripFaq(UUIDPrimaryKeyMixin, TimestampMixin, Base):

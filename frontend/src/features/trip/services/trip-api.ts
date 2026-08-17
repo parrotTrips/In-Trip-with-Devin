@@ -144,6 +144,9 @@ export interface Recommendation {
   rating: number | null;
   map_url: string | null;
   emoji: string | null;
+  phone: string | null;
+  whatsapp_url: string | null;
+  contact_label: string | null;
 }
 
 export async function getMyEmergencyContacts() {

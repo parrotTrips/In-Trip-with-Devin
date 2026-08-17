@@ -35,6 +35,9 @@ RECOMMENDATIONS_HEADERS = [
     "rating",
     "map_url",
     "emoji",
+    "phone",
+    "whatsapp_url",
+    "contact_label",
 ]
 
 

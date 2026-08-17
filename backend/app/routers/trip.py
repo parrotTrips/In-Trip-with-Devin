@@ -400,6 +400,9 @@ async def get_my_recommendations(
                 "rating": float(r.rating) if r.rating is not None else None,
                 "map_url": r.map_url,
                 "emoji": r.emoji,
+                "phone": r.phone,
+                "whatsapp_url": r.whatsapp_url,
+                "contact_label": r.contact_label,
             }
             for r in rows
         ]

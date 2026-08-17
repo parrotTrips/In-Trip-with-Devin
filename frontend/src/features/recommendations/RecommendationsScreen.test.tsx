@@ -49,6 +49,9 @@ describe('RecommendationsScreen', () => {
             rating: 4.7,
             map_url: 'https://maps.example/babbo',
             emoji: '🍝',
+            phone: '+5521999999999',
+            whatsapp_url: 'https://wa.me/5521999999999',
+            contact_label: 'Concierge',
           },
           {
             id: 'rec-2',
@@ -65,6 +68,9 @@ describe('RecommendationsScreen', () => {
             rating: null,
             map_url: null,
             emoji: '🏖️',
+            phone: null,
+            whatsapp_url: null,
+            contact_label: null,
           },
         ],
       }))
@@ -75,6 +81,8 @@ describe('RecommendationsScreen', () => {
     expect(await screen.findByText('Babbo Osteria')).toBeInTheDocument();
     expect(screen.getByText('Ipanema Beach')).toBeInTheDocument();
     expect(screen.getByText('Near the hotel')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /call concierge/i })).toHaveAttribute('href', 'tel:+5521999999999');
+    expect(screen.getByRole('link', { name: /whatsapp concierge/i })).toHaveAttribute('href', 'https://wa.me/5521999999999');
 
     await userEvent.click(screen.getByRole('button', { name: /beaches/i }));
 
@@ -101,6 +109,9 @@ describe('RecommendationsScreen', () => {
             rating: null,
             map_url: null,
             emoji: 'kite',
+            phone: '+5588996439775',
+            whatsapp_url: 'https://wa.me/5588996439775',
+            contact_label: 'Professor Bete',
           },
           {
             id: 'rec-2',
@@ -117,6 +128,9 @@ describe('RecommendationsScreen', () => {
             rating: null,
             map_url: null,
             emoji: 'restaurant',
+            phone: null,
+            whatsapp_url: null,
+            contact_label: null,
           },
         ],
       }))

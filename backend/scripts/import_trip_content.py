@@ -181,6 +181,9 @@ class Recommendation:
     rating: float | None
     map_url: str | None
     emoji: str | None
+    phone: str | None
+    whatsapp_url: str | None
+    contact_label: str | None
 
 
 @dataclass
@@ -256,6 +259,9 @@ def parse_recommendations_tab(rows: list[list[str]]) -> list[Recommendation]:
             rating=_parse_float(_col(row, header, "rating")),
             map_url=_col(row, header, "map_url") or None,
             emoji=_col(row, header, "emoji") or None,
+            phone=_col(row, header, "phone") or None,
+            whatsapp_url=_col(row, header, "whatsapp_url") or None,
+            contact_label=_col(row, header, "contact_label") or None,
         ))
 
     return recs

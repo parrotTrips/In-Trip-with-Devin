@@ -1,9 +1,12 @@
 import {
   ArrowLeft,
   Coffee,
+  Copy,
   ExternalLink,
   Loader2,
   MapPin,
+  MessageCircle,
+  Phone,
   ShoppingBag,
   Sparkles,
   Star,
@@ -87,9 +90,20 @@ function mapUrlFor(rec: Recommendation) {
   return null;
 }
 
+function contactLabelFor(rec: Recommendation) {
+  return rec.contact_label || rec.name;
+}
+
+function copyPhone(phone: string) {
+  if (!navigator.clipboard) return;
+  void navigator.clipboard.writeText(phone);
+}
+
 function RecommendationCard({ rec }: { rec: Recommendation }) {
   const mapUrl = mapUrlFor(rec);
   const neighborhood = rec.neighborhood || rec.address;
+  const contactLabel = contactLabelFor(rec);
+  const phone = rec.phone;
 
   return (
     <article className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
@@ -135,17 +149,59 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
             {rec.description && (
               <p className="text-xs text-gray-600 mt-2 leading-relaxed">{rec.description}</p>
             )}
-            {mapUrl && (
-              <a
-                href={mapUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium mt-3"
-                onClick={() => posthog.capture('recommendation_opened', { recommendation_id: rec.id, name: rec.name })}
-              >
-                <ExternalLink size={12} />
-                Open in Maps
-              </a>
+            {(mapUrl || rec.phone || rec.whatsapp_url) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {mapUrl && (
+                  <a
+                    href={mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                    onClick={() => posthog.capture('recommendation_opened', { recommendation_id: rec.id, name: rec.name })}
+                  >
+                    <ExternalLink size={12} />
+                    Maps
+                  </a>
+                )}
+                {phone && (
+                  <a
+                    href={`tel:${phone}`}
+                    aria-label={`Call ${contactLabel}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100"
+                    onClick={() => posthog.capture('recommendation_call_clicked', { recommendation_id: rec.id, name: rec.name })}
+                  >
+                    <Phone size={12} />
+                    Call
+                  </a>
+                )}
+                {rec.whatsapp_url && (
+                  <a
+                    href={rec.whatsapp_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`WhatsApp ${contactLabel}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+                    onClick={() => posthog.capture('recommendation_whatsapp_clicked', { recommendation_id: rec.id, name: rec.name })}
+                  >
+                    <MessageCircle size={12} />
+                    WhatsApp
+                  </a>
+                )}
+                {phone && (
+                  <button
+                    type="button"
+                    aria-label={`Copy phone for ${contactLabel}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+                    onClick={() => {
+                      copyPhone(phone);
+                      posthog.capture('recommendation_phone_copied', { recommendation_id: rec.id, name: rec.name });
+                    }}
+                  >
+                    <Copy size={12} />
+                    Copy
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
