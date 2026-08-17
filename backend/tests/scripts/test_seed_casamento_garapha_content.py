@@ -1,4 +1,5 @@
 import sys
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -365,3 +366,112 @@ def test_cli_execute_writes_sheets(monkeypatch):
 
     assert written["sheets"] is fake_sheets
     assert written["rows"] == script.build_sheet_rows()
+
+
+def test_cli_rejects_import_db_without_execute(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        script.main(["--import-db"])
+
+    assert exc_info.value.code == 2
+    assert "--import-db requires --execute" in capsys.readouterr().err
+
+
+def test_cli_execute_import_db_runs_import_after_successful_sheet_write(monkeypatch):
+    fake_sheets = object()
+    events = []
+
+    monkeypatch.setattr(script, "build_sheets_client", lambda: fake_sheets)
+
+    def fake_update_sheets(sheets, rows):
+        events.append(("write", sheets, rows))
+        return {"updated_tabs": {"content": ["FAQ"], "staff": ["Contatos"]}}
+
+    async def fake_import_db_content(sheets):
+        events.append(("import", sheets))
+        return {"mode": {"mode": "pre-trip"}}
+
+    monkeypatch.setattr(script, "update_sheets", fake_update_sheets)
+    monkeypatch.setattr(script, "import_db_content", fake_import_db_content)
+
+    script.main(["--execute", "--import-db"])
+
+    assert events == [
+        ("write", fake_sheets, script.build_sheet_rows()),
+        ("import", fake_sheets),
+    ]
+
+
+def test_import_db_content_orchestrates_scoped_existing_imports(monkeypatch):
+    from app.services import admin_service
+    from scripts import import_staff_content, import_trip_content
+
+    class FakeConnection:
+        async def close(self):
+            events.append(("close",))
+
+    fake_sheets = object()
+    fake_conn = FakeConnection()
+    events = []
+
+    def fake_build_sheets_client():
+        events.append(("build_sheets_client",))
+        return fake_sheets
+
+    async def fake_connect(pg_url):
+        events.append(("connect", pg_url))
+        return fake_conn
+
+    async def fake_trip_import_one(sheets, conn, trip_uuid, sheet_id):
+        events.append(("trip_import_one", sheets, conn, trip_uuid, sheet_id))
+        return {"phases": 4}
+
+    async def fake_staff_import_one(sheets, conn, trip_uuid, sheet_id):
+        events.append(("staff_import_one", sheets, conn, trip_uuid, sheet_id))
+        return {"contacts": 1}
+
+    async def fake_admin_import_recommendations(trip_uuid):
+        events.append(("admin_import_recommendations", trip_uuid))
+        return {"recommendations_imported": 12}
+
+    async def fake_admin_import_emergency_contacts(trip_uuid):
+        events.append(("admin_import_emergency_contacts", trip_uuid))
+        return {"emergency_contacts_imported": 1}
+
+    async def fake_admin_import_faq(trip_uuid):
+        events.append(("admin_import_faq", trip_uuid))
+        return {"imported": 3}
+
+    async def fake_admin_set_mode(trip_uuid, mode):
+        events.append(("admin_set_mode", trip_uuid, mode))
+        return {"mode": mode}
+
+    monkeypatch.setattr(import_trip_content, "build_sheets_client", fake_build_sheets_client)
+    monkeypatch.setattr(import_trip_content.asyncpg, "connect", fake_connect)
+    monkeypatch.setattr(import_trip_content, "import_one", fake_trip_import_one)
+    monkeypatch.setattr(import_staff_content, "import_one", fake_staff_import_one)
+    monkeypatch.setattr(admin_service, "admin_import_recommendations", fake_admin_import_recommendations)
+    monkeypatch.setattr(admin_service, "admin_import_emergency_contacts", fake_admin_import_emergency_contacts)
+    monkeypatch.setattr(admin_service, "admin_import_faq", fake_admin_import_faq)
+    monkeypatch.setattr(admin_service, "admin_set_mode", fake_admin_set_mode)
+
+    result = asyncio.run(script.import_db_content())
+
+    assert events == [
+        ("build_sheets_client",),
+        ("connect", import_trip_content.PG_URL),
+        ("trip_import_one", fake_sheets, fake_conn, script.TRIP_UUID, script.TRIP_CONTENT_SHEET_ID),
+        ("admin_import_recommendations", script.TRIP_UUID),
+        ("admin_import_emergency_contacts", script.TRIP_UUID),
+        ("admin_import_faq", script.TRIP_UUID),
+        ("staff_import_one", fake_sheets, fake_conn, script.TRIP_UUID, script.STAFF_CONTENT_SHEET_ID),
+        ("admin_set_mode", script.TRIP_UUID, "pre-trip"),
+        ("close",),
+    ]
+    assert result == {
+        "trip_content": {"phases": 4},
+        "recommendations": {"recommendations_imported": 12},
+        "emergency_contacts": {"emergency_contacts_imported": 1},
+        "faq": {"imported": 3},
+        "staff_content": {"contacts": 1},
+        "mode": {"mode": "pre-trip"},
+    }

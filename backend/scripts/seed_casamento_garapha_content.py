@@ -7,6 +7,7 @@ defines constants and returns row data shaped for the existing sheet importers.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 from datetime import date, datetime
@@ -594,6 +595,47 @@ def build_sheets_client():
     return build("sheets", "v4", credentials=credentials)
 
 
+async def import_db_content(sheets=None) -> dict[str, Any]:
+    from app.services.admin_service import (
+        admin_import_emergency_contacts,
+        admin_import_faq,
+        admin_import_recommendations,
+        admin_set_mode,
+    )
+    from scripts import import_staff_content, import_trip_content
+
+    sheets_svc = sheets or import_trip_content.build_sheets_client()
+    conn = await import_trip_content.asyncpg.connect(import_trip_content.PG_URL)
+    try:
+        trip_content_result = await import_trip_content.import_one(
+            sheets_svc,
+            conn,
+            TRIP_UUID,
+            TRIP_CONTENT_SHEET_ID,
+        )
+        recommendations_result = await admin_import_recommendations(TRIP_UUID)
+        emergency_contacts_result = await admin_import_emergency_contacts(TRIP_UUID)
+        faq_result = await admin_import_faq(TRIP_UUID)
+        staff_content_result = await import_staff_content.import_one(
+            sheets_svc,
+            conn,
+            TRIP_UUID,
+            STAFF_CONTENT_SHEET_ID,
+        )
+        mode_result = await admin_set_mode(TRIP_UUID, "pre-trip")
+    finally:
+        await conn.close()
+
+    return {
+        "trip_content": trip_content_result,
+        "recommendations": recommendations_result,
+        "emergency_contacts": emergency_contacts_result,
+        "faq": faq_result,
+        "staff_content": staff_content_result,
+        "mode": mode_result,
+    }
+
+
 def print_counts(rows: dict[str, dict[str, list[list[Any]]]]) -> None:
     for sheet_name in ("content", "staff"):
         for tab in sorted(rows[sheet_name]):
@@ -603,7 +645,14 @@ def print_counts(rows: dict[str, dict[str, list[list[Any]]]]) -> None:
 def main(argv: list[str] | None = None) -> dict[str, Any] | None:
     parser = argparse.ArgumentParser(description="Seed Casamento GaRapha content rows to Google Sheets.")
     parser.add_argument("--execute", action="store_true", help="Write rows to Google Sheets. Defaults to dry-run.")
+    parser.add_argument(
+        "--import-db",
+        action="store_true",
+        help="After writing sheets, import Casamento GaRapha content into the database.",
+    )
     args = parser.parse_args(argv)
+    if args.import_db and not args.execute:
+        parser.error("--import-db requires --execute")
 
     rows = build_sheet_rows()
     print_counts(rows)
@@ -611,9 +660,14 @@ def main(argv: list[str] | None = None) -> dict[str, Any] | None:
         print("Dry run: no sheets were written")
         return None
 
-    result = update_sheets(build_sheets_client(), rows)
+    sheets = build_sheets_client()
+    result = update_sheets(sheets, rows)
     print(f"Wrote content tabs: {', '.join(result['updated_tabs']['content'])}")
     print(f"Wrote staff tabs: {', '.join(result['updated_tabs']['staff'])}")
+    if args.import_db:
+        import_result = asyncio.run(import_db_content(sheets))
+        result["db_import"] = import_result
+        print("Imported database content and set mode to pre-trip")
     return result
 
 
