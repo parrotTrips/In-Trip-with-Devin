@@ -531,19 +531,122 @@ def pad_rows_for_write(rows: list[list[Any]], row_count: int, column_count: int 
     return padded_rows
 
 
-def ensure_tab(sheets, spreadsheet_id: str, tab: str) -> None:
-    meta = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title").execute()
-    titles = {sheet["properties"]["title"] for sheet in meta.get("sheets", [])}
-    if tab in titles:
-        return
+def column_letter(column_index: int) -> str:
+    letters = ""
+    while column_index:
+        column_index, remainder = divmod(column_index - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
+
+
+def sheet_row_range(tab: str, start_row: int, row_count: int, column_count: int) -> str:
+    end_row = start_row + row_count - 1
+    return f"'{tab}'!A{start_row}:{column_letter(column_count)}{end_row}"
+
+
+def get_tab_properties(sheets, spreadsheet_id: str) -> dict[str, dict[str, Any]]:
+    meta = (
+        sheets.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties(sheetId,title)")
+        .execute()
+    )
+    return {sheet["properties"]["title"]: sheet["properties"] for sheet in meta.get("sheets", [])}
+
+
+def ensure_tab(sheets, spreadsheet_id: str, tab: str) -> int:
+    properties_by_title = get_tab_properties(sheets, spreadsheet_id)
+    if tab in properties_by_title:
+        return int(properties_by_title[tab]["sheetId"])
     sheets.spreadsheets().batchUpdate(
         spreadsheetId=spreadsheet_id,
         body={"requests": [{"addSheet": {"properties": {"title": tab}}}]},
     ).execute()
+    properties_by_title = get_tab_properties(sheets, spreadsheet_id)
+    return int(properties_by_title[tab]["sheetId"])
+
+
+def find_trip_row_block(values: list[list[Any]], header: list[str], trip_uuid: str = TRIP_UUID) -> tuple[int, int]:
+    matching_indexes = [
+        row_index
+        for row_index, row in enumerate(values[1:], start=1)
+        if row_matches_trip_uuid(row, header, trip_uuid)
+    ]
+    if not matching_indexes:
+        return len(values), 0
+
+    block_start = matching_indexes[0]
+    block_end = matching_indexes[-1]
+    expected_indexes = list(range(block_start, block_end + 1))
+    if matching_indexes != expected_indexes:
+        raise ValueError(f"Found non-contiguous rows for trip {trip_uuid} in managed sheet")
+    return block_start, len(matching_indexes)
+
+
+def insert_sheet_rows(sheets, spreadsheet_id: str, sheet_id: int, start_index: int, row_count: int) -> None:
+    if row_count <= 0:
+        return
+    sheets.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={
+            "requests": [
+                {
+                    "insertDimension": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "ROWS",
+                            "startIndex": start_index,
+                            "endIndex": start_index + row_count,
+                        },
+                        "inheritFromBefore": start_index > 0,
+                    }
+                }
+            ]
+        },
+    ).execute()
+
+
+def delete_sheet_rows(sheets, spreadsheet_id: str, sheet_id: int, start_index: int, row_count: int) -> None:
+    if row_count <= 0:
+        return
+    sheets.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={
+            "requests": [
+                {
+                    "deleteDimension": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "ROWS",
+                            "startIndex": start_index,
+                            "endIndex": start_index + row_count,
+                        }
+                    }
+                }
+            ]
+        },
+    ).execute()
+
+
+def update_sheet_values(
+    sheets,
+    spreadsheet_id: str,
+    tab: str,
+    start_row: int,
+    rows: list[list[Any]],
+    column_count: int,
+) -> None:
+    if not rows:
+        return
+    sheets.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=sheet_row_range(tab, start_row, len(rows), column_count),
+        valueInputOption="RAW",
+        body={"values": normalize_sheet_values(rows)},
+    ).execute()
 
 
 def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list[Any]]) -> None:
-    ensure_tab(sheets, spreadsheet_id, tab)
+    sheet_id = ensure_tab(sheets, spreadsheet_id, tab)
     values = (
         sheets.spreadsheets()
         .values()
@@ -552,14 +655,27 @@ def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list
         .get("values", [])
     )
     header = validate_managed_header(tab, values)
-    merged = merge_trip_rows(values, header, new_rows)
-    write_rows = pad_rows_for_write(merged, max(len(values), len(merged)))
-    sheets.spreadsheets().values().update(
-        spreadsheetId=spreadsheet_id,
-        range=f"'{tab}'!A:Z",
-        valueInputOption="RAW",
-        body={"values": write_rows},
-    ).execute()
+    column_count = len(header)
+    if not values:
+        update_sheet_values(sheets, spreadsheet_id, tab, 1, [header] + new_rows, column_count)
+        return
+
+    block_start_index, existing_trip_row_count = find_trip_row_block(values, header)
+    new_trip_row_count = len(new_rows)
+    delta = new_trip_row_count - existing_trip_row_count
+    if delta > 0 and existing_trip_row_count > 0:
+        insert_sheet_rows(sheets, spreadsheet_id, sheet_id, block_start_index + existing_trip_row_count, delta)
+
+    update_sheet_values(sheets, spreadsheet_id, tab, block_start_index + 1, new_rows, column_count)
+
+    if delta < 0:
+        delete_sheet_rows(
+            sheets,
+            spreadsheet_id,
+            sheet_id,
+            block_start_index + new_trip_row_count,
+            abs(delta),
+        )
 
 
 def update_sheets(sheets, rows: dict[str, dict[str, list[list[Any]]]]) -> dict[str, Any]:

@@ -225,9 +225,23 @@ class FakeSheetsValues:
     def __init__(self, parent):
         self.parent = parent
 
+    def _parse_tab(self, range):
+        return range.split("'!")[0].strip("'")
+
+    def _parse_row_range(self, range):
+        if "!" not in range or ":" not in range:
+            return None
+        _, cells = range.split("!", 1)
+        start_cell, end_cell = cells.split(":", 1)
+        start_digits = "".join(char for char in start_cell if char.isdigit())
+        end_digits = "".join(char for char in end_cell if char.isdigit())
+        if not start_digits or not end_digits:
+            return None
+        return int(start_digits), int(end_digits)
+
     def get(self, spreadsheetId, range):
         self.parent.calls.append(("get", spreadsheetId, range))
-        tab = range.split("'!")[0].strip("'")
+        tab = self._parse_tab(range)
         return FakeRequest({"values": self.parent.values.get((spreadsheetId, tab), [])})
 
     def clear(self, spreadsheetId, range):
@@ -236,10 +250,18 @@ class FakeSheetsValues:
 
     def update(self, spreadsheetId, range, valueInputOption, body):
         self.parent.calls.append(("update", spreadsheetId, range, valueInputOption, body))
-        tab = range.split("'!")[0].strip("'")
+        tab = self._parse_tab(range)
 
         def store():
-            self.parent.values[(spreadsheetId, tab)] = body["values"]
+            row_range = self._parse_row_range(range)
+            if row_range is None:
+                self.parent.values[(spreadsheetId, tab)] = body["values"]
+                return
+            start_row, end_row = row_range
+            rows = self.parent.values.setdefault((spreadsheetId, tab), [])
+            while len(rows) < end_row:
+                rows.append([])
+            rows[start_row - 1 : end_row] = body["values"]
 
         return FakeRequest(callback=store)
 
@@ -252,16 +274,43 @@ class FakeSheetsSpreadsheets:
     def get(self, spreadsheetId, fields):
         self.parent.calls.append(("meta", spreadsheetId, fields))
         titles = self.parent.tabs.get(spreadsheetId, set())
-        return FakeRequest({"sheets": [{"properties": {"title": title}} for title in sorted(titles)]})
+        sheets = []
+        for index, title in enumerate(sorted(titles), start=1):
+            sheets.append(
+                {
+                    "properties": {
+                        "title": title,
+                        "sheetId": self.parent.sheet_ids.get((spreadsheetId, title), index),
+                    }
+                }
+            )
+        return FakeRequest({"sheets": sheets})
 
     def batchUpdate(self, spreadsheetId, body):
         self.parent.calls.append(("batchUpdate", spreadsheetId, body))
-        title = body["requests"][0]["addSheet"]["properties"]["title"]
 
-        def add_tab():
-            self.parent.tabs.setdefault(spreadsheetId, set()).add(title)
+        def apply_requests():
+            for request in body["requests"]:
+                if "addSheet" in request:
+                    title = request["addSheet"]["properties"]["title"]
+                    self.parent.tabs.setdefault(spreadsheetId, set()).add(title)
+                    self.parent.sheet_ids[(spreadsheetId, title)] = len(self.parent.sheet_ids) + 1
+                    continue
+                if "insertDimension" in request:
+                    dimension_range = request["insertDimension"]["range"]
+                    tab = self.parent.tab_for_sheet_id(spreadsheetId, dimension_range["sheetId"])
+                    rows = self.parent.values.setdefault((spreadsheetId, tab), [])
+                    rows[dimension_range["startIndex"] : dimension_range["startIndex"]] = [
+                        [] for _ in range(dimension_range["endIndex"] - dimension_range["startIndex"])
+                    ]
+                    continue
+                if "deleteDimension" in request:
+                    dimension_range = request["deleteDimension"]["range"]
+                    tab = self.parent.tab_for_sheet_id(spreadsheetId, dimension_range["sheetId"])
+                    rows = self.parent.values.setdefault((spreadsheetId, tab), [])
+                    del rows[dimension_range["startIndex"] : dimension_range["endIndex"]]
 
-        return FakeRequest(callback=add_tab)
+        return FakeRequest(callback=apply_requests)
 
     def values(self):
         return self.values_resource
@@ -271,11 +320,21 @@ class FakeSheets:
     def __init__(self):
         self.calls = []
         self.tabs = {}
+        self.sheet_ids = {}
         self.values = {}
         self.spreadsheets_resource = FakeSheetsSpreadsheets(self)
 
     def spreadsheets(self):
         return self.spreadsheets_resource
+
+    def tab_for_sheet_id(self, spreadsheet_id, sheet_id):
+        for (candidate_spreadsheet_id, title), candidate_sheet_id in self.sheet_ids.items():
+            if candidate_spreadsheet_id == spreadsheet_id and candidate_sheet_id == sheet_id:
+                return title
+        for index, title in enumerate(sorted(self.tabs.get(spreadsheet_id, set())), start=1):
+            if index == sheet_id:
+                return title
+        raise KeyError(sheet_id)
 
 
 def trim_trailing_empty(row):
@@ -296,7 +355,7 @@ def test_merge_trip_rows_preserves_existing_rows_for_other_trips():
     assert merged == [header, other_trip_row, fresh_row]
 
 
-def test_replace_trip_rows_removes_existing_trip_rows_before_appending_fresh_rows():
+def test_replace_trip_rows_updates_only_existing_contiguous_trip_rows():
     sheets = FakeSheets()
     spreadsheet_id = "content-sheet"
     tab = "FAQ"
@@ -305,16 +364,130 @@ def test_replace_trip_rows_removes_existing_trip_rows_before_appending_fresh_row
     stale_row = [script.TRIP_UUID, "Old question", "Old answer", 2]
     second_stale_row = [script.TRIP_UUID, "Older question", "Older answer", 4]
     fresh_row = [script.TRIP_UUID, "Fresh question", "Fresh answer", 3]
+    second_fresh_row = [script.TRIP_UUID, "Second fresh question", "Second fresh answer", 4]
     sheets.tabs[spreadsheet_id] = {tab}
+    sheets.sheet_ids[(spreadsheet_id, tab)] = 7
     sheets.values[(spreadsheet_id, tab)] = [header, other_trip_row, stale_row, second_stale_row]
+
+    script.replace_trip_rows(sheets, spreadsheet_id, tab, [fresh_row, second_fresh_row])
+
+    updated_rows = sheets.values[(spreadsheet_id, tab)]
+    assert updated_rows == [header, other_trip_row, fresh_row, second_fresh_row]
+    assert (
+        "update",
+        spreadsheet_id,
+        f"'{tab}'!A3:D4",
+        "RAW",
+        {"values": [fresh_row, second_fresh_row]},
+    ) in sheets.calls
+    assert not any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A:Z") for call in sheets.calls)
+    assert not any(call[0] == "clear" for call in sheets.calls)
+    assert not any(
+        call[0] == "batchUpdate" and "insertDimension" in call[2]["requests"][0]
+        for call in sheets.calls
+    )
+    assert not any(
+        call[0] == "batchUpdate" and "deleteDimension" in call[2]["requests"][0]
+        for call in sheets.calls
+    )
+
+
+def test_replace_trip_rows_inserts_only_inside_target_trip_block_when_rows_grow():
+    sheets = FakeSheets()
+    spreadsheet_id = "content-sheet"
+    tab = "FAQ"
+    header = script.MANAGED_HEADERS[tab]
+    other_before = ["OTHER-2026", "Before question", "Before answer", 1]
+    stale_row = [script.TRIP_UUID, "Old question", "Old answer", 2]
+    other_after = ["OTHER-2026", "After question", "After answer", 3]
+    fresh_rows = [
+        [script.TRIP_UUID, "Fresh question", "Fresh answer", 4],
+        [script.TRIP_UUID, "Second fresh question", "Second fresh answer", 5],
+    ]
+    sheets.tabs[spreadsheet_id] = {tab}
+    sheets.sheet_ids[(spreadsheet_id, tab)] = 7
+    sheets.values[(spreadsheet_id, tab)] = [header, other_before, stale_row, other_after]
+
+    script.replace_trip_rows(sheets, spreadsheet_id, tab, fresh_rows)
+
+    assert sheets.values[(spreadsheet_id, tab)] == [header, other_before, *fresh_rows, other_after]
+    assert (
+        "batchUpdate",
+        spreadsheet_id,
+        {
+            "requests": [
+                {
+                    "insertDimension": {
+                        "range": {"sheetId": 7, "dimension": "ROWS", "startIndex": 3, "endIndex": 4},
+                        "inheritFromBefore": True,
+                    }
+                }
+            ]
+        },
+    ) in sheets.calls
+    assert ("update", spreadsheet_id, f"'{tab}'!A3:D4", "RAW", {"values": fresh_rows}) in sheets.calls
+    assert not any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A:Z") for call in sheets.calls)
+
+
+def test_replace_trip_rows_deletes_only_inside_target_trip_block_when_rows_shrink():
+    sheets = FakeSheets()
+    spreadsheet_id = "content-sheet"
+    tab = "FAQ"
+    header = script.MANAGED_HEADERS[tab]
+    other_before = ["OTHER-2026", "Before question", "Before answer", 1]
+    stale_rows = [
+        [script.TRIP_UUID, "Old question", "Old answer", 2],
+        [script.TRIP_UUID, "Older question", "Older answer", 3],
+    ]
+    other_after = ["OTHER-2026", "After question", "After answer", 4]
+    fresh_row = [script.TRIP_UUID, "Fresh question", "Fresh answer", 5]
+    sheets.tabs[spreadsheet_id] = {tab}
+    sheets.sheet_ids[(spreadsheet_id, tab)] = 7
+    sheets.values[(spreadsheet_id, tab)] = [header, other_before, *stale_rows, other_after]
 
     script.replace_trip_rows(sheets, spreadsheet_id, tab, [fresh_row])
 
-    updated_rows = sheets.values[(spreadsheet_id, tab)]
-    assert [trim_trailing_empty(row) for row in updated_rows] == [header, other_trip_row, fresh_row, []]
-    assert all(len(row) == 26 for row in updated_rows)
-    assert not any(call[0] == "clear" for call in sheets.calls)
-    assert any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A:Z") for call in sheets.calls)
+    assert sheets.values[(spreadsheet_id, tab)] == [header, other_before, fresh_row, other_after]
+    assert (
+        "batchUpdate",
+        spreadsheet_id,
+        {
+            "requests": [
+                {
+                    "deleteDimension": {
+                        "range": {"sheetId": 7, "dimension": "ROWS", "startIndex": 3, "endIndex": 4}
+                    }
+                }
+            ]
+        },
+    ) in sheets.calls
+    assert ("update", spreadsheet_id, f"'{tab}'!A3:D3", "RAW", {"values": [fresh_row]}) in sheets.calls
+    assert not any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A:Z") for call in sheets.calls)
+
+
+def test_replace_trip_rows_rejects_non_contiguous_trip_rows_without_writing():
+    sheets = FakeSheets()
+    spreadsheet_id = "content-sheet"
+    tab = "FAQ"
+    header = script.MANAGED_HEADERS[tab]
+    sheets.tabs[spreadsheet_id] = {tab}
+    sheets.sheet_ids[(spreadsheet_id, tab)] = 7
+    sheets.values[(spreadsheet_id, tab)] = [
+        header,
+        [script.TRIP_UUID, "Old question", "Old answer", 1],
+        ["OTHER-2026", "Other question", "Other answer", 2],
+        [script.TRIP_UUID, "Older question", "Older answer", 3],
+    ]
+
+    with pytest.raises(ValueError, match="non-contiguous rows"):
+        script.replace_trip_rows(sheets, spreadsheet_id, tab, [[script.TRIP_UUID, "Fresh question", "Fresh answer", 4]])
+
+    assert not any(call[0] == "update" for call in sheets.calls)
+    assert not any(
+        call[0] == "batchUpdate"
+        and any("insertDimension" in request or "deleteDimension" in request for request in call[2]["requests"])
+        for call in sheets.calls
+    )
 
 
 def test_replace_trip_rows_rejects_managed_header_mismatch_without_writing():
@@ -345,9 +518,15 @@ def test_replace_trip_rows_uses_managed_header_for_missing_tabs():
         script.MANAGED_HEADERS[tab],
         fresh_row,
     ]
-    assert all(len(row) == 26 for row in sheets.values[(spreadsheet_id, tab)])
     assert ("batchUpdate", spreadsheet_id, {"requests": [{"addSheet": {"properties": {"title": tab}}}]}) in sheets.calls
     assert ("get", spreadsheet_id, f"'{tab}'!A:Z") in sheets.calls
+    assert (
+        "update",
+        spreadsheet_id,
+        f"'{tab}'!A1:D2",
+        "RAW",
+        {"values": [script.MANAGED_HEADERS[tab], fresh_row]},
+    ) in sheets.calls
 
 
 def test_update_sheets_writes_content_and_staff_tabs(monkeypatch):
