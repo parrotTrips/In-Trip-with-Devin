@@ -7,6 +7,7 @@ from scripts.import_trip_content import (
     PreTripPhase,
     ChecklistItem,
     PhaseLink,
+    deterministic_phase_id,
     filter_rows_by_trip,
     parse_recommendations_tab,
     parse_fases_tab,
@@ -14,6 +15,16 @@ from scripts.import_trip_content import (
     parse_links_tab,
     parse_roteiro_tab,
 )
+
+
+def test_deterministic_phase_id_is_stable_for_phase_routes():
+    first = deterministic_phase_id("CASAMENTO-GARAPHA-2026", "pre-trip", "logistica_de_viagem")
+    second = deterministic_phase_id("CASAMENTO-GARAPHA-2026", "pre-trip", "logistica_de_viagem")
+    other = deterministic_phase_id("CASAMENTO-GARAPHA-2026", "in-trip", "1")
+
+    assert first == second
+    assert first != other
+    assert len(first) == 36
 
 
 # ---------------------------------------------------------------------------

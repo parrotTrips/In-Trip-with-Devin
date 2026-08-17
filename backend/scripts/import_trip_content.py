@@ -56,6 +56,10 @@ PG_URL = (
 TRIP_CONTENT_SHEET_ID = os.environ.get("TRIP_CONTENT_SHEET_ID", "")
 
 
+def deterministic_phase_id(trip_uuid: str, phase_type: str, phase_key: str | int) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"parrot-trips:{trip_uuid}:phase:{phase_type}:{phase_key}"))
+
+
 def _get_credentials() -> Credentials:
     creds: Credentials | None = None
     if _TOKEN_FILE.exists():
@@ -512,7 +516,7 @@ async def write_to_db(
         sort_order = 0
         ideal_pace_phase_id: str | None = None
         for phase in pre_trip_phases:
-            phase_id = str(uuid.uuid4())
+            phase_id = deterministic_phase_id(trip_uuid, "pre-trip", phase.fase)
             await conn.execute(
                 """
                 INSERT INTO trip_phases
@@ -549,7 +553,7 @@ async def write_to_db(
 
         # 3. Insert in-trip days
         for day in in_trip_days:
-            phase_id = str(uuid.uuid4())
+            phase_id = deterministic_phase_id(trip_uuid, "in-trip", day.dia)
             try:
                 starts_at = datetime.strptime(day.data, "%Y-%m-%d").replace(tzinfo=UTC)
             except ValueError:
