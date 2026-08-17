@@ -595,13 +595,173 @@ def build_sheets_client():
     return build("sheets", "v4", credentials=credentials)
 
 
-async def import_db_content(sheets=None) -> dict[str, Any]:
-    from app.services.admin_service import (
-        admin_import_emergency_contacts,
-        admin_import_faq,
-        admin_import_recommendations,
-        admin_set_mode,
+def _col(row: list[str], header: list[str], name: str) -> str:
+    try:
+        idx = header.index(name)
+    except ValueError:
+        return ""
+    if idx >= len(row):
+        return ""
+    return str(row[idx]).strip()
+
+
+def _parse_sort_order(value: str) -> int:
+    try:
+        return int(value or "0")
+    except ValueError:
+        return 0
+
+
+async def import_recommendations(sheets_svc, conn) -> dict[str, Any]:
+    from scripts import import_trip_content
+
+    rows = import_trip_content.filter_rows_by_trip(
+        import_trip_content.read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Recomendacoes"),
+        TRIP_UUID,
     )
+    if not rows or len(rows) < 2:
+        return {"status": "skipped", "trip_uuid": TRIP_UUID, "message": "No recommendations found"}
+
+    recommendations = import_trip_content.parse_recommendations_tab(rows)
+    async with conn.transaction():
+        await conn.execute("DELETE FROM trip_recommendations WHERE wetravel_trip_uuid = $1", TRIP_UUID)
+        for recommendation in recommendations:
+            await conn.execute(
+                """
+                INSERT INTO trip_recommendations
+                    (
+                        id, wetravel_trip_uuid, name, description, address, photo_url,
+                        sort_order, category, neighborhood, location, highlight,
+                        price_range, rating, map_url, emoji, created_at, updated_at
+                    )
+                VALUES (
+                    gen_random_uuid(), $1, $2, $3, $4, $5,
+                    $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, now(), now()
+                )
+                """,
+                TRIP_UUID,
+                recommendation.name,
+                recommendation.description,
+                recommendation.address,
+                recommendation.photo_url,
+                recommendation.sort_order,
+                recommendation.category,
+                recommendation.neighborhood,
+                recommendation.location,
+                recommendation.highlight,
+                recommendation.price_range,
+                recommendation.rating,
+                recommendation.map_url,
+                recommendation.emoji,
+            )
+
+    return {"status": "ok", "trip_uuid": TRIP_UUID, "recommendations_imported": len(recommendations)}
+
+
+async def import_emergency_contacts(sheets_svc, conn) -> dict[str, Any]:
+    from scripts import import_trip_content
+
+    rows = import_trip_content.filter_rows_by_trip(
+        import_trip_content.read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Emergency Contacts"),
+        TRIP_UUID,
+    )
+    if not rows or len(rows) < 2:
+        return {"status": "skipped", "trip_uuid": TRIP_UUID, "message": "No emergency contacts found"}
+
+    header = [str(value).strip().lower() for value in rows[0]]
+    contacts = []
+    for row in rows[1:]:
+        name = _col(row, header, "name")
+        if not name:
+            continue
+        contacts.append(
+            {
+                "name": name,
+                "role": _col(row, header, "role") or None,
+                "phone": _col(row, header, "phone") or None,
+                "sort_order": _parse_sort_order(_col(row, header, "sort_order")),
+            }
+        )
+
+    async with conn.transaction():
+        await conn.execute("DELETE FROM trip_emergency_contacts WHERE wetravel_trip_uuid = $1", TRIP_UUID)
+        for contact in contacts:
+            await conn.execute(
+                """
+                INSERT INTO trip_emergency_contacts
+                    (id, wetravel_trip_uuid, name, role, phone, sort_order, created_at, updated_at)
+                VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, now(), now())
+                """,
+                TRIP_UUID,
+                contact["name"],
+                contact["role"],
+                contact["phone"],
+                contact["sort_order"],
+            )
+
+    return {"status": "ok", "trip_uuid": TRIP_UUID, "emergency_contacts_imported": len(contacts)}
+
+
+async def import_faq(sheets_svc, conn) -> dict[str, Any]:
+    from scripts import import_trip_content
+
+    rows = import_trip_content.filter_rows_by_trip(
+        import_trip_content.read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "FAQ"),
+        TRIP_UUID,
+    )
+    if not rows or len(rows) < 2:
+        return {"status": "skipped", "trip_uuid": TRIP_UUID, "message": "No FAQ rows found"}
+
+    header = [str(value).strip().lower() for value in rows[0]]
+    faqs = []
+    for row in rows[1:]:
+        question = _col(row, header, "question")
+        answer = _col(row, header, "answer")
+        if not question or not answer:
+            continue
+        faqs.append(
+            {
+                "question": question,
+                "answer": answer,
+                "sort_order": _parse_sort_order(_col(row, header, "sort_order")),
+            }
+        )
+
+    async with conn.transaction():
+        await conn.execute("DELETE FROM trip_faqs WHERE wetravel_trip_uuid = $1", TRIP_UUID)
+        for faq in faqs:
+            await conn.execute(
+                """
+                INSERT INTO trip_faqs
+                    (id, wetravel_trip_uuid, question, answer, sort_order, created_at, updated_at)
+                VALUES (gen_random_uuid(), $1, $2, $3, $4, now(), now())
+                """,
+                TRIP_UUID,
+                faq["question"],
+                faq["answer"],
+                faq["sort_order"],
+            )
+
+    return {"status": "ok", "trip_uuid": TRIP_UUID, "imported": len(faqs)}
+
+
+async def set_mode(conn, mode: str) -> dict[str, Any]:
+    if mode not in ("pre-trip", "in-trip"):
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'pre-trip' or 'in-trip'.")
+    await conn.execute(
+        """
+        INSERT INTO trip_settings (trip_uuid, mode)
+        VALUES ($1, $2)
+        ON CONFLICT (trip_uuid) DO UPDATE SET mode = $2, updated_at = now()
+        """,
+        TRIP_UUID,
+        mode,
+    )
+    return {"status": "ok", "trip_uuid": TRIP_UUID, "mode": mode}
+
+
+async def import_db_content(sheets=None) -> dict[str, Any]:
     from scripts import import_staff_content, import_trip_content
 
     sheets_svc = sheets or import_trip_content.build_sheets_client()
@@ -613,16 +773,16 @@ async def import_db_content(sheets=None) -> dict[str, Any]:
             TRIP_UUID,
             TRIP_CONTENT_SHEET_ID,
         )
-        recommendations_result = await admin_import_recommendations(TRIP_UUID)
-        emergency_contacts_result = await admin_import_emergency_contacts(TRIP_UUID)
-        faq_result = await admin_import_faq(TRIP_UUID)
+        recommendations_result = await import_recommendations(sheets_svc, conn)
+        emergency_contacts_result = await import_emergency_contacts(sheets_svc, conn)
+        faq_result = await import_faq(sheets_svc, conn)
         staff_content_result = await import_staff_content.import_one(
             sheets_svc,
             conn,
             TRIP_UUID,
             STAFF_CONTENT_SHEET_ID,
         )
-        mode_result = await admin_set_mode(TRIP_UUID, "pre-trip")
+        mode_result = await set_mode(conn, "pre-trip")
     finally:
         await conn.close()
 

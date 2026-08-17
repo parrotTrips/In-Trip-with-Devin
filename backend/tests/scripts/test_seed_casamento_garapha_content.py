@@ -1,5 +1,5 @@
-import sys
 import asyncio
+import sys
 from pathlib import Path
 
 import pytest
@@ -405,7 +405,20 @@ def test_import_db_content_orchestrates_scoped_existing_imports(monkeypatch):
     from app.services import admin_service
     from scripts import import_staff_content, import_trip_content
 
+    class FakeTransaction:
+        async def __aenter__(self):
+            events.append(("transaction_enter",))
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            events.append(("transaction_exit", exc_type))
+
     class FakeConnection:
+        def transaction(self):
+            return FakeTransaction()
+
+        async def execute(self, query, *args):
+            events.append(("execute", " ".join(query.split()), args))
+
         async def close(self):
             events.append(("close",))
 
@@ -429,49 +442,90 @@ def test_import_db_content_orchestrates_scoped_existing_imports(monkeypatch):
         events.append(("staff_import_one", sheets, conn, trip_uuid, sheet_id))
         return {"contacts": 1}
 
-    async def fake_admin_import_recommendations(trip_uuid):
-        events.append(("admin_import_recommendations", trip_uuid))
-        return {"recommendations_imported": 12}
+    def fake_read_tab(sheets, sheet_id, tab_name):
+        events.append(("read_tab", sheets, sheet_id, tab_name))
+        rows_by_tab = {
+            "Recomendacoes": [
+                script.MANAGED_HEADERS["Recomendacoes"],
+                [script.TRIP_UUID, "Balcon", "Restaurante", "Prea", "", "1", "Restaurantes", "Prea", "Prea", "", "$$", "", "", "restaurant"],
+                ["OTHER-2026", "Other", "Other", "Other", "", "2", "Other", "", "", "", "", "", "", ""],
+            ],
+            "Emergency Contacts": [
+                script.MANAGED_HEADERS["Emergency Contacts"],
+                [script.TRIP_UUID, "Marine Carneiro", "Apoio", "+55", "1"],
+                ["OTHER-2026", "Other Contact", "Other", "+1", "2"],
+            ],
+            "FAQ": [
+                script.MANAGED_HEADERS["FAQ"],
+                [script.TRIP_UUID, "Pergunta?", "Resposta.", "1"],
+                ["OTHER-2026", "Other?", "Other.", "2"],
+            ],
+        }
+        return rows_by_tab[tab_name]
 
-    async def fake_admin_import_emergency_contacts(trip_uuid):
-        events.append(("admin_import_emergency_contacts", trip_uuid))
-        return {"emergency_contacts_imported": 1}
-
-    async def fake_admin_import_faq(trip_uuid):
-        events.append(("admin_import_faq", trip_uuid))
-        return {"imported": 3}
-
-    async def fake_admin_set_mode(trip_uuid, mode):
-        events.append(("admin_set_mode", trip_uuid, mode))
-        return {"mode": mode}
+    async def fail_admin_import(*args):
+        raise AssertionError("sheet-backed admin imports must not be used")
 
     monkeypatch.setattr(import_trip_content, "build_sheets_client", fake_build_sheets_client)
     monkeypatch.setattr(import_trip_content.asyncpg, "connect", fake_connect)
     monkeypatch.setattr(import_trip_content, "import_one", fake_trip_import_one)
+    monkeypatch.setattr(import_trip_content, "read_tab", fake_read_tab)
     monkeypatch.setattr(import_staff_content, "import_one", fake_staff_import_one)
-    monkeypatch.setattr(admin_service, "admin_import_recommendations", fake_admin_import_recommendations)
-    monkeypatch.setattr(admin_service, "admin_import_emergency_contacts", fake_admin_import_emergency_contacts)
-    monkeypatch.setattr(admin_service, "admin_import_faq", fake_admin_import_faq)
-    monkeypatch.setattr(admin_service, "admin_set_mode", fake_admin_set_mode)
+    monkeypatch.setattr(admin_service, "admin_import_recommendations", fail_admin_import)
+    monkeypatch.setattr(admin_service, "admin_import_emergency_contacts", fail_admin_import)
+    monkeypatch.setattr(admin_service, "admin_import_faq", fail_admin_import)
 
     result = asyncio.run(script.import_db_content())
 
-    assert events == [
+    assert events[:4] == [
         ("build_sheets_client",),
         ("connect", import_trip_content.PG_URL),
         ("trip_import_one", fake_sheets, fake_conn, script.TRIP_UUID, script.TRIP_CONTENT_SHEET_ID),
-        ("admin_import_recommendations", script.TRIP_UUID),
-        ("admin_import_emergency_contacts", script.TRIP_UUID),
-        ("admin_import_faq", script.TRIP_UUID),
+        ("read_tab", fake_sheets, script.TRIP_CONTENT_SHEET_ID, "Recomendacoes"),
+    ]
+    assert ("read_tab", fake_sheets, script.TRIP_CONTENT_SHEET_ID, "Emergency Contacts") in events
+    assert ("read_tab", fake_sheets, script.TRIP_CONTENT_SHEET_ID, "FAQ") in events
+    assert (
+        "staff_import_one",
+        fake_sheets,
+        fake_conn,
+        script.TRIP_UUID,
+        script.STAFF_CONTENT_SHEET_ID,
+    ) in events
+    assert (
+        "execute",
+        "INSERT INTO trip_settings (trip_uuid, mode) VALUES ($1, $2) ON CONFLICT (trip_uuid) DO UPDATE SET mode = $2, updated_at = now()",
+        (script.TRIP_UUID, "pre-trip"),
+    ) in events
+    assert events[-1] == ("close",)
+    assert [
+        event
+        for event in events
+        if event[0] == "read_tab"
+    ] == [
+        ("read_tab", fake_sheets, script.TRIP_CONTENT_SHEET_ID, "Recomendacoes"),
+        ("read_tab", fake_sheets, script.TRIP_CONTENT_SHEET_ID, "Emergency Contacts"),
+        ("read_tab", fake_sheets, script.TRIP_CONTENT_SHEET_ID, "FAQ"),
+    ]
+    assert all(
+        event[2] == (script.TRIP_UUID,) or script.TRIP_UUID in event[2]
+        for event in events
+        if event[0] == "execute"
+    )
+    assert events[-3:] == [
         ("staff_import_one", fake_sheets, fake_conn, script.TRIP_UUID, script.STAFF_CONTENT_SHEET_ID),
-        ("admin_set_mode", script.TRIP_UUID, "pre-trip"),
+        (
+            "execute",
+            "INSERT INTO trip_settings (trip_uuid, mode) VALUES ($1, $2) ON CONFLICT (trip_uuid) DO UPDATE SET mode = $2, updated_at = now()",
+            (script.TRIP_UUID, "pre-trip"),
+        ),
         ("close",),
     ]
     assert result == {
         "trip_content": {"phases": 4},
-        "recommendations": {"recommendations_imported": 12},
-        "emergency_contacts": {"emergency_contacts_imported": 1},
-        "faq": {"imported": 3},
+        "recommendations": {"status": "ok", "trip_uuid": script.TRIP_UUID, "recommendations_imported": 1},
+        "emergency_contacts": {"status": "ok", "trip_uuid": script.TRIP_UUID, "emergency_contacts_imported": 1},
+        "faq": {"status": "ok", "trip_uuid": script.TRIP_UUID, "imported": 1},
         "staff_content": {"contacts": 1},
-        "mode": {"mode": "pre-trip"},
+        "mode": {"status": "ok", "trip_uuid": script.TRIP_UUID, "mode": "pre-trip"},
     }
