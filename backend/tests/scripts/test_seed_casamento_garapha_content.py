@@ -260,7 +260,7 @@ def test_replace_trip_rows_removes_existing_trip_rows_before_appending_fresh_row
 
     assert sheets.values[(spreadsheet_id, tab)] == [header, other_trip_row, fresh_row]
     assert ("clear", spreadsheet_id, f"'{tab}'!A:Z") in sheets.calls
-    assert any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A1") for call in sheets.calls)
+    assert any(call[:3] == ("update", spreadsheet_id, f"'{tab}'!A:Z") for call in sheets.calls)
 
 
 def test_replace_trip_rows_uses_managed_header_for_missing_tabs():

@@ -538,7 +538,7 @@ def replace_trip_rows(sheets, spreadsheet_id: str, tab: str, new_rows: list[list
     sheets.spreadsheets().values().clear(spreadsheetId=spreadsheet_id, range=f"'{tab}'!A:Z").execute()
     sheets.spreadsheets().values().update(
         spreadsheetId=spreadsheet_id,
-        range=f"'{tab}'!A1",
+        range=f"'{tab}'!A:Z",
         valueInputOption="RAW",
         body={"values": merged},
     ).execute()
