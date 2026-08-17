@@ -306,12 +306,14 @@ async def import_to_database(trip_uuid: str, rows: list[list[str]]) -> int:
                         (
                             id, wetravel_trip_uuid, name, description, address, photo_url,
                             sort_order, category, neighborhood, location, highlight,
-                            price_range, rating, map_url, emoji, created_at, updated_at
+                            price_range, rating, map_url, emoji,
+                            phone, whatsapp_url, contact_label, created_at, updated_at
                         )
                     VALUES (
                         gen_random_uuid(), $1, $2, $3, $4, $5,
                         $6, $7, $8, $9, $10,
-                        $11, $12, $13, $14, now(), now()
+                        $11, $12, $13, $14,
+                        $15, $16, $17, now(), now()
                     )
                     """,
                     trip_uuid,
@@ -328,6 +330,9 @@ async def import_to_database(trip_uuid: str, rows: list[list[str]]) -> int:
                     r.rating,
                     r.map_url,
                     r.emoji,
+                    r.phone,
+                    r.whatsapp_url,
+                    r.contact_label,
                 )
     finally:
         await conn.close()
