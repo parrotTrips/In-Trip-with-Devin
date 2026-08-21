@@ -6,6 +6,7 @@ import {
   Clock,
   Info,
   MapPin,
+  ExternalLink,
   Star,
   ChevronRight,
   Check,
@@ -19,6 +20,7 @@ import {
 
 function ActivityCard({ activity, index }: { activity: Activity; index: number }) {
   const [expanded, setExpanded] = useState(false);
+  const mapUrl = activity.address ? `https://maps.google.com/?q=${encodeURIComponent(activity.address)}` : null;
   const toggleExpanded = () => {
     const next = !expanded;
     setExpanded(next);
@@ -66,57 +68,75 @@ function ActivityCard({ activity, index }: { activity: Activity; index: number }
         </div>
 
         <div className="flex-1 pb-6">
-          <button
-            onClick={toggleExpanded}
-            className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
-          >
-            <div className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${config.color}`}>
-                  {config.icon}
-                  {config.label}
-                </span>
-                {activity.amount_brl !== null && activity.activity_type !== 'optional' && (
-                  <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
-                    <DollarSign size={12} />
-                    R$ {activity.amount_brl}
+          <div className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+            <button
+              type="button"
+              onClick={toggleExpanded}
+              className="w-full text-left"
+            >
+              <div className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${config.color}`}>
+                    {config.icon}
+                    {config.label}
                   </span>
-                )}
-              </div>
-
-              <h4 className="font-semibold text-gray-800 text-sm font-[Fredoka]">{activity.name}</h4>
-
-              <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
-                <Clock size={12} />
-                <span>{formatTime(activity.starts_at, activity.duration_minutes)}</span>
-              </div>
-
-              {activity.address && (
-                <div className="flex items-start gap-1 mt-2 text-xs text-gray-500">
-                  <MapPin size={12} className="mt-0.5 flex-shrink-0" />
-                  <span>{activity.address}</span>
+                  {activity.amount_brl !== null && activity.activity_type !== 'optional' && (
+                    <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                      <DollarSign size={12} />
+                      R$ {activity.amount_brl}
+                    </span>
+                  )}
                 </div>
-              )}
 
-              <div className="text-sm text-gray-600 mt-2 leading-relaxed whitespace-pre-line">
-                {activity.short_description}
-              </div>
+                <h4 className="font-semibold text-gray-800 text-sm font-[Fredoka]">{activity.name}</h4>
 
-              {expanded && activity.practical_info && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <div className="flex items-start gap-2 text-sm text-gray-600">
-                    <Info size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
-                    <div className="whitespace-pre-line">{activity.practical_info}</div>
+                <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                  <Clock size={12} />
+                  <span>{formatTime(activity.starts_at, activity.duration_minutes)}</span>
+                </div>
+
+                {activity.address && (
+                  <div className="flex items-start gap-1 mt-2 text-xs text-gray-500">
+                    <MapPin size={12} className="mt-0.5 flex-shrink-0" />
+                    <span>{activity.address}</span>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="flex items-center justify-end mt-2 text-xs text-blue-500 font-medium">
-                <span>{expanded ? 'Show less' : 'See details'}</span>
-                <ChevronRight size={14} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                <div className="text-sm text-gray-600 mt-2 leading-relaxed whitespace-pre-line">
+                  {activity.short_description}
+                </div>
+
+                {expanded && activity.practical_info && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <div className="flex items-start gap-2 text-sm text-gray-600">
+                      <Info size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                      <div className="whitespace-pre-line">{activity.practical_info}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end mt-2 text-xs text-blue-500 font-medium">
+                  <span>{expanded ? 'Show less' : 'See details'}</span>
+                  <ChevronRight size={14} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                </div>
               </div>
-            </div>
-          </button>
+            </button>
+
+            {mapUrl && (
+              <div className="px-4 pb-4 -mt-1 flex">
+                <a
+                  href={mapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                  onClick={() => posthog.capture('activity_maps_opened', { activity_id: activity.id, activity_name: activity.name })}
+                >
+                  <ExternalLink size={12} />
+                  Maps
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

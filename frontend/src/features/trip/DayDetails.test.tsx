@@ -97,6 +97,28 @@ describe('DayDetails', () => {
     expect(screen.getByText('Hotel lobby, Rio de Janeiro')).toBeInTheDocument();
   });
 
+  test('shows a Google Maps link for activities with an address', async () => {
+    render(
+      <MemoryRouter initialEntries={[`/day/${DAY_ID}`]}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/day/:dayId" element={<DayDetails />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Airport Pickup')).toBeInTheDocument();
+
+    const mapsLink = screen.getByRole('link', { name: /maps/i });
+    expect(mapsLink).toHaveAttribute(
+      'href',
+      `https://maps.google.com/?q=${encodeURIComponent('Hotel lobby, Rio de Janeiro')}`
+    );
+  });
+
   test('does not show prices or booking buttons for optional activities', async () => {
     render(
       <MemoryRouter initialEntries={[`/day/${DAY_ID}`]}>
