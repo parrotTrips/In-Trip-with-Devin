@@ -27,7 +27,7 @@
 - Create: `backend/scripts/seed_casamento_garapha.py`
 
 **Steps:**
-1. Add constants for trip and traveler data from `20260806 - Data Request Casamento GaRapha.md`.
+1. Add constants for trip and traveler data from `docs/data-requests/20260806-data-request-casamento-garapha.md`.
 2. Add helper functions that build Google Sheets row payloads without side effects.
 3. Add CLI flags: `--execute`, `--skip-sheets`, `--output-dir`.
 4. Run the script without `--execute` and verify it prints planned changes only.

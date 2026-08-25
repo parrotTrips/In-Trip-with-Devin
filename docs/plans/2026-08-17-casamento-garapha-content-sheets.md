@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Populate the wedding trip content from `20260806 - Data Request Casamento GaRapha.md` into Google Sheets and import it into Supabase while keeping `CASAMENTO-GARAPHA-2026` in `pre-trip`.
+**Goal:** Populate the wedding trip content from `docs/data-requests/20260806-data-request-casamento-garapha.md` into Google Sheets and import it into Supabase while keeping `CASAMENTO-GARAPHA-2026` in `pre-trip`.
 
 **Architecture:** Add a focused idempotent script that converts the approved wedding content into the existing Trip Content and Staff Content sheet tabs. Reuse the existing import scripts/services to move those rows into Supabase, adding only a small orchestration wrapper if needed.
 

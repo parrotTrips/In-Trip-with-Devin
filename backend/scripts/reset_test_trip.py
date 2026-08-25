@@ -36,9 +36,9 @@ PG_URL = (
     .replace("postgresql+psycopg2://", "postgresql://")
 )
 
-# Original starts_at dates for TEST-2026-FULL (from the Google Sheet).
-# Day 1 = 2026-07-01, Day 2 = 2026-07-02, etc.
-ORIGINAL_START_DATE = datetime(2026, 7, 1, 0, 0, 0, tzinfo=UTC)
+# Original starts_at dates for TEST-2026-FULL.
+# Pre-trip runs through 2026-08-23; Day 1 starts on 2026-08-24.
+ORIGINAL_START_DATE = datetime(2026, 8, 24, 0, 0, 0, tzinfo=UTC)
 
 
 async def reset(trip_uuid: str, dry_run: bool) -> None:
@@ -125,7 +125,7 @@ async def reset(trip_uuid: str, dry_run: bool) -> None:
 
         print(f"  ✅ Deleted checklist progress:  {deleted_checklist} rows")
         print(f"  ✅ Deleted phase progress:      {deleted_phase} rows")
-        print(f"  ✅ Reset {len(in_trip_phases)} phase dates to 2026-07-01 onwards")
+        print(f"  ✅ Reset {len(in_trip_phases)} phase dates to 2026-08-24 onwards")
         print(f"  ✅ Trip mode set to:            pre-trip")
         print(f"\nDone. Open the app — should show 📋 Pre-Trip with 0%.\n")
 

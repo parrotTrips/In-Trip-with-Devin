@@ -1,5 +1,7 @@
+import asyncio
 import sys
 from pathlib import Path
+from datetime import date
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -7,6 +9,31 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from scripts import seed_parrot_test_travelers as script
+
+
+class FakeConnection:
+    def __init__(self):
+        self.calls = []
+
+    async def execute(self, query, *args):
+        self.calls.append((query, args))
+
+
+def test_internal_trip_dates_match_validation_window():
+    assert script.PRETRIP_START_DATE == "2026-08-18"
+    assert script.PRETRIP_END_DATE == "2026-08-23"
+    assert script.TRIP_START_DATE == "2026-08-24"
+    assert script.TRIP_END_DATE == "2026-08-25"
+
+
+def test_align_trip_dates_passes_date_objects():
+    conn = FakeConnection()
+
+    asyncio.run(script.align_trip_dates(conn))
+
+    _, args = conn.calls[0]
+    assert args[2] == date(2026, 8, 24)
+    assert args[3] == date(2026, 8, 25)
 
 
 def test_dataset_has_20_fictitious_unique_travelers():

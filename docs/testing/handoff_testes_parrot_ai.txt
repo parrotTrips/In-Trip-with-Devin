@@ -1074,7 +1074,7 @@ Ordem recomendada:
 1. PRODUCT_AND_SYSTEM_DESIGN/22-mapeamento-profile-viajante.md
    - Mapeia o que vem da WeTravel, viajante e planilhas.
 
-2. tests_documentation/traveler_e2e_test_plan.md
+2. docs/testing/traveler_e2e_test_plan.md
    - Passo a passo do teste E2E do viajante.
 
 3. PRODUCT_AND_SYSTEM_DESIGN/20-fluxo-staffs.md

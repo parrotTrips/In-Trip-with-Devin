@@ -69,6 +69,6 @@
 1. Run relevant frontend and backend tests.
 2. Run `poetry run python scripts/seed_casamento_garapha_content.py --execute --import-db` from `backend`.
 3. Query Supabase or use the app/API to confirm the links and activity addresses are present.
-4. Commit all changes except `20260806 - Data Request Casamento GaRapha.md`.
+4. Commit all changes except `docs/data-requests/20260806-data-request-casamento-garapha.md`.
 5. Push `main`.
 6. Deploy frontend because UI code changed; deploy backend only if backend runtime code changed.

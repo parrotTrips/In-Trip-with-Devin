@@ -49,6 +49,25 @@ describe('LoginScreen', () => {
     expect(options).toEqual(supportedCountryCodes);
   });
 
+  test('shows flags next to country calling codes', () => {
+    localStorage.removeItem('parrot_user');
+    render(
+      <AuthProvider>
+        <LoginScreen />
+      </AuthProvider>
+    );
+
+    const selector = screen.getByRole('combobox');
+    const optionLabels = Array.from(selector.querySelectorAll('option')).reduce<Record<string, string>>(
+      (labels, option) => ({ ...labels, [option.value]: option.textContent ?? '' }),
+      {}
+    );
+
+    expect(optionLabels['+1']).toBe('🇺🇸 +1');
+    expect(optionLabels['+55']).toBe('🇧🇷 +55');
+    expect(optionLabels['+351']).toBe('🇵🇹 +351');
+  });
+
   test('submits the full phone number when requesting an OTP', async () => {
     let requestedPhone = '';
 

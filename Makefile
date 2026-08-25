@@ -5,7 +5,8 @@ GCP_REGION     = southamerica-east1
 SERVICE_NAME   = parrot-trips-backend
 IMAGE_REPO     = $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT)/parrot-trips/backend
 NETLIFY_SITE     = e5840ec7-de34-4fbb-a115-ccf7e3292999
-FRONTEND_URL     = https://$(NETLIFY_SITE).netlify.app
+NETLIFY_SITE_NAME = parrot-trips
+FRONTEND_URL     = https://$(NETLIFY_SITE_NAME).netlify.app
 
 # Image tag: uses short git commit hash by default
 IMAGE_TAG      ?= $(shell git rev-parse --short HEAD)

@@ -2,7 +2,7 @@
   "mode": "execute",
   "trip_uuid": "TEST-2026-FULL",
   "traveler_count": 20,
-  "started_at": "2026-08-14T17:16:55.880179+00:00",
+  "started_at": "2026-08-21T12:19:44.960818+00:00",
   "sheets": {
     "content_sheet_id": "1N1B66s1-K4DDf2_863frmhnpF6LRZB_ww60uax0gKZM",
     "staff_sheet_id": "1iVv9k45F3dacjYEwR4TsIuGuFtFmVgN3y0ueghvNWiI",
@@ -29,158 +29,14 @@
       ]
     }
   },
-  "drive": {
-    "folder_id": "1qXJejeBsUBw7st3ipwJtpppcbwZLXZsE",
-    "qr_files": [
-      {
-        "phone": "+15550102001",
-        "full_name": "Lara Mendes",
-        "qr_filename": "parrot-test-01-lara-mendes.png",
-        "drive_file_id": "1Wr43z_tqHZlA2P1AwCtTmWrfbcuG67ID",
-        "drive_web_view_link": "https://drive.google.com/file/d/1Wr43z_tqHZlA2P1AwCtTmWrfbcuG67ID/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102002",
-        "full_name": "Noah Carter",
-        "qr_filename": "parrot-test-02-noah-carter.png",
-        "drive_file_id": "1LM0CvlcKEeFOoiCg6BV_8faDUwvk7Jxq",
-        "drive_web_view_link": "https://drive.google.com/file/d/1LM0CvlcKEeFOoiCg6BV_8faDUwvk7Jxq/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102003",
-        "full_name": "Maya Brooks",
-        "qr_filename": "parrot-test-03-maya-brooks.png",
-        "drive_file_id": "1oEnGzUejssYwU8-G2yfZ9g7sj6ew63CE",
-        "drive_web_view_link": "https://drive.google.com/file/d/1oEnGzUejssYwU8-G2yfZ9g7sj6ew63CE/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102004",
-        "full_name": "Ethan Silva",
-        "qr_filename": "parrot-test-04-ethan-silva.png",
-        "drive_file_id": "1RjXV6AO6MDsrIkg0GRU7maktDC2w3dxA",
-        "drive_web_view_link": "https://drive.google.com/file/d/1RjXV6AO6MDsrIkg0GRU7maktDC2w3dxA/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102005",
-        "full_name": "Sofia Grant",
-        "qr_filename": "parrot-test-05-sofia-grant.png",
-        "drive_file_id": "1ne1GzHpHn5EiYonY_ErHoXilQ0iJP6Qw",
-        "drive_web_view_link": "https://drive.google.com/file/d/1ne1GzHpHn5EiYonY_ErHoXilQ0iJP6Qw/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102006",
-        "full_name": "Lucas Bennett",
-        "qr_filename": "parrot-test-06-lucas-bennett.png",
-        "drive_file_id": "1ogdYVTxmDXKmT5IT-TedahOrTPH5sPDu",
-        "drive_web_view_link": "https://drive.google.com/file/d/1ogdYVTxmDXKmT5IT-TedahOrTPH5sPDu/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102007",
-        "full_name": "Emma Torres",
-        "qr_filename": "parrot-test-07-emma-torres.png",
-        "drive_file_id": "1SgNoD7FBIjziOvJWOLjJCkZi6pjb24fI",
-        "drive_web_view_link": "https://drive.google.com/file/d/1SgNoD7FBIjziOvJWOLjJCkZi6pjb24fI/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102008",
-        "full_name": "Owen Price",
-        "qr_filename": "parrot-test-08-owen-price.png",
-        "drive_file_id": "1yI8_ZBEg7XVuSwQQSgcOrcG6m-gUaTor",
-        "drive_web_view_link": "https://drive.google.com/file/d/1yI8_ZBEg7XVuSwQQSgcOrcG6m-gUaTor/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102009",
-        "full_name": "Ava Stone",
-        "qr_filename": "parrot-test-09-ava-stone.png",
-        "drive_file_id": "1kwjIqyTpU3E_Wgh0P9zCE9rsKviGAAYW",
-        "drive_web_view_link": "https://drive.google.com/file/d/1kwjIqyTpU3E_Wgh0P9zCE9rsKviGAAYW/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102010",
-        "full_name": "Mateo Reed",
-        "qr_filename": "parrot-test-10-mateo-reed.png",
-        "drive_file_id": "12Pp4OJMBMkvrpbRPFScfdqs_woc3xPo4",
-        "drive_web_view_link": "https://drive.google.com/file/d/12Pp4OJMBMkvrpbRPFScfdqs_woc3xPo4/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102011",
-        "full_name": "Chloe Fisher",
-        "qr_filename": "parrot-test-11-chloe-fisher.png",
-        "drive_file_id": "1n-IB_-q84eicMe8Y0YZFI2Iv3jvJ1Vrg",
-        "drive_web_view_link": "https://drive.google.com/file/d/1n-IB_-q84eicMe8Y0YZFI2Iv3jvJ1Vrg/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102012",
-        "full_name": "Daniel Park",
-        "qr_filename": "parrot-test-12-daniel-park.png",
-        "drive_file_id": "1jB9v5MIyWEmFVGNYKBFBdZvTlalfE8rU",
-        "drive_web_view_link": "https://drive.google.com/file/d/1jB9v5MIyWEmFVGNYKBFBdZvTlalfE8rU/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102013",
-        "full_name": "Nina Hughes",
-        "qr_filename": "parrot-test-13-nina-hughes.png",
-        "drive_file_id": "1S6TC0guV7FXHDJcUs_MXG0av6Y1oVicy",
-        "drive_web_view_link": "https://drive.google.com/file/d/1S6TC0guV7FXHDJcUs_MXG0av6Y1oVicy/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102014",
-        "full_name": "Leo Martin",
-        "qr_filename": "parrot-test-14-leo-martin.png",
-        "drive_file_id": "1b10HUK_tvZC5onVGYK_IM81Fd65EgM6q",
-        "drive_web_view_link": "https://drive.google.com/file/d/1b10HUK_tvZC5onVGYK_IM81Fd65EgM6q/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102015",
-        "full_name": "Isla Morgan",
-        "qr_filename": "parrot-test-15-isla-morgan.png",
-        "drive_file_id": "14SgbwbMemdx8eEit3Aq1ADexxIXx89UG",
-        "drive_web_view_link": "https://drive.google.com/file/d/14SgbwbMemdx8eEit3Aq1ADexxIXx89UG/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102016",
-        "full_name": "Julian King",
-        "qr_filename": "parrot-test-16-julian-king.png",
-        "drive_file_id": "1QEAC8gHGIRsJ5Sos1fFjBUpQpHSiiaLb",
-        "drive_web_view_link": "https://drive.google.com/file/d/1QEAC8gHGIRsJ5Sos1fFjBUpQpHSiiaLb/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102017",
-        "full_name": "Mila Scott",
-        "qr_filename": "parrot-test-17-mila-scott.png",
-        "drive_file_id": "1-N6hwD9I4-umyEU9fG5fe9Wd9TQf6fR3",
-        "drive_web_view_link": "https://drive.google.com/file/d/1-N6hwD9I4-umyEU9fG5fe9Wd9TQf6fR3/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102018",
-        "full_name": "Ryan Cooper",
-        "qr_filename": "parrot-test-18-ryan-cooper.png",
-        "drive_file_id": "1ygduo4mW0nE-VulHFoF71ykvsL2pB9Ne",
-        "drive_web_view_link": "https://drive.google.com/file/d/1ygduo4mW0nE-VulHFoF71ykvsL2pB9Ne/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102019",
-        "full_name": "Zoe Rivera",
-        "qr_filename": "parrot-test-19-zoe-rivera.png",
-        "drive_file_id": "1tfWyZTAZNF01o7GwUsTg4oBgYS0hMx06",
-        "drive_web_view_link": "https://drive.google.com/file/d/1tfWyZTAZNF01o7GwUsTg4oBgYS0hMx06/view?usp=drivesdk"
-      },
-      {
-        "phone": "+15550102020",
-        "full_name": "Theo Wallace",
-        "qr_filename": "parrot-test-20-theo-wallace.png",
-        "drive_file_id": "1u_8gEqarCjOExsACIDZf8zFd1bEraLrV",
-        "drive_web_view_link": "https://drive.google.com/file/d/1u_8gEqarCjOExsACIDZf8zFd1bEraLrV/view?usp=drivesdk"
-      }
-    ]
-  },
+  "drive": null,
   "before": {
     "trip": {
       "trip_uuid": "TEST-2026-FULL",
       "title": "Viagem Interna Parrot",
       "destination": "Rio de Janeiro, Brasil",
-      "start_date": "2026-12-15",
-      "end_date": "2026-12-22"
+      "start_date": "2026-08-24",
+      "end_date": "2026-08-25"
     },
     "existing_test_users": [
       {
@@ -433,8 +289,8 @@
       "trip_uuid": "TEST-2026-FULL",
       "title": "Viagem Interna Parrot",
       "destination": "Rio de Janeiro, Brasil",
-      "start_date": "2026-12-15",
-      "end_date": "2026-12-22"
+      "start_date": "2026-08-24",
+      "end_date": "2026-08-25"
     },
     "existing_test_users": [
       {

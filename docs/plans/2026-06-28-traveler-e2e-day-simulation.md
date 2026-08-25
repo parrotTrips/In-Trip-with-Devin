@@ -70,7 +70,7 @@ If `wetravel_trips.start_date` is missing, print a clear error and stop without 
 ### Task 3: Create Traveler E2E Documentation
 
 **Files:**
-- Create: `tests_documentation/traveler_e2e_test_plan.md`
+- Create: `docs/testing/traveler_e2e_test_plan.md`
 
 **Step 1: Write baby-step guide**
 
@@ -106,6 +106,6 @@ poetry run pytest tests/scripts/test_simulate_trip_day.py -q
 **Step 2: Check git diff**
 
 ```bash
-git diff -- backend/scripts/simulate_trip_day.py backend/tests/scripts/test_simulate_trip_day.py tests_documentation/traveler_e2e_test_plan.md docs/plans/2026-06-28-traveler-e2e-day-simulation-design.md docs/plans/2026-06-28-traveler-e2e-day-simulation.md
+git diff -- backend/scripts/simulate_trip_day.py backend/tests/scripts/test_simulate_trip_day.py docs/testing/traveler_e2e_test_plan.md docs/plans/2026-06-28-traveler-e2e-day-simulation-design.md docs/plans/2026-06-28-traveler-e2e-day-simulation.md
 ```
 

@@ -14,8 +14,8 @@ Backend (FastAPI)
        └── Artifact Registry: southamerica-east1-docker.pkg.dev/jogo-da-vida-497700/parrot-trips/backend
 
 Frontend (React)
-  └── Netlify: parrot-trips-app-286
-       └── Site: https://parrot-trips-app-286.netlify.app
+  └── Netlify: parrot-trips
+       └── Site: https://parrot-trips.netlify.app
        └── SPA routing: redirect /* → /index.html (via netlify.toml)
        └── Deploy: netlify deploy --prod --dir=dist
 
@@ -25,7 +25,7 @@ Banco de dados
 
 **URLs de produção:**
 - Backend: `https://parrot-trips-backend-428743191336.southamerica-east1.run.app`
-- Frontend: `https://parrot-trips-app-286.netlify.app`
+- Frontend: `https://parrot-trips.netlify.app`
 
 ---
 
@@ -40,7 +40,7 @@ Banco de dados
 1. `netlify-cli` instalado: `npm install -g netlify-cli`
 2. Autenticado no Netlify: `netlify login`
 3. `frontend/.env.production` com `VITE_API_URL` (ver seção abaixo)
-4. Site `parrot-trips-app-286` já criado (feito uma vez — não precisa repetir)
+4. Site `parrot-trips` já criado (feito uma vez — não precisa repetir)
 
 ### Verificar autenticação GCP (para backend)
 
@@ -154,7 +154,7 @@ O `netlify.toml` na pasta `frontend/` configura o redirect `/* → /index.html` 
 |---|---|---|
 | GCP Cloud Run | Roda o backend FastAPI | Console GCP → Cloud Run → parrot-trips-backend |
 | GCP Artifact Registry | Armazena imagens Docker | `southamerica-east1-docker.pkg.dev/jogo-da-vida-497700/parrot-trips/` |
-| Netlify | Serve o frontend React (SPA) | app.netlify.com → parrot-trips-app-286 |
+| Netlify | Serve o frontend React (SPA) | app.netlify.com → parrot-trips |
 
 ---
 
@@ -184,7 +184,7 @@ O Cloud Run faz o rollout automaticamente sem downtime — o tráfego só é mig
 curl https://parrot-trips-backend-428743191336.southamerica-east1.run.app/health
 
 # Frontend carregando?
-curl -s -o /dev/null -w "%{http_code}" https://parrot-trips-app-286.netlify.app
+curl -s -o /dev/null -w "%{http_code}" https://parrot-trips.netlify.app
 # Esperado: 200
 
 # Logs do backend:

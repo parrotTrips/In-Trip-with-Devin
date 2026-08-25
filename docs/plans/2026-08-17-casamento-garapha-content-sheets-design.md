@@ -2,7 +2,7 @@
 
 ## Goal
 
-Populate the `CASAMENTO-GARAPHA-2026` wedding trip with all filled content from `20260806 - Data Request Casamento GaRapha.md`, while keeping Google Sheets as the auditable source before importing into Supabase.
+Populate the `CASAMENTO-GARAPHA-2026` wedding trip with all filled content from `docs/data-requests/20260806-data-request-casamento-garapha.md`, while keeping Google Sheets as the auditable source before importing into Supabase.
 
 ## Source Content
 

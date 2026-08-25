@@ -3,6 +3,11 @@ import posthog from 'posthog-js';
 import { getMyTrip, getMyTripPhases, getMyTripTravelers, type TripInfo, type TripPhase, type TripTraveler } from '../../features/trip/services/trip-api';
 import { TripContext } from './trip-context';
 
+function clearTripAnalyticsContext() {
+  posthog.unregister('viagem_id');
+  posthog.unregister('modo_viagem');
+}
+
 export function TripProvider({ children }: { children: ReactNode }) {
   const [tripInfo, setTripInfo] = useState<TripInfo | null>(null);
   const [phases, setPhases] = useState<TripPhase[]>([]);
@@ -24,10 +29,13 @@ export function TripProvider({ children }: { children: ReactNode }) {
       setPhases(phasesResult.phases);
       setIdealPacePhaseId(phasesResult.ideal_pace_phase_id ?? null);
       setTravelers(travelersResult.travelers);
+      clearTripAnalyticsContext();
       if (tripResult.trip) {
         posthog.register({ viagem_id: tripResult.trip.wetravel_trip_uuid, modo_viagem: tripResult.trip.trip_mode });
       }
     } catch (e) {
+      setTripInfo(null);
+      clearTripAnalyticsContext();
       setError(e instanceof Error ? e.message : 'Erro ao carregar dados da viagem');
     } finally {
       setLoading(false);
@@ -36,6 +44,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetchAll();
+    return clearTripAnalyticsContext;
   }, [fetchAll]);
 
   return (

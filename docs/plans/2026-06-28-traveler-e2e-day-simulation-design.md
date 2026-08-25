@@ -8,7 +8,7 @@ Create a beginner-friendly traveler E2E test guide and keep day simulation as an
 
 Use the existing `backend/scripts/simulate_trip_day.py` as the operational tool for simulating in-trip days. Improve it so reset can work for newly created WeTravel test trips by reading `wetravel_trips.start_date` instead of using hardcoded dates from the old test trip.
 
-Create `tests_documentation/traveler_e2e_test_plan.md` as the human-readable test guide. The guide will start at WeTravel, move through spreadsheet/import steps, and end inside the deployed traveler app. Each step will include what to do, what to check, and what to write down if something fails.
+Create `docs/testing/traveler_e2e_test_plan.md` as the human-readable test guide. The guide will start at WeTravel, move through spreadsheet/import steps, and end inside the deployed traveler app. Each step will include what to do, what to check, and what to write down if something fails.
 
 ## Alternatives Considered
 

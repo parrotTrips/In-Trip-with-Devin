@@ -120,7 +120,7 @@ def build_wetravel_trip_record(now: datetime) -> dict[str, Any]:
         "start_date": TRIP["start_date"],
         "end_date": TRIP["end_date"],
         "published": "true",
-        "raw_payload_json": json.dumps({"source": "20260806 - Data Request Casamento GaRapha.md"}),
+        "raw_payload_json": json.dumps({"source": "docs/data-requests/20260806-data-request-casamento-garapha.md"}),
         "first_seen_at": now,
         "last_seen_at": now,
         "inserted_at": now,

@@ -37,6 +37,10 @@ from app.services.qr_service import create_traveler_qr_payload
 
 TRIP_UUID = "TEST-2026-FULL"
 TRIP_TITLE = "Viagem Interna Parrot"
+PRETRIP_START_DATE = "2026-08-18"
+PRETRIP_END_DATE = "2026-08-23"
+TRIP_START_DATE = "2026-08-24"
+TRIP_END_DATE = "2026-08-25"
 TRIP_CONTENT_SHEET_ID = "1N1B66s1-K4DDf2_863frmhnpF6LRZB_ww60uax0gKZM"
 STAFF_CONTENT_SHEET_ID = "1iVv9k45F3dacjYEwR4TsIuGuFtFmVgN3y0ueghvNWiI"
 QR_DRIVE_FOLDER_ID = "1qXJejeBsUBw7st3ipwJtpppcbwZLXZsE"
@@ -605,6 +609,22 @@ async def upsert_travelers(conn: asyncpg.Connection) -> list[dict[str, Any]]:
         seeded.append({**traveler, "user_id": str(user_id), "trip_traveler_id": str(trip_traveler_id)})
     await replace_activity_allowlists(conn, seeded, now)
     return seeded
+
+
+async def align_trip_dates(conn: asyncpg.Connection) -> None:
+    await conn.execute(
+        """
+        update wetravel_trips
+        set title=$2,
+            start_date=$3::date,
+            end_date=$4::date
+        where trip_uuid=$1
+        """,
+        TRIP_UUID,
+        TRIP_TITLE,
+        date.fromisoformat(TRIP_START_DATE),
+        date.fromisoformat(TRIP_END_DATE),
+    )
 
 
 async def upsert_wetravel_like_rows(conn: asyncpg.Connection, traveler: dict[str, Any], now: datetime) -> None:
@@ -1224,6 +1244,14 @@ async def main(argv: list[str] | None = None) -> None:
         report["before"] = before
         if args.dry_run:
             report["would_create_or_update"] = {
+                "trip": {
+                    "trip_uuid": TRIP_UUID,
+                    "title": TRIP_TITLE,
+                    "pretrip_start_date": PRETRIP_START_DATE,
+                    "pretrip_end_date": PRETRIP_END_DATE,
+                    "start_date": TRIP_START_DATE,
+                    "end_date": TRIP_END_DATE,
+                },
                 "users": len(TEST_TRAVELERS),
                 "trip_travelers": len(TEST_TRAVELERS),
                 "traveler_profiles": len(TEST_TRAVELERS),
@@ -1237,6 +1265,7 @@ async def main(argv: list[str] | None = None) -> None:
             print(json.dumps(report["would_create_or_update"], indent=2))
             return
         async with conn.transaction():
+            await align_trip_dates(conn)
             seeded = await upsert_travelers(conn)
         qr_records: list[dict[str, str]] = []
         sheets_report = None

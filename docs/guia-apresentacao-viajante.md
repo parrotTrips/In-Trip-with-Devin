@@ -9,7 +9,7 @@ Tempo estimado: 30 minutos.
 ## Antes de começar
 
 Tenha aberto no computador ou celular:
-- App: https://parrot-trips-app-286.netlify.app
+- App: https://parrot-trips.netlify.app
 - Planilha de conteúdo da viagem (Google Sheets)
 - WhatsApp do número de teste do viajante
 
@@ -19,7 +19,7 @@ Tenha aberto no computador ou celular:
 
 ### 1.1 Login
 
-1. Abrir https://parrot-trips-app-286.netlify.app no celular.
+1. Abrir https://parrot-trips.netlify.app no celular.
 2. Digitar o telefone do viajante de teste.
 3. Clicar em enviar código.
 4. Abrir o WhatsApp e mostrar o código chegando.
