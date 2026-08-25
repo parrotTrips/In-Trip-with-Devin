@@ -13,9 +13,12 @@ import RecommendationsScreen from '../features/recommendations/pages/Recommendat
 import BottomNav from '../shared/components/BottomNav';
 
 function screenPayloadForPath(pathname: string) {
-  const [, route, id] = pathname.split('/');
-  if (route === 'day' && id) return { tela: '/day', day_id: id };
-  if (route === 'phase' && id) return { tela: '/phase', phase_id: id };
+  const dayMatch = pathname.match(/^\/day\/([^/]+)\/?$/);
+  if (dayMatch) return { tela: '/day', day_id: dayMatch[1] };
+
+  const phaseMatch = pathname.match(/^\/phase\/([^/]+)\/?$/);
+  if (phaseMatch) return { tela: '/phase', phase_id: phaseMatch[1] };
+
   return { tela: pathname };
 }
 

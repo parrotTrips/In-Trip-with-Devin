@@ -141,14 +141,14 @@ describe('PostHog screen tracking', () => {
 
   test('normalizes day routes and includes loaded trip context', async () => {
     setupTripHandlers();
-    window.history.pushState({}, '', '/day/123');
+    window.history.pushState({}, '', '/day/0fb84ab8-450a-4881-b5e8-ea72ce856f6e');
 
     render(<App />);
 
     await waitFor(() => {
       expectLastScreenViewPayload({
         tela: '/day',
-        day_id: '123',
+        day_id: '0fb84ab8-450a-4881-b5e8-ea72ce856f6e',
         viagem_id: 'trip-001',
         modo_viagem: 'in-trip',
       });
@@ -157,14 +157,14 @@ describe('PostHog screen tracking', () => {
 
   test('normalizes phase routes and includes loaded trip context', async () => {
     setupTripHandlers();
-    window.history.pushState({}, '', '/phase/456');
+    window.history.pushState({}, '', '/phase/39e43d1c-0b0c-422f-b45e-45d3dd31c562');
 
     render(<App />);
 
     await waitFor(() => {
       expectLastScreenViewPayload({
         tela: '/phase',
-        phase_id: '456',
+        phase_id: '39e43d1c-0b0c-422f-b45e-45d3dd31c562',
         viagem_id: 'trip-001',
         modo_viagem: 'in-trip',
       });
