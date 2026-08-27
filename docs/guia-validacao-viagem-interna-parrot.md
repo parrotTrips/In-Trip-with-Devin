@@ -8,7 +8,7 @@ Este guia serve para orientar o teste completo da viagem interna da Parrot no ap
 | --- | --- |
 | Nome da viagem | Viagem Interna Parrot |
 | Periodo de pre-trip | 18/08/2026 a 23/08/2026 |
-| Periodo in-trip | 24/08/2026 e 25/08/2026 |
+| Periodo in-trip | 24/08/2026 a 01/09/2026 |
 | App | https://parrot-trips.netlify.app |
 | Objetivo principal | Validar login, perfil, pacotes, roteiro, mensagens, QR check-in, atividades restritas, feedback e visao de staff |
 
@@ -32,7 +32,7 @@ Confirme estes pontos antes de pedir para as pessoas testarem:
 
 - A viagem aparece no app como **Viagem Interna Parrot**.
 - As datas estao configuradas para pre-trip de **18/08/2026 a 23/08/2026**.
-- Os dias in-trip estao configurados para **24/08/2026** e **25/08/2026**.
+- O periodo in-trip esta configurado de **24/08/2026** a **01/09/2026**.
 - Os viajantes de teste conseguem fazer login com seus telefones.
 - Os staffs conseguem fazer login e cair na visao de staff.
 - Os QR Codes dos viajantes estao disponiveis.
@@ -51,6 +51,7 @@ Confirme estes pontos antes de pedir para as pessoas testarem:
 | 23/08/2026 | Pre-trip | Reteste geral antes de iniciar viagem |
 | 24/08/2026 | In-trip Dia 1 | Roteiro, progresso, check-ins e atividades restritas |
 | 25/08/2026 | In-trip Dia 2 | Atividades opcionais, feedback final e validacao operacional |
+| 26/08/2026 a 01/09/2026 | In-trip estendido | Retestes internos da Parrot no aplicativo |
 
 ## Validacao como traveler
 
@@ -343,9 +344,9 @@ Staff deve validar:
 - Mensagens para travelers.
 - Traveler View durante o dia.
 
-## Validacao in-trip - Dia 2 - 25/08/2026
+## Validacao in-trip - Dia 2 e periodo estendido - 25/08/2026 a 01/09/2026
 
-Foco do dia: validar atividades finais, opcionais/restritas e feedback final.
+Foco: validar atividades finais, opcionais/restritas, feedback final e retestes internos durante a semana adicional.
 
 Traveler deve validar:
 
@@ -396,6 +397,7 @@ Use esta tabela para registrar cada teste feito.
 | 24/08/2026 |  | Staff |  | QR included | Check-in aceito |  |  |  |  |
 | 24/08/2026 |  | Staff |  | QR restrito bloqueado | Traveler nao autorizado e recusado |  |  |  |  |
 | 25/08/2026 |  | Traveler |  | Feedback final | Feedback salvo |  |  |  |  |
+| 26/08/2026 |  | Traveler/Staff |  | Reteste interno | App continua em modo in-trip |  |  |  |  |
 
 ## Bugs e problemas
 
@@ -445,7 +447,7 @@ Observacoes:
 - Recomendacoes locais abrem corretamente.
 - Feedback pode ser enviado.
 - Pre-trip funciona entre 18/08/2026 e 23/08/2026.
-- In-trip funciona nos dias 24/08/2026 e 25/08/2026.
+- In-trip funciona entre 24/08/2026 e 01/09/2026.
 
 ## Observacoes importantes
 

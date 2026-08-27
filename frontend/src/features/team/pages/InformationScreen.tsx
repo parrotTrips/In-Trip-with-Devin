@@ -6,8 +6,7 @@ import {
   getMyTeam,
   getMyEmergencyContacts,
   getMyFaq,
-  getMyAppFeedback,
-  updateMyAppFeedback,
+  sendMyAppFeedback,
   type TeamMember,
   type EmergencyContact,
   type FaqItem,
@@ -126,19 +125,19 @@ export default function InformationScreen() {
       getMyTeam().then(r => setTeam(r.team)),
       getMyEmergencyContacts().then(r => setEmergency(r.emergency_contacts)),
       getMyFaq().then(r => setFaq(r.faq)),
-      getMyAppFeedback().then(r => setAppFeedback(r.feedback ?? '')),
     ])
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   async function handleFeedbackSend() {
+    if (!appFeedback.trim()) return;
     setFeedbackSaving(true);
     setFeedbackSaved(false);
     setFeedbackError(false);
     try {
-      const response = await updateMyAppFeedback(appFeedback);
-      setAppFeedback(response.feedback);
+      await sendMyAppFeedback(appFeedback);
+      setAppFeedback('');
       setFeedbackSaved(true);
       posthog.capture('app_feedback_sent');
     } catch {
@@ -215,7 +214,7 @@ export default function InformationScreen() {
               <button
                 type="button"
                 onClick={handleFeedbackSend}
-                disabled={feedbackSaving}
+                disabled={feedbackSaving || !appFeedback.trim()}
                 className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-xl font-medium text-sm transition-colors"
               >
                 {feedbackSaving ? (

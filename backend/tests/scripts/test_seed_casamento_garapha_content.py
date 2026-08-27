@@ -22,6 +22,20 @@ def test_trip_uuid_is_casamento_garapha():
     assert script.TRIP_UUID == "CASAMENTO-GARAPHA-2026"
 
 
+def test_staff_rows_include_vitor_sanches_for_casamento():
+    rows = script.build_sheet_rows()["staff"]["Staff"]
+    staff = rows_as_dicts("Staff", rows)
+
+    assert {
+        "phone": "+5511997666680",
+        "nome": "Vitor Sanches",
+        "funcao": "Staff Parrot",
+        "trip_uuid": script.TRIP_UUID,
+        "photo_url": "",
+        "bio": "",
+    } in staff
+
+
 def test_build_sheet_rows_returns_four_pre_trip_phases():
     rows = script.build_sheet_rows()["content"]["Fases"]
     phases = rows_as_dicts("Fases", rows)

@@ -23,7 +23,7 @@ def test_internal_trip_dates_match_validation_window():
     assert script.PRETRIP_START_DATE == "2026-08-18"
     assert script.PRETRIP_END_DATE == "2026-08-23"
     assert script.TRIP_START_DATE == "2026-08-24"
-    assert script.TRIP_END_DATE == "2026-08-25"
+    assert script.TRIP_END_DATE == "2026-09-01"
 
 
 def test_align_trip_dates_passes_date_objects():
@@ -33,7 +33,7 @@ def test_align_trip_dates_passes_date_objects():
 
     _, args = conn.calls[0]
     assert args[2] == date(2026, 8, 24)
-    assert args[3] == date(2026, 8, 25)
+    assert args[3] == date(2026, 9, 1)
 
 
 def test_dataset_has_20_fictitious_unique_travelers():

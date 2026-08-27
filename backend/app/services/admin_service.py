@@ -171,6 +171,80 @@ async def admin_sync_roteiro_to_sheet(trip_uuid: str) -> dict:
     return {"status": "ok", "trip_uuid": trip_uuid, "cells_updated": len(updates)}
 
 
+def _ensure_sheet_tab(sheets_svc, spreadsheet_id: str, tab_name: str) -> None:
+    """Create a Google Sheets tab if it is missing."""
+    spreadsheet = (
+        sheets_svc.spreadsheets()
+        .get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title")
+        .execute()
+    )
+    titles = {
+        sheet.get("properties", {}).get("title")
+        for sheet in spreadsheet.get("sheets", [])
+    }
+    if tab_name in titles:
+        return
+
+    sheets_svc.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body={"requests": [{"addSheet": {"properties": {"title": tab_name}}}]},
+    ).execute()
+
+
+async def admin_sync_feedback_to_sheet(trip_uuid: str) -> dict:
+    """Write traveler app feedback submissions from DB to the Trip Content Google Sheet."""
+    if not TRIP_CONTENT_SHEET_ID:
+        raise ValueError("TRIP_CONTENT_SHEET_ID is not set")
+
+    conn = await _get_connection()
+    try:
+        rows = await conn.fetch(
+            """
+            SELECT
+                taf.id::text AS feedback_id,
+                tt.wetravel_trip_uuid AS trip_uuid,
+                COALESCE(u.full_name, '') AS traveler_name,
+                COALESCE(u.phone, '') AS phone,
+                taf.feedback,
+                taf.created_at::text AS created_at
+            FROM traveler_app_feedback taf
+            JOIN trip_travelers tt ON tt.id = taf.trip_traveler_id
+            JOIN users u ON u.id = tt.user_id
+            WHERE tt.wetravel_trip_uuid = $1
+            ORDER BY taf.created_at, taf.id
+            """,
+            trip_uuid,
+        )
+    finally:
+        await conn.close()
+
+    data = [["feedback_id", "trip_uuid", "traveler_name", "phone", "feedback", "created_at"]]
+    for r in rows:
+        data.append([
+            r["feedback_id"],
+            r["trip_uuid"],
+            r["traveler_name"],
+            r["phone"],
+            r["feedback"],
+            r["created_at"],
+        ])
+
+    sheets_svc = _build_sheets_client_adc()
+    _ensure_sheet_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Feedbacks")
+    sheets_svc.spreadsheets().values().clear(
+        spreadsheetId=TRIP_CONTENT_SHEET_ID,
+        range="Feedbacks",
+    ).execute()
+    sheets_svc.spreadsheets().values().update(
+        spreadsheetId=TRIP_CONTENT_SHEET_ID,
+        range="Feedbacks!A1",
+        valueInputOption="RAW",
+        body={"values": data},
+    ).execute()
+
+    return {"status": "ok", "trip_uuid": trip_uuid, "feedback_rows": len(rows)}
+
+
 async def admin_setup_staff_sheet_headers() -> dict:
     """Add photo_url and bio columns to the Staff sheet header if missing."""
     if not STAFF_CONTENT_SHEET_ID:

@@ -9,3 +9,4 @@ codex resume 019fd74b-5b20-7633-938d-091346ae073d <- Viagem Interna Parrot | Cor
 codex resume 01a0017b-c901-7830-bff2-0d28ee14d160 <- Correcoes pontuais de layout(feedback, rotas do local recommendations...)
 codex resume 01a00bf1-f5ec-7a80-add6-e5f7a028cd62 <- Alinhamento planilha e supabase
 codex resume 01a02400-a183-7000-846a-bd6dcf30aeeb <- Carga inicial casamento e alteracoes de layout que o Sanches pediu
+codex resume 01a034cc-a7ce-7230-978c-fccfffbec6ad <- Metricas PostHog

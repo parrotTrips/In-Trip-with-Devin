@@ -15,6 +15,8 @@ function onOpen() {
     .addItem("❓ Export FAQ to App", "importFaq")
     .addItem("📄 Export Cancellation Policy to App", "importCancellationPolicy")
     .addSeparator()
+    .addItem("💬 Import Feedbacks from App", "importFeedbacks")
+    .addSeparator()
     .addItem("▶️ Start Trip", "startTrip")
     .addItem("🔁 Reset Trip to Pre-Trip", "resetTrip")
     .addSeparator()
@@ -188,6 +190,16 @@ function importCancellationPolicy() {
   }
 }
 
+function importFeedbacks() {
+  var trip_uuid = promptForTrip("💬 Import Feedbacks from App");
+  if (!trip_uuid) return;
+  try {
+    showResult(callBackend("/admin/trips/sync-feedback-to-sheet", trip_uuid));
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Error: " + e.message);
+  }
+}
+
 function startTrip() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
@@ -261,6 +273,11 @@ function setupSheetHeaders() {
       name: "Recomendacoes",
       headers: ["trip_uuid", "name", "description", "address", "photo_url", "sort_order", "category", "neighborhood", "location", "highlight", "price_range", "rating", "map_url", "emoji"],
       note: "Local recommendations. category examples: restaurants, bars, cafes, beaches, wellness, shopping. location examples: rio, ilha-grande. rating is optional."
+    },
+    {
+      name: "Feedbacks",
+      headers: ["feedback_id", "trip_uuid", "traveler_name", "phone", "feedback", "created_at"],
+      note: "Read-only operational view. Use Import Feedbacks from App to refresh this tab."
     },
     {
       name: "FAQ",

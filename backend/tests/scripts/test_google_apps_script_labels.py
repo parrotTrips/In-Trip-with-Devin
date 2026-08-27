@@ -15,6 +15,8 @@ def test_content_apps_script_uses_import_for_app_to_sheet_and_export_for_sheet_t
     assert "Import Trip Content → Supabase" not in source
     assert "run Import Trip Content" not in source
     assert "Sync Trips from App" not in source
+    assert "Import Feedbacks from App" in source
+    assert "/admin/trips/sync-feedback-to-sheet" in source
 
 
 def test_staff_apps_script_uses_export_for_sheet_to_app_actions():

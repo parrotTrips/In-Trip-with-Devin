@@ -23,6 +23,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 TRIP_UUID = "CASAMENTO-GARAPHA-2026"
 TRIP_TITLE = "Casamento GaRapha"
 MARINE_PHONE = "+558899769044"
+VITOR_SANCHES_PHONE = "+5511997666680"
 TRIP_CONTENT_SHEET_ID = os.environ.get(
     "TRIP_CONTENT_SHEET_ID",
     "1N1B66s1-K4DDf2_863frmhnpF6LRZB_ww60uax0gKZM",
@@ -78,6 +79,7 @@ MANAGED_HEADERS: dict[str, list[str]] = {
     ],
     "FAQ": ["trip_uuid", "question", "answer", "sort_order"],
     "Contatos": ["trip_uuid", "category", "name", "role", "phone", "sort_order"],
+    "Staff": ["phone", "nome", "funcao", "trip_uuid", "photo_url", "bio"],
 }
 
 CONTENT_ROWS: dict[str, list[list[Any]]] = {
@@ -588,6 +590,9 @@ STAFF_ROWS: dict[str, list[list[Any]]] = {
     "Contatos": [
         [TRIP_UUID, "Cerimonia", "Marine Carneiro", "Apoio da cerimonia", MARINE_PHONE, 1],
     ],
+    "Staff": [
+        [VITOR_SANCHES_PHONE, "Vitor Sanches", "Staff Parrot", TRIP_UUID, "", ""],
+    ],
 }
 
 GOOGLE_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -613,6 +618,7 @@ def build_sheet_rows() -> dict[str, dict[str, list[list[Any]]]]:
         },
         "staff": {
             "Contatos": copy_rows(STAFF_ROWS["Contatos"]),
+            "Staff": copy_rows(STAFF_ROWS["Staff"]),
         },
     }
 

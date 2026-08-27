@@ -55,18 +55,20 @@ describe('InformationScreen', () => {
       http.get('http://localhost:8000/me/cancellation-policy', () => {
         cancellationPolicyRequest();
         return HttpResponse.json({ cancellation_policy: [] });
-      }),
-      http.get('http://localhost:8000/me/app-feedback', () => HttpResponse.json({ feedback: null }))
+      })
     );
   });
 
-  test('lets travelers edit app feedback inside the app', async () => {
+  test('lets travelers send app feedback inside the app', async () => {
     let savedPayload: unknown = null;
     server.use(
-      http.get('http://localhost:8000/me/app-feedback', () => HttpResponse.json({ feedback: 'Loved the daily checklist.' })),
-      http.put('http://localhost:8000/me/app-feedback', async ({ request }) => {
+      http.post('http://localhost:8000/me/app-feedback', async ({ request }) => {
         savedPayload = await request.json();
-        return HttpResponse.json({ feedback: 'The app made the trip easier.', updated_at: '2026-08-16T12:00:00Z' });
+        return HttpResponse.json({
+          id: 'feedback-1',
+          feedback: 'The app made the trip easier.',
+          created_at: '2026-08-16T12:00:00Z',
+        });
       })
     );
 
@@ -78,15 +80,19 @@ describe('InformationScreen', () => {
     expect(screen.getByText(/Tell us what worked well in the app/i)).toBeInTheDocument();
 
     const feedbackField = screen.getByRole('textbox', { name: /app feedback/i });
-    expect(feedbackField).toHaveValue('Loved the daily checklist.');
+    expect(feedbackField).toHaveValue('');
     expect(screen.queryByRole('link', { name: /enviar feedback/i })).not.toBeInTheDocument();
 
-    await userEvent.clear(feedbackField);
+    const sendButton = screen.getByRole('button', { name: /send feedback/i });
+    expect(sendButton).toBeDisabled();
+
     await userEvent.type(feedbackField, 'The app made the trip easier.');
-    await userEvent.click(screen.getByRole('button', { name: /send feedback/i }));
+    expect(sendButton).toBeEnabled();
+    await userEvent.click(sendButton);
 
     expect(savedPayload).toEqual({ feedback: 'The app made the trip easier.' });
     expect(await screen.findByText(/feedback sent/i)).toBeInTheDocument();
+    expect(feedbackField).toHaveValue('');
   });
 
   test('links local recommendations directly to the dedicated recommendations page', async () => {

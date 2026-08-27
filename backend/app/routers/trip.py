@@ -265,45 +265,31 @@ async def mark_my_announcement_read(
     return {"status": "read", "announcement_id": str(announcement_id)}
 
 
-@router.get("/me/app-feedback")
-async def get_my_app_feedback(
-    request: Request,
-    session: AsyncSession = Depends(get_db_session),
-):
-    """Return the authenticated traveler's editable app feedback for the active trip."""
-    trip_traveler = await _get_active_trip_traveler(request.state.user_id, session)
-    feedback = await session.scalar(
-        select(TravelerAppFeedback).where(TravelerAppFeedback.trip_traveler_id == trip_traveler.id)
-    )
-
-    return {"feedback": feedback.feedback if feedback else None}
-
-
-@router.put("/me/app-feedback")
-async def update_my_app_feedback(
+@router.post("/me/app-feedback")
+async def create_my_app_feedback(
     body: AppFeedbackRequest,
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Create or update one app feedback entry for the authenticated traveler and active trip."""
+    """Create one app feedback submission for the authenticated traveler and active trip."""
     trip_traveler = await _get_active_trip_traveler(request.state.user_id, session)
-    feedback = await session.scalar(
-        select(TravelerAppFeedback).where(TravelerAppFeedback.trip_traveler_id == trip_traveler.id)
-    )
     text_value = body.feedback.strip()
+    if not text_value:
+        raise HTTPException(status_code=400, detail="Feedback cannot be empty")
 
-    if feedback is None:
-        feedback = TravelerAppFeedback(trip_traveler_id=trip_traveler.id, feedback=text_value)
-        session.add(feedback)
-    else:
-        feedback.feedback = text_value
+    feedback = TravelerAppFeedback(
+        trip_traveler_id=trip_traveler.id,
+        feedback=text_value,
+    )
+    session.add(feedback)
 
     await session.commit()
     await session.refresh(feedback)
 
     return {
+        "id": str(feedback.id),
         "feedback": feedback.feedback,
-        "updated_at": feedback.updated_at.isoformat(),
+        "created_at": feedback.created_at.isoformat(),
     }
 
 

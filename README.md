@@ -330,7 +330,6 @@ poetry run python scripts/add_test_user.py --phone +5511999999999 --remove
 
 **Viajantes atuais na viagem de teste:**
 - Marcelo Angelo (+5512991296651)
-- Vitor Sanches (+5511997666680)
 - Becker (+5511981121225)
 - Bia (+5511997220065)
 - Bela (+5534992526835)

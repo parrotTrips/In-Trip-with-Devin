@@ -217,31 +217,20 @@ def test_mark_announcement_read_rejects_other_trip(seeded_client, session_factor
     assert response.status_code == 404
 
 
-def test_get_my_app_feedback_returns_empty_feedback(seeded_client, session_factory):
-    phone = "+5511333000017"
-    trip_uuid = "trip-app-feedback-empty"
-    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
-    headers = _auth(seeded_client, phone)
-
-    response = seeded_client.get("/me/app-feedback", headers=headers)
-
-    assert response.status_code == 200
-    assert response.json() == {"feedback": None}
-
-
-def test_put_my_app_feedback_upserts_one_feedback_per_traveler(seeded_client, session_factory):
+def test_post_my_app_feedback_creates_multiple_feedbacks_per_traveler(seeded_client, session_factory):
     phone = "+5511333000018"
     trip_uuid = "trip-app-feedback-upsert"
     user_id = asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
     headers = _auth(seeded_client, phone)
 
-    create_response = seeded_client.put("/me/app-feedback", headers=headers, json={"feedback": "The app helped a lot."})
-    update_response = seeded_client.put("/me/app-feedback", headers=headers, json={"feedback": "Updated feedback."})
+    create_response = seeded_client.post("/me/app-feedback", headers=headers, json={"feedback": "The app helped a lot."})
+    second_response = seeded_client.post("/me/app-feedback", headers=headers, json={"feedback": "Second feedback."})
 
     assert create_response.status_code == 200
     assert create_response.json()["feedback"] == "The app helped a lot."
-    assert update_response.status_code == 200
-    assert update_response.json()["feedback"] == "Updated feedback."
+    assert second_response.status_code == 200
+    assert second_response.json()["feedback"] == "Second feedback."
+    assert create_response.json()["id"] != second_response.json()["id"]
 
     async def _stored_feedback():
         async with session_factory() as session:
@@ -257,12 +246,36 @@ def test_put_my_app_feedback_upserts_one_feedback_per_traveler(seeded_client, se
             return rows
 
     rows = asyncio.run(_stored_feedback())
-    assert len(rows) == 1
-    assert rows[0].feedback == "Updated feedback."
+    assert len(rows) == 2
+    assert [row.feedback for row in rows] == ["The app helped a lot.", "Second feedback."]
 
-    get_response = seeded_client.get("/me/app-feedback", headers=headers)
-    assert get_response.status_code == 200
-    assert get_response.json()["feedback"] == "Updated feedback."
+
+def test_post_my_app_feedback_rejects_blank_feedback(seeded_client, session_factory):
+    phone = "+5511333000021"
+    trip_uuid = "trip-app-feedback-blank"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.post("/me/app-feedback", headers=headers, json={"feedback": "   "})
+
+    assert response.status_code == 400
+
+    async def _count_feedback():
+        async with session_factory() as session:
+            return await session.scalar(select(func.count()).select_from(TravelerAppFeedback))
+
+    assert asyncio.run(_count_feedback()) == 0
+
+
+def test_put_my_app_feedback_is_not_supported(seeded_client, session_factory):
+    phone = "+5511333000017"
+    trip_uuid = "trip-app-feedback-no-edit"
+    asyncio.run(_seed_trip(session_factory, user_phone=phone, trip_uuid=trip_uuid))
+    headers = _auth(seeded_client, phone)
+
+    response = seeded_client.put("/me/app-feedback", headers=headers, json={"feedback": "Edited feedback."})
+
+    assert response.status_code == 405
 
 
 def test_get_my_trip_phase_detail_returns_activity_address(seeded_client, session_factory):

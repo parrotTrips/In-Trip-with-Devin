@@ -26,7 +26,6 @@ class TripTraveler(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class TravelerAppFeedback(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "traveler_app_feedback"
-    __table_args__ = (UniqueConstraint("trip_traveler_id"),)
 
     trip_traveler_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

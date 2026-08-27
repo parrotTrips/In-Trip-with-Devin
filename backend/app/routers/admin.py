@@ -18,6 +18,7 @@ from app.services.admin_service import (
     admin_reset_trip,
     admin_set_user_role,
     admin_start_trip,
+    admin_sync_feedback_to_sheet,
     admin_sync_roteiro_to_sheet,
     admin_sync_staff_to_sheet,
     admin_write_staff_bios,
@@ -63,6 +64,15 @@ async def sync_staff_to_sheet(body: TripUUIDRequest):
     """Write staff tasks and activity participants from DB to the Staff Google Sheet."""
     try:
         return await admin_sync_staff_to_sheet(body.trip_uuid)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/trips/sync-feedback-to-sheet")
+async def sync_feedback_to_sheet(body: TripUUIDRequest):
+    """Write traveler app feedback submissions from DB to the Trip Content Google Sheet."""
+    try:
+        return await admin_sync_feedback_to_sheet(body.trip_uuid)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
