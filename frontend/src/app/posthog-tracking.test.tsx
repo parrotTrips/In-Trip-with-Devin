@@ -136,6 +136,7 @@ describe('PostHog screen tracking', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     localStorage.clear();
   });
 
@@ -259,6 +260,97 @@ describe('PostHog screen tracking', () => {
         papel: 'traveler',
       });
       expect(posthogMock.reset).toHaveBeenCalled();
+    });
+  });
+
+  test('captures active screen time with normalized route and trip context on unmount', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    setupTripHandlers();
+    window.history.pushState({}, '', '/day/0fb84ab8-450a-4881-b5e8-ea72ce856f6e');
+
+    const view = render(<App />);
+
+    await waitFor(() => {
+      expectLastScreenViewPayload({
+        tela: '/day',
+        day_id: '0fb84ab8-450a-4881-b5e8-ea72ce856f6e',
+        viagem_id: 'trip-001',
+        modo_viagem: 'in-trip',
+      });
+    });
+
+    now += 5000;
+    view.unmount();
+
+    expect(posthogMock.capture).toHaveBeenCalledWith('tela_tempo_ativo', {
+      tela: '/day',
+      day_id: '0fb84ab8-450a-4881-b5e8-ea72ce856f6e',
+      viagem_id: 'trip-001',
+      modo_viagem: 'in-trip',
+      tempo_ativo_ms: 5000,
+      idle_timeout_ms: 30000,
+    });
+  });
+
+  test('does not count screen time after the user becomes idle', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    setupTripHandlers();
+    window.history.pushState({}, '', '/information');
+
+    const view = render(<App />);
+
+    await waitFor(() => {
+      expectLastScreenViewPayload({
+        tela: '/information',
+        viagem_id: 'trip-001',
+        modo_viagem: 'in-trip',
+      });
+    });
+
+    now += 45000;
+    view.unmount();
+
+    expect(posthogMock.capture).toHaveBeenCalledWith('tela_tempo_ativo', {
+      tela: '/information',
+      viagem_id: 'trip-001',
+      modo_viagem: 'in-trip',
+      tempo_ativo_ms: 30000,
+      idle_timeout_ms: 30000,
+    });
+  });
+
+  test('resumes active screen time after user activity without counting the idle gap', async () => {
+    let now = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    setupTripHandlers();
+    window.history.pushState({}, '', '/information');
+
+    const view = render(<App />);
+
+    await waitFor(() => {
+      expectLastScreenViewPayload({
+        tela: '/information',
+        viagem_id: 'trip-001',
+        modo_viagem: 'in-trip',
+      });
+    });
+
+    now += 45000;
+    window.dispatchEvent(new MouseEvent('click'));
+    now += 5000;
+    view.unmount();
+
+    expect(posthogMock.capture).toHaveBeenCalledWith('tela_tempo_ativo', {
+      tela: '/information',
+      viagem_id: 'trip-001',
+      modo_viagem: 'in-trip',
+      tempo_ativo_ms: 35000,
+      idle_timeout_ms: 30000,
     });
   });
 });
