@@ -181,6 +181,29 @@ async def test_write_staff_creates_active_staff_user():
 
 
 @pytest.mark.asyncio
+async def test_write_staff_links_staff_user_as_trip_traveler():
+    conn = _FakeConn()
+
+    result = await write_staff(conn, "TEST-2026-FULL", [{
+        "phone": "+5516993903965",
+        "nome": "Gabriel Alianca",
+        "funcao": "QR Scanner / Internal Staff",
+        "trip_uuid": "TEST-2026-FULL",
+        "photo_url": None,
+        "bio": None,
+    }])
+
+    trip_traveler_calls = [
+        call for call in conn.execute_calls
+        if "INSERT INTO trip_travelers" in call[0]
+    ]
+
+    assert result["linked"] == 1
+    assert trip_traveler_calls
+    assert trip_traveler_calls[0][1:] == (conn.staff_id, "TEST-2026-FULL")
+
+
+@pytest.mark.asyncio
 async def test_write_staff_tasks_resolves_dia_as_in_trip_day_number():
     conn = _FakeConn()
 
