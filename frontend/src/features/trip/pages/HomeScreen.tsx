@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTripContext } from '../../../app/providers/trip-context';
 import { useAuth } from '../../../app/providers/auth-context';
@@ -50,6 +51,7 @@ function formatDateRange(start: string, end: string): string {
 
 export default function HomeScreen() {
   const navigate = useNavigate();
+  const currentPhaseRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const { onSwitchToStaffView } = useStaffView();
   const { tripInfo, phases, travelers, idealPacePhaseId, loading, error } = useTripContext();
@@ -85,6 +87,22 @@ export default function HomeScreen() {
     ? formatDateRange(tripInfo.start_date, tripInfo.end_date)
     : '';
 
+  useEffect(() => {
+    if (
+      loading ||
+      !currentUserPhaseId ||
+      !currentPhaseRef.current ||
+      typeof currentPhaseRef.current.scrollIntoView !== 'function'
+    ) {
+      return;
+    }
+
+    currentPhaseRef.current.scrollIntoView({
+      block: 'center',
+      inline: 'nearest',
+    });
+  }, [currentUserPhaseId, loading, phases.length]);
+
   const handlePhaseClick = (phase: TripPhase) => {
     if (phase.phase_type === 'in-trip') {
       navigate(`/day/${phase.id}`);
@@ -119,12 +137,15 @@ export default function HomeScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-emerald-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-b from-sky-50 via-white to-emerald-50 pt-14 pb-20">
       <AppHeader title={displayTitle} />
 
       {/* Hero Section */}
-      <div className="pt-14">
-        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 px-5 py-6">
+      <div
+        data-testid="journey-sticky-header"
+        className="sticky top-14 z-50"
+      >
+        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 px-5 py-6 shadow-lg shadow-emerald-950/10">
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/30 rounded-full -translate-y-1/2 translate-x-1/2" />
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-teal-500/20 rounded-full translate-y-1/2 -translate-x-1/2" />
 
@@ -182,7 +203,11 @@ export default function HomeScreen() {
               const travelersHere = travelers.filter(t => t.current_phase_id === phase.id);
 
               return (
-                <div key={phase.id} className="relative">
+                <div
+                  key={phase.id}
+                  ref={isCurrentUser ? currentPhaseRef : undefined}
+                  className="relative"
+                >
                   <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
                     <div
                       className={`w-4 h-4 rounded-full border-2 ${

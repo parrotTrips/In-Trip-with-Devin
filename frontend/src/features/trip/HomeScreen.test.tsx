@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, vi } from 'vitest';
 
 import { AuthProvider } from '../../app/providers/AuthProvider';
 import { TripProvider } from '../../app/providers/TripProvider';
@@ -10,12 +11,54 @@ import HomeScreen from './pages/HomeScreen';
 const TRIP_UUID = 'test-trip-001';
 const USER_ID = 'traveler-001';
 
+function makePhase({
+  id,
+  title,
+  sortOrder,
+  icon = 'passport',
+}: {
+  id: string;
+  title: string;
+  sortOrder: number;
+  icon?: string;
+}) {
+  return {
+    id,
+    phase_type: 'pre-trip',
+    title,
+    subtitle: null,
+    icon,
+    short_description: `${title} details`,
+    detailed_description: null,
+    sort_order: sortOrder,
+    starts_at: null,
+    is_locked_by_default: false,
+    checklist_items: [],
+    links: [],
+  };
+}
+
 function setupHandlers({
   idealPacePhaseId = null,
   currentPhaseId = 'phase-001',
+  phases = [makePhase({ id: 'phase-001', title: 'Passport', sortOrder: 0 })],
 }: {
   idealPacePhaseId?: string | null;
   currentPhaseId?: string | null;
+  phases?: Array<{
+    id: string;
+    phase_type: string;
+    title: string;
+    subtitle: string | null;
+    icon: string | null;
+    short_description: string | null;
+    detailed_description: string | null;
+    sort_order: number;
+    starts_at: string | null;
+    is_locked_by_default: boolean;
+    checklist_items: unknown[];
+    links: unknown[];
+  }>;
 } = {}) {
   server.use(
     http.get('http://localhost:8000/me/trip', () =>
@@ -35,22 +78,7 @@ function setupHandlers({
     http.get('http://localhost:8000/me/trip/phases', () =>
       HttpResponse.json({
         wetravel_trip_uuid: TRIP_UUID,
-        phases: [
-          {
-            id: 'phase-001',
-            phase_type: 'pre-trip',
-            title: 'Passport',
-            subtitle: null,
-            icon: 'passport',
-            short_description: 'Passport details',
-            detailed_description: null,
-            sort_order: 0,
-            starts_at: null,
-            is_locked_by_default: false,
-            checklist_items: [],
-            links: [],
-          },
-        ],
+        phases,
         ideal_pace_phase_id: idealPacePhaseId,
       })
     ),
@@ -70,6 +98,11 @@ function setupHandlers({
 }
 
 describe('HomeScreen', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window.HTMLElement.prototype, 'scrollIntoView');
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
     localStorage.setItem(
       'parrot_user',
@@ -99,6 +132,56 @@ describe('HomeScreen', () => {
 
     expect((await screen.findAllByText('Peru Adventure')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('heading', { name: 'My QR Code' })).not.toBeInTheDocument();
+  });
+
+  test('keeps the journey summary sticky below the app header', async () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/" element={<HomeScreen />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Passport');
+
+    expect(screen.getByTestId('journey-sticky-header')).toHaveClass('sticky', 'top-14');
+  });
+
+  test('centers the current phase after the journey loads', async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    setupHandlers({
+      currentPhaseId: 'phase-003',
+      phases: [
+        makePhase({ id: 'phase-001', title: 'Passport', sortOrder: 0 }),
+        makePhase({ id: 'phase-002', title: 'Packing', sortOrder: 1, icon: 'luggage' }),
+        makePhase({ id: 'phase-003', title: 'Airport', sortOrder: 2, icon: 'plane' }),
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/" element={<HomeScreen />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Airport');
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', inline: 'nearest' });
   });
 
   test('groups parrot and completed check in one card badge container', async () => {
