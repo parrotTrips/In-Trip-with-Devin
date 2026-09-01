@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid as _uuid
 from datetime import UTC, datetime as _datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -18,6 +19,8 @@ from app.db.models.trip import (
 )
 from app.db.models.progress import TravelerPhaseProgress
 from app.db.models.user import User
+
+SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
 
 async def _get_trip_settings(trip_uuid: str, session: AsyncSession) -> dict:
@@ -60,6 +63,50 @@ def compute_in_trip_phase_completions(
                 starts_at = starts_at.replace(tzinfo=UTC)
             result[phase["id"]] = starts_at <= now
     return result
+
+
+def _phase_local_date(phase: dict, timezone: ZoneInfo):
+    starts_at = phase["starts_at"]
+    if starts_at is None:
+        return None
+    if isinstance(starts_at, str):
+        starts_at = _datetime.fromisoformat(starts_at)
+    if starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=UTC)
+    return starts_at.astimezone(timezone).date()
+
+
+def compute_current_phase_id(
+    phases: list[dict],
+    completed_phase_ids: set[str],
+    trip_mode: str,
+    now: _datetime,
+    timezone: ZoneInfo = SAO_PAULO_TZ,
+) -> str | None:
+    if not phases:
+        return None
+
+    ordered_phases = sorted(phases, key=lambda p: p["sort_order"])
+
+    if trip_mode == "in-trip":
+        in_trip_phases = [p for p in ordered_phases if p["phase_type"] == "in-trip"]
+        if in_trip_phases:
+            if now.tzinfo is None:
+                now = now.replace(tzinfo=UTC)
+            today = now.astimezone(timezone).date()
+            current_phase = in_trip_phases[0]
+
+            for phase in in_trip_phases:
+                phase_date = _phase_local_date(phase, timezone)
+                if phase_date is not None and phase_date <= today:
+                    current_phase = phase
+
+            return current_phase["id"]
+
+    for phase in ordered_phases:
+        if phase["id"] not in completed_phase_ids:
+            return phase["id"]
+    return ordered_phases[-1]["id"]
 
 
 async def _get_trip_uuid(user_id: str, session: AsyncSession) -> str:
@@ -247,10 +294,9 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
         }
         for p in all_phases
     ]
-    phases_ordered = [(p["sort_order"], p["id"]) for p in phase_dicts]
-
     now = _datetime.now(UTC)
     date_completions = compute_in_trip_phase_completions(phase_dicts, now)
+    settings = await _get_trip_settings(trip_uuid, session)
 
     progress_result = await session.execute(
         select(TravelerPhaseProgress)
@@ -263,26 +309,21 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
     for prog in progress_result.scalars():
         db_completed_ids.setdefault(prog.trip_traveler_id, set()).add(str(prog.trip_phase_id))
 
-    def _current_phase_id(tt_id: _uuid.UUID) -> str | None:
-        if not phases_ordered:
-            return None
-        tt_db_done = db_completed_ids.get(tt_id, set())
-        # Pre-trip phases complete via DB only; in-trip phases complete by date.
-        # If the trip has started but the traveler never finished pre-trip,
-        # they remain on the last incomplete pre-trip phase by design.
-        for sort_order, pid in phases_ordered:
-            is_done = (pid in tt_db_done) or date_completions.get(pid, False)
-            if not is_done:
-                return pid
-        return phases_ordered[-1][1]
-
     travelers = []
     for tt, user in rows:
+        completed_phase_ids = db_completed_ids.get(tt.id, set()) | {
+            pid for pid, is_completed in date_completions.items() if is_completed
+        }
         travelers.append({
             "id": str(user.id),
             "name": user.full_name,
             "phone": user.phone,
-            "current_phase_id": _current_phase_id(tt.id),
+            "current_phase_id": compute_current_phase_id(
+                phases=phase_dicts,
+                completed_phase_ids=completed_phase_ids,
+                trip_mode=settings["mode"],
+                now=now,
+            ),
         })
 
     return {"travelers": travelers}
