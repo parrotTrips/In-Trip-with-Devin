@@ -36,6 +36,27 @@ export interface ProfileData {
   departure_time: string | null;
   departure_flight: string | null;
   avatar_url: string | null;
+  visa_status: string | null;
+  checked_bags: string | null;
+  travel_insurance_status: string | null;
+  travel_insurance_brazil_medical_coverage: string | null;
+  travel_insurance_provider: string | null;
+  travel_insurance_policy_number: string | null;
+  travel_insurance_notes: string | null;
+  roommate_status: string | null;
+  roommate_email: string | null;
+  room_configuration: string | null;
+  roommate_gender_preference: string | null;
+  extended_stay_help: string | null;
+  extended_stay_help_details: string | null;
+  early_check_in_preference: string | null;
+  emergency_contact: string | null;
+  instagram_handle: string | null;
+  trip_mood: string | null;
+  social_topic: string | null;
+  always_up_for: string | null;
+  home_address: string | null;
+  final_considerations: string | null;
 }
 
 export interface ProfileResponse {

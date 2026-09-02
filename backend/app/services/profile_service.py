@@ -49,6 +49,60 @@ PROFILE_FIELD_DEFAULTS = {
     "departure_time": None,
     "departure_flight": None,
     "avatar_url": None,
+    "visa_status": None,
+    "checked_bags": None,
+    "travel_insurance_status": None,
+    "travel_insurance_brazil_medical_coverage": None,
+    "travel_insurance_provider": None,
+    "travel_insurance_policy_number": None,
+    "travel_insurance_notes": None,
+    "roommate_status": None,
+    "roommate_email": None,
+    "room_configuration": None,
+    "roommate_gender_preference": None,
+    "extended_stay_help": None,
+    "extended_stay_help_details": None,
+    "early_check_in_preference": None,
+    "emergency_contact": None,
+    "instagram_handle": None,
+    "trip_mood": None,
+    "social_topic": None,
+    "always_up_for": None,
+    "home_address": None,
+    "final_considerations": None,
+}
+
+PRE_DEPARTURE_DATE_FIELDS = {
+    "arrival_date",
+    "departure_date",
+}
+
+PRE_DEPARTURE_TEXT_FIELDS = {
+    "visa_status",
+    "arrival_time",
+    "arrival_flight",
+    "departure_time",
+    "departure_flight",
+    "checked_bags",
+    "travel_insurance_status",
+    "travel_insurance_brazil_medical_coverage",
+    "travel_insurance_provider",
+    "travel_insurance_policy_number",
+    "travel_insurance_notes",
+    "roommate_status",
+    "roommate_email",
+    "room_configuration",
+    "roommate_gender_preference",
+    "extended_stay_help",
+    "extended_stay_help_details",
+    "early_check_in_preference",
+    "emergency_contact",
+    "instagram_handle",
+    "trip_mood",
+    "social_topic",
+    "always_up_for",
+    "home_address",
+    "final_considerations",
 }
 
 SUPPORTED_UPDATE_FIELDS = {
@@ -73,7 +127,7 @@ SUPPORTED_UPDATE_FIELDS = {
     "travel_insurance_help_yn",
     "unforgettable_trip_details",
     "avatar_url",
-}
+} | PRE_DEPARTURE_DATE_FIELDS | PRE_DEPARTURE_TEXT_FIELDS
 
 
 def _parse_uuid(value: str, detail: str) -> UUID:
@@ -233,6 +287,10 @@ async def get_profile(
         profile_dict["travel_insurance_help_yn"] = _encode_yes_no(profile.needs_travel_insurance_help_flag)
         profile_dict["unforgettable_trip_details"] = profile.unforgettable_trip_details
         profile_dict["avatar_url"] = profile.avatar_url
+        for field in PRE_DEPARTURE_DATE_FIELDS:
+            profile_dict[field] = _encode_optional_date(getattr(profile, field))
+        for field in PRE_DEPARTURE_TEXT_FIELDS:
+            profile_dict[field] = getattr(profile, field)
 
     return {
         "user_id": user_id,
@@ -338,6 +396,14 @@ async def update_profile(
     if "email" in update_data:
         user.email = update_data["email"]
         updated_fields.append("email")
+    for field in PRE_DEPARTURE_DATE_FIELDS:
+        if field in update_data:
+            setattr(profile, field, _parse_optional_date(update_data[field], field))
+            updated_fields.append(field)
+    for field in PRE_DEPARTURE_TEXT_FIELDS:
+        if field in update_data:
+            setattr(profile, field, update_data[field])
+            updated_fields.append(field)
 
     await session.commit()
 

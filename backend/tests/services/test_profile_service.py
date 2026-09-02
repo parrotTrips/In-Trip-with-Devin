@@ -104,6 +104,58 @@ def test_update_profile_creates_profile_through_trip_traveler(session_factory):
     asyncio.run(run_test())
 
 
+def test_update_profile_persists_pre_departure_information(session_factory):
+    async def run_test():
+        seeded = await seed_trip_assignment(session_factory)
+        pre_departure_payload = {
+            "visa_status": "Yes, I already have a visa / I can enter Brazil without a visa",
+            "arrival_date": "2026-10-03",
+            "arrival_time": "14:30",
+            "arrival_flight": "GRU, AA 1234",
+            "departure_date": "2026-10-12",
+            "departure_time": "21:45",
+            "departure_flight": "GIG, LA 4567",
+            "checked_bags": "1 checked bag is all I need",
+            "travel_insurance_status": "Already hired one",
+            "travel_insurance_brazil_medical_coverage": "Yes",
+            "travel_insurance_provider": "SafetyWing",
+            "travel_insurance_policy_number": "POL-123",
+            "travel_insurance_notes": "Covers hiking.",
+            "roommate_status": "No, please match me with someone.",
+            "roommate_email": "roommate@example.com",
+            "room_configuration": "Two twin beds (one single bed each)",
+            "roommate_gender_preference": "No preference",
+            "extended_stay_help": "Yes, please",
+            "extended_stay_help_details": "Need one night before the trip.",
+            "early_check_in_preference": "I’ll arrive after the check-in time.",
+            "emergency_contact": "Maria +5511999999999",
+            "instagram_handle": "@alice",
+            "trip_mood": "I’m here for what’s local, unique, and off the beaten path.",
+            "social_topic": "Brazilian food",
+            "always_up_for": "Beach\nLive music",
+            "home_address": "123 Main St",
+            "final_considerations": "No duplicated registration fields here.",
+        }
+
+        async with session_factory() as session:
+            update_response = await update_profile(
+                seeded["user_id"],
+                seeded["wetravel_trip_uuid"],
+                pre_departure_payload,
+                session,
+            )
+            profile_response = await get_profile(
+                seeded["user_id"], seeded["wetravel_trip_uuid"], session
+            )
+
+        assert update_response["message"] == "Profile updated"
+        assert set(update_response["updated_fields"]) == set(pre_departure_payload)
+        for key, value in pre_departure_payload.items():
+            assert profile_response["profile"][key] == value
+
+    asyncio.run(run_test())
+
+
 def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(session_factory):
     async def run_test():
         primary = await seed_trip_assignment(

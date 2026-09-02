@@ -80,7 +80,6 @@ def test_profile_route_ignores_unsupported_orphan_fields(seeded_client, session_
         f"/profile/{user_id}?trip_id={trip_uuid}",
         json={
             "transfer_platform": "wise",
-            "arrival_date": "2026-02-01",
             "preferred_name": "Test",  # supported field mixed in
         },
         headers=headers,
@@ -89,3 +88,53 @@ def test_profile_route_ignores_unsupported_orphan_fields(seeded_client, session_
     assert response.status_code == 200
     assert response.json()["message"] == "Profile updated"
     assert response.json()["updated_fields"] == ["preferred_name"]
+
+
+def test_profile_route_persists_pre_departure_information(seeded_client, session_factory):
+    user_id, token = create_user(seeded_client, phone="+5511991000001")
+    headers = {"Authorization": f"Bearer {token}"}
+    trip_uuid = asyncio.run(seed_trip_assignment(session_factory, user_id=user_id))
+
+    response = seeded_client.put(
+        f"/profile/{user_id}?trip_id={trip_uuid}",
+        json={
+            "visa_status": "I am not sure and I need orientation about it",
+            "arrival_date": "2026-10-03",
+            "arrival_time": "14:30",
+            "arrival_flight": "GRU, AA 1234",
+            "departure_date": "2026-10-12",
+            "departure_time": "21:45",
+            "departure_flight": "GIG, LA 4567",
+            "checked_bags": "No checked bags, I travel light",
+            "travel_insurance_status": "Already hired one",
+            "travel_insurance_brazil_medical_coverage": "Yes",
+            "travel_insurance_provider": "SafetyWing",
+            "travel_insurance_policy_number": "POL-123",
+            "travel_insurance_notes": "Covers hiking.",
+            "roommate_status": "I am staying in an individual room",
+            "roommate_email": "",
+            "room_configuration": "One double bed (for two people)",
+            "roommate_gender_preference": "No preference",
+            "extended_stay_help": "No, thanks",
+            "extended_stay_help_details": "",
+            "early_check_in_preference": "I’ll arrive after the check-in time.",
+            "emergency_contact": "Maria +5511999999999",
+            "instagram_handle": "@alice",
+            "trip_mood": "I’m here for what’s local, unique, and off the beaten path.",
+            "social_topic": "Brazilian food",
+            "always_up_for": "Beach\nLive music",
+            "home_address": "123 Main St",
+            "final_considerations": "No duplicated registration fields here.",
+        },
+        headers=headers,
+    )
+    updated_response = seeded_client.get(f"/profile/{user_id}?trip_id={trip_uuid}", headers=headers)
+
+    assert response.status_code == 200
+    assert updated_response.status_code == 200
+    profile = updated_response.json()["profile"]
+    assert profile["visa_status"] == "I am not sure and I need orientation about it"
+    assert profile["arrival_date"] == "2026-10-03"
+    assert profile["departure_flight"] == "GIG, LA 4567"
+    assert profile["travel_insurance_provider"] == "SafetyWing"
+    assert profile["emergency_contact"] == "Maria +5511999999999"

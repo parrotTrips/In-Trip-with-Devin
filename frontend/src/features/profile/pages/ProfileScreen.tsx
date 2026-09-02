@@ -142,6 +142,42 @@ const DOB_MONTHS = [
   { value: '12', label: 'December' },
 ];
 
+const VISA_STATUS_OPTIONS = [
+  { value: 'Yes, I already have a visa / I can enter Brazil without a visa', label: 'Yes, I already have a visa / I can enter Brazil without a visa' },
+  { value: "Not yet, I already started my visa process but don't have one yet", label: "Not yet, I already started my visa process but don't have one yet" },
+  { value: "No, I am required to have a visa but didn't start the application so far.", label: "No, I am required to have a visa but didn't start the application so far." },
+  { value: 'I am not sure and I need orientation about it', label: 'I am not sure and I need orientation about it' },
+];
+
+const CHECKED_BAGS_OPTIONS = [
+  { value: 'No checked bags, I travel light', label: 'No checked bags, I travel light' },
+  { value: '1 checked bag is all I need', label: '1 checked bag is all I need' },
+  { value: 'More than 1 checked bag and I will take care of the extra costs.', label: 'More than 1 checked bag and I will take care of the extra costs.' },
+];
+
+const TRAVEL_INSURANCE_STATUS_OPTIONS = [
+  { value: 'Already hired one', label: 'Already hired one' },
+  { value: 'I will use one provided by my credit card (or something like that)', label: 'I will use one provided by my credit card (or something like that)' },
+  { value: "I don't have one yet, but I will since is mandatory", label: "I don't have one yet, but I will since is mandatory" },
+];
+
+const ROOMMATE_STATUS_OPTIONS = [
+  { value: 'Yes', label: 'Yes' },
+  { value: 'No, please match me with someone.', label: 'No, please match me with someone.' },
+  { value: 'I am staying in an individual room', label: 'I am staying in an individual room' },
+];
+
+const ROOM_CONFIGURATION_OPTIONS = [
+  { value: 'One double bed (for two people)', label: 'One double bed (for two people)' },
+  { value: 'Two twin beds (one single bed each)', label: 'Two twin beds (one single bed each)' },
+];
+
+const EARLY_CHECK_IN_OPTIONS = [
+  { value: "I’ll arrive after the check-in time.", label: "I’ll arrive after the check-in time." },
+  { value: "I’ll arrive early but prefer not to pay extra; I’m happy with your best effort.", label: "I’ll arrive early but prefer not to pay extra; I’m happy with your best effort." },
+  { value: "I’ll arrive early and would rather pay the full daily rate to guarantee early check-in.", label: "I’ll arrive early and would rather pay the full daily rate to guarantee early check-in." },
+];
+
 function DateSelectField({ label, value, onChange }: {
   label: string;
   value: string;
@@ -249,6 +285,33 @@ export default function ProfileScreen() {
     travel_insurance_help_yn: '',
     unforgettable_trip_details: '',
     avatar_url: '',
+    visa_status: '',
+    arrival_date: '',
+    arrival_time: '',
+    arrival_flight: '',
+    departure_date: '',
+    departure_time: '',
+    departure_flight: '',
+    checked_bags: '',
+    travel_insurance_status: '',
+    travel_insurance_brazil_medical_coverage: '',
+    travel_insurance_provider: '',
+    travel_insurance_policy_number: '',
+    travel_insurance_notes: '',
+    roommate_status: '',
+    roommate_email: '',
+    room_configuration: '',
+    roommate_gender_preference: '',
+    extended_stay_help: '',
+    extended_stay_help_details: '',
+    early_check_in_preference: '',
+    emergency_contact: '',
+    instagram_handle: '',
+    trip_mood: '',
+    social_topic: '',
+    always_up_for: '',
+    home_address: '',
+    final_considerations: '',
   });
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -501,6 +564,122 @@ export default function ProfileScreen() {
                   { value: 'no', label: 'No' },
                 ]} />
                 <TextAreaField label="What would make this trip unforgettable?" value={form.unforgettable_trip_details} onChange={v => setField('unforgettable_trip_details', v)} placeholder="Share your ideas..." />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-3">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  saveError
+                    ? 'bg-red-500 text-white'
+                    : saved
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                }`}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : saveError ? (
+                  <>
+                    <Save size={18} />
+                    Error saving — try again
+                  </>
+                ) : saved ? (
+                  <>
+                    <Save size={18} />
+                    Saved!
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </CollapsibleSection>
+
+        {/* ── Section 3: Pre Departure Information ── */}
+        <CollapsibleSection title="Pre Departure Information" icon={<FileText size={18} />} emoji="🧳" defaultOpen={false}>
+          <div className="pt-3 space-y-3">
+            <SelectField label="Visa Status" value={form.visa_status} onChange={v => setField('visa_status', v)} options={VISA_STATUS_OPTIONS} />
+
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Arrival</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <InputField label="Arrival Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} type="date" />
+                  <InputField label="Arrival Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} type="time" />
+                </div>
+                <InputField label="Arrival Airport and Flight" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. GRU, AA 1234" />
+                <SelectField label="Checked Bags" value={form.checked_bags} onChange={v => setField('checked_bags', v)} options={CHECKED_BAGS_OPTIONS} />
+                <SelectField label="Need help with early arrival or longer stay?" value={form.extended_stay_help} onChange={v => setField('extended_stay_help', v)} options={[
+                  { value: 'Yes, please', label: 'Yes, please' },
+                  { value: 'No, thanks', label: 'No, thanks' },
+                ]} />
+                {form.extended_stay_help === 'Yes, please' && (
+                  <TextAreaField label="How can we help?" value={form.extended_stay_help_details} onChange={v => setField('extended_stay_help_details', v)} />
+                )}
+                <SelectField label="Early Check-in Preference" value={form.early_check_in_preference} onChange={v => setField('early_check_in_preference', v)} options={EARLY_CHECK_IN_OPTIONS} />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Departure</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <InputField label="Departure Date" value={form.departure_date} onChange={v => setField('departure_date', v)} type="date" />
+                  <InputField label="Departure Time" value={form.departure_time} onChange={v => setField('departure_time', v)} type="time" />
+                </div>
+                <InputField label="Departure Airport and Flight" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. GIG, LA 4567" />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Travel Insurance</p>
+              <div className="space-y-3">
+                <SelectField label="Travel Insurance Status" value={form.travel_insurance_status} onChange={v => setField('travel_insurance_status', v)} options={TRAVEL_INSURANCE_STATUS_OPTIONS} />
+                <SelectField label="Medical Coverage in Brazil" value={form.travel_insurance_brazil_medical_coverage} onChange={v => setField('travel_insurance_brazil_medical_coverage', v)} options={[
+                  { value: 'Yes', label: 'Yes' },
+                  { value: 'No', label: 'No' },
+                  { value: 'Not sure, but I will find out', label: 'Not sure, but I will find out' },
+                ]} />
+                <InputField label="Insurance Provider" value={form.travel_insurance_provider} onChange={v => setField('travel_insurance_provider', v)} />
+                <InputField label="Policy Number" value={form.travel_insurance_policy_number} onChange={v => setField('travel_insurance_policy_number', v)} />
+                <TextAreaField label="Travel Insurance Notes" value={form.travel_insurance_notes} onChange={v => setField('travel_insurance_notes', v)} />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Room Preferences</p>
+              <div className="space-y-3">
+                <SelectField label="Do you know who you will share the room with?" value={form.roommate_status} onChange={v => setField('roommate_status', v)} options={ROOMMATE_STATUS_OPTIONS} />
+                <InputField label="Requested Roommate Email" value={form.roommate_email} onChange={v => setField('roommate_email', v)} type="email" />
+                <SelectField label="Room Configuration" value={form.room_configuration} onChange={v => setField('room_configuration', v)} options={ROOM_CONFIGURATION_OPTIONS} />
+                <SelectField label="Roommate Gender Preference" value={form.roommate_gender_preference} onChange={v => setField('roommate_gender_preference', v)} options={[
+                  { value: 'Female', label: 'Female' },
+                  { value: 'Male', label: 'Male' },
+                  { value: 'No preference', label: 'No preference' },
+                ]} />
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-3">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Contact & Social</p>
+              <div className="space-y-3">
+                <InputField label="Emergency Contact" value={form.emergency_contact} onChange={v => setField('emergency_contact', v)} placeholder="Name and phone number" />
+                <InputField label="Instagram Handle" value={form.instagram_handle} onChange={v => setField('instagram_handle', v)} placeholder="@yourhandle" />
+                <TextAreaField label="Trip Mood" value={form.trip_mood} onChange={v => setField('trip_mood', v)} />
+                <InputField label="Social Topic" value={form.social_topic} onChange={v => setField('social_topic', v)} />
+                <TextAreaField label="Always Up For" value={form.always_up_for} onChange={v => setField('always_up_for', v)} />
+                <InputField label="Home Address" value={form.home_address} onChange={v => setField('home_address', v)} />
+                <TextAreaField label="Final Considerations" value={form.final_considerations} onChange={v => setField('final_considerations', v)} />
               </div>
             </div>
 
