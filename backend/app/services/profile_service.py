@@ -105,6 +105,10 @@ PRE_DEPARTURE_TEXT_FIELDS = {
     "final_considerations",
 }
 
+PRE_DEPARTURE_UUID_FIELDS = {
+    "roommate_user_id",
+}
+
 SUPPORTED_UPDATE_FIELDS = {
     "preferred_name",
     "email",
@@ -127,7 +131,7 @@ SUPPORTED_UPDATE_FIELDS = {
     "travel_insurance_help_yn",
     "unforgettable_trip_details",
     "avatar_url",
-} | PRE_DEPARTURE_DATE_FIELDS | PRE_DEPARTURE_TEXT_FIELDS
+} | PRE_DEPARTURE_DATE_FIELDS | PRE_DEPARTURE_TEXT_FIELDS | PRE_DEPARTURE_UUID_FIELDS
 
 
 def _parse_uuid(value: str, detail: str) -> UUID:
@@ -135,6 +139,24 @@ def _parse_uuid(value: str, detail: str) -> UUID:
         return UUID(value)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=detail) from exc
+
+
+async def _validate_trip_roommate(
+    roommate_user_id: UUID,
+    trip_traveler: TripTraveler,
+    session: AsyncSession,
+) -> None:
+    roommate_trip_traveler = await session.scalar(
+        select(TripTraveler).where(
+            TripTraveler.user_id == roommate_user_id,
+            TripTraveler.wetravel_trip_uuid == trip_traveler.wetravel_trip_uuid,
+        )
+    )
+    if not roommate_trip_traveler:
+        raise HTTPException(
+            status_code=422,
+            detail="Roommate must be a traveler on this trip",
+        )
 
 
 async def _resolve_trip_traveler(
@@ -149,19 +171,38 @@ async def _resolve_trip_traveler(
         raise HTTPException(status_code=404, detail="User not found")
 
     if wetravel_trip_uuid:
-        trip_traveler = await session.scalar(
-            select(TripTraveler).where(
-                TripTraveler.user_id == parsed_user_id,
-                TripTraveler.wetravel_trip_uuid == wetravel_trip_uuid,
-            )
+        result = await session.execute(
+            text("""
+                SELECT tt.id
+                FROM trip_travelers tt
+                JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+                WHERE tt.user_id = CAST(:user_id AS uuid)
+                  AND tt.wetravel_trip_uuid = :trip_uuid
+                  AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
+                LIMIT 1
+            """),
+            {"user_id": user_id, "trip_uuid": wetravel_trip_uuid},
         )
     else:
-        trip_traveler = await session.scalar(
-            select(TripTraveler)
-            .where(TripTraveler.user_id == parsed_user_id)
-            .order_by(TripTraveler.created_at)
-            .limit(1)
+        result = await session.execute(
+            text("""
+                SELECT tt.id
+                FROM trip_travelers tt
+                JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+                WHERE tt.user_id = CAST(:user_id AS uuid)
+                  AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
+                ORDER BY wt.start_date ASC
+                LIMIT 1
+            """),
+            {"user_id": user_id},
         )
+
+    row = result.mappings().first()
+    trip_traveler = (
+        await session.get(TripTraveler, row["id"])
+        if row
+        else None
+    )
 
     if not trip_traveler:
         raise HTTPException(status_code=404, detail="Traveler not found for trip")
@@ -289,6 +330,9 @@ async def get_profile(
         profile_dict["avatar_url"] = profile.avatar_url
         for field in PRE_DEPARTURE_DATE_FIELDS:
             profile_dict[field] = _encode_optional_date(getattr(profile, field))
+        for field in PRE_DEPARTURE_UUID_FIELDS:
+            value = getattr(profile, field)
+            profile_dict[field] = str(value) if value else None
         for field in PRE_DEPARTURE_TEXT_FIELDS:
             profile_dict[field] = getattr(profile, field)
 
@@ -400,6 +444,16 @@ async def update_profile(
         if field in update_data:
             setattr(profile, field, _parse_optional_date(update_data[field], field))
             updated_fields.append(field)
+    if "roommate_user_id" in update_data:
+        roommate_user_id = (
+            _parse_uuid(str(update_data["roommate_user_id"]), "Roommate not found")
+            if update_data["roommate_user_id"]
+            else None
+        )
+        if roommate_user_id:
+            await _validate_trip_roommate(roommate_user_id, trip_traveler, session)
+        profile.roommate_user_id = roommate_user_id
+        updated_fields.append("roommate_user_id")
     for field in PRE_DEPARTURE_TEXT_FIELDS:
         if field in update_data:
             setattr(profile, field, update_data[field])
@@ -415,7 +469,10 @@ async def get_trip_travelers(trip_id: str, session: AsyncSession) -> dict:
     rows = await session.execute(
         select(User)
         .join(TripTraveler, TripTraveler.user_id == User.id)
-        .where(TripTraveler.wetravel_trip_uuid == trip_id)
+        .where(
+            TripTraveler.wetravel_trip_uuid == trip_id,
+            User.role == "traveler",
+        )
         .order_by(User.phone)
     )
     users = rows.scalars().all()

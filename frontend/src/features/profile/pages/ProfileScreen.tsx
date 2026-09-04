@@ -1,5 +1,6 @@
-import { User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut, QrCode, Camera } from 'lucide-react';
+import { User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut, QrCode, Camera, Info } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import AppHeader from '../../../shared/components/AppHeader';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../../../app/providers/auth-context';
@@ -14,12 +15,26 @@ interface SectionProps {
   emoji: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  sectionId?: string;
 }
 
-function CollapsibleSection({ title, emoji, children, defaultOpen = false }: SectionProps) {
+function CollapsibleSection({ title, emoji, children, defaultOpen = false, sectionId }: SectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!defaultOpen) return;
+
+    setOpen(true);
+    if (sectionId) {
+      window.setTimeout(() => {
+        sectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    }
+  }, [defaultOpen, sectionId]);
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div id={sectionId} ref={sectionRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-16">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
@@ -39,19 +54,43 @@ function CollapsibleSection({ title, emoji, children, defaultOpen = false }: Sec
   );
 }
 
-function InputField({ label, value, onChange, type = 'text', placeholder, disabled = false }: {
+function FieldError({ id, error }: { id: string; error?: string }) {
+  if (!error) return null;
+  return <p id={id} className="text-xs font-medium text-red-600">{error}</p>;
+}
+
+function RequiredMark() {
+  return <span className="text-red-500" aria-hidden="true">*</span>;
+}
+
+function InfoCallout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
+      <Info size={14} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden="true" />
+      <p>{children}</p>
+    </div>
+  );
+}
+
+function InputField({ label, value, onChange, type = 'text', placeholder, disabled = false, required = false, error }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   placeholder?: string;
   disabled?: boolean;
+  required?: boolean;
+  error?: string;
 }) {
   const fieldId = useId();
+  const errorId = `${fieldId}-error`;
 
   return (
     <div className="space-y-1">
-      <label htmlFor={fieldId} className="text-xs font-medium text-gray-500">{label}</label>
+      <label htmlFor={fieldId} className="flex items-center gap-1 text-xs font-medium text-gray-500">
+        {label}
+        {required && <RequiredMark />}
+      </label>
       <input
         id={fieldId}
         type={type}
@@ -59,8 +98,14 @@ function InputField({ label, value, onChange, type = 'text', placeholder, disabl
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400"
+        required={required}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        className={`w-full min-w-0 px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${
+          error ? 'border-red-300 bg-red-50/40' : 'border-gray-200'
+        }`}
       />
+      <FieldError id={errorId} error={error} />
     </div>
   );
 }
@@ -80,49 +125,75 @@ function ReadOnlyField({ label, value, placeholder }: {
   );
 }
 
-function SelectField({ label, value, onChange, options }: {
+function SelectField({ label, value, onChange, options, required = false, error, disabled = false }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  required?: boolean;
+  error?: string;
+  disabled?: boolean;
 }) {
   const fieldId = useId();
+  const errorId = `${fieldId}-error`;
 
   return (
     <div className="space-y-1">
-      <label htmlFor={fieldId} className="text-xs font-medium text-gray-500">{label}</label>
+      <label htmlFor={fieldId} className="flex items-center gap-1 text-xs font-medium text-gray-500">
+        {label}
+        {required && <RequiredMark />}
+      </label>
       <select
         id={fieldId}
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-white"
+        required={required}
+        disabled={disabled}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        className={`w-full min-w-0 px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${
+          error ? 'border-red-300 bg-red-50/40' : 'border-gray-200 bg-white'
+        }`}
       >
         <option value="">Select...</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+      <FieldError id={errorId} error={error} />
     </div>
   );
 }
 
-function TextAreaField({ label, value, onChange, placeholder }: {
+function TextAreaField({ label, value, onChange, placeholder, required = false, error }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  required?: boolean;
+  error?: string;
 }) {
   const fieldId = useId();
+  const errorId = `${fieldId}-error`;
 
   return (
     <div className="space-y-1">
-      <label htmlFor={fieldId} className="text-xs font-medium text-gray-500">{label}</label>
+      <label htmlFor={fieldId} className="flex items-center gap-1 text-xs font-medium text-gray-500">
+        {label}
+        {required && <RequiredMark />}
+      </label>
       <textarea
         id={fieldId}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         rows={3}
-        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all resize-none"
+        required={required}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        className={`w-full min-w-0 px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all resize-none ${
+          error ? 'border-red-300 bg-red-50/40' : 'border-gray-200'
+        }`}
       />
+      <FieldError id={errorId} error={error} />
     </div>
   );
 }
@@ -177,6 +248,47 @@ const EARLY_CHECK_IN_OPTIONS = [
   { value: "I’ll arrive early but prefer not to pay extra; I’m happy with your best effort.", label: "I’ll arrive early but prefer not to pay extra; I’m happy with your best effort." },
   { value: "I’ll arrive early and would rather pay the full daily rate to guarantee early check-in.", label: "I’ll arrive early and would rather pay the full daily rate to guarantee early check-in." },
 ];
+
+const PROFILE_SECTION_IDS = new Set([
+  'qr-code',
+  'registration',
+  'pre-departure',
+  'packages',
+  'service-agreement',
+]);
+
+const PRE_DEPARTURE_REMOVED_FIELDS = new Set([
+  'trip_mood',
+  'social_topic',
+  'always_up_for',
+  'roommate_email',
+]);
+
+const PRE_DEPARTURE_REQUIRED_LABELS: Record<string, string> = {
+  visa_status: 'Visa Status',
+  arrival_date: 'Arrival Date',
+  arrival_flight: 'Arrival Airport and Flight',
+  checked_bags: 'Checked Bags',
+  extended_stay_help: 'Early arrival or longer stay',
+  extended_stay_help_details: 'How can we help?',
+  early_check_in_preference: 'Early Check-in Preference',
+  departure_date: 'Departure Date',
+  departure_flight: 'Departure Airport and Flight',
+  travel_insurance_status: 'Travel Insurance Status',
+  travel_insurance_brazil_medical_coverage: 'Medical Coverage in Brazil',
+  travel_insurance_provider: 'Insurance Provider',
+  travel_insurance_policy_number: 'Policy Number',
+  roommate_status: 'Roommate Status',
+  roommate_user_id: 'Requested Roommate',
+  room_configuration: 'Room Configuration',
+  roommate_gender_preference: 'Roommate Gender Preference',
+  emergency_contact: 'Emergency Contact',
+};
+
+function getLinkedProfileSection(search: string) {
+  const section = new URLSearchParams(search).get('section');
+  return section && PROFILE_SECTION_IDS.has(section) ? section : null;
+}
 
 function DateSelectField({ label, value, onChange }: {
   label: string;
@@ -249,13 +361,15 @@ function DateSelectField({ label, value, onChange }: {
 }
 
 export default function ProfileScreen() {
+  const location = useLocation();
   const { user, logout } = useAuth();
   const { setAvatarUrl } = useAvatar();
-  const { tripInfo } = useTripContext();
+  const { tripInfo, travelers } = useTripContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [qrCode, setQrCode] = useState<TravelerQrCode | null>(null);
 
   const [form, setForm] = useState<Record<string, string>>({
@@ -299,6 +413,7 @@ export default function ProfileScreen() {
     travel_insurance_policy_number: '',
     travel_insurance_notes: '',
     roommate_status: '',
+    roommate_user_id: '',
     roommate_email: '',
     room_configuration: '',
     roommate_gender_preference: '',
@@ -313,8 +428,55 @@ export default function ProfileScreen() {
     home_address: '',
     final_considerations: '',
   });
+  const linkedSection = getLinkedProfileSection(location.search);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  const roommateOptions = travelers
+    .filter(traveler => traveler.id !== user?.userId)
+    .map(traveler => ({
+      value: traveler.id,
+      label: traveler.name || traveler.phone || 'Traveler',
+    }));
+
+  const requireField = (errors: Record<string, string>, key: string) => {
+    if (!form[key]?.trim()) {
+      errors[key] = `${PRE_DEPARTURE_REQUIRED_LABELS[key]} is required`;
+    }
+  };
+
+  const validatePreDeparture = () => {
+    const errors: Record<string, string> = {};
+    [
+      'visa_status',
+      'arrival_date',
+      'arrival_flight',
+      'checked_bags',
+      'extended_stay_help',
+      'early_check_in_preference',
+      'departure_date',
+      'departure_flight',
+      'travel_insurance_status',
+      'travel_insurance_brazil_medical_coverage',
+      'travel_insurance_provider',
+      'travel_insurance_policy_number',
+      'roommate_status',
+      'room_configuration',
+      'emergency_contact',
+    ].forEach(key => requireField(errors, key));
+
+    if (form.extended_stay_help === 'Yes, please') {
+      requireField(errors, 'extended_stay_help_details');
+    }
+    if (form.roommate_status === 'Yes') {
+      requireField(errors, 'roommate_user_id');
+    }
+    if (form.roommate_status === 'No, please match me with someone.') {
+      requireField(errors, 'roommate_gender_preference');
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -330,6 +492,31 @@ export default function ProfileScreen() {
 
   const setField = (key: string, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
+    setValidationErrors(prev => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setSaved(false);
+  };
+
+  const setRoommateStatus = (value: string) => {
+    setForm(prev => ({
+      ...prev,
+      roommate_status: value,
+      roommate_user_id: value === 'Yes' ? prev.roommate_user_id : '',
+      roommate_email: '',
+      roommate_gender_preference: value === 'No, please match me with someone.' ? prev.roommate_gender_preference : '',
+    }));
+    setValidationErrors(prev => {
+      const next = { ...prev };
+      delete next.roommate_status;
+      delete next.roommate_user_id;
+      delete next.roommate_email;
+      delete next.roommate_gender_preference;
+      return next;
+    });
     setSaved(false);
   };
 
@@ -375,13 +562,21 @@ export default function ProfileScreen() {
     void load();
   }, [user]);
 
-  const handleSave = async () => {
+  const handleSave = async ({ validate = false }: { validate?: boolean } = {}) => {
     if (!user) return;
+    if (validate && !validatePreDeparture()) {
+      setSaved(false);
+      return;
+    }
     setSaving(true);
     setSaveError(false);
     try {
       const data: Partial<ProfileData> = {};
       for (const [key, val] of Object.entries(form)) {
+        if (PRE_DEPARTURE_REMOVED_FIELDS.has(key)) continue;
+        if (key === 'roommate_user_id' && form.roommate_status !== 'Yes') continue;
+        if (key === 'roommate_gender_preference' && form.roommate_status !== 'No, please match me with someone.') continue;
+        if (key === 'extended_stay_help_details' && form.extended_stay_help !== 'Yes, please') continue;
         if (val !== '') {
           if (key === 'num_people') {
             (data as Record<string, unknown>)[key] = parseInt(val) || null;
@@ -462,7 +657,7 @@ export default function ProfileScreen() {
       <div className="px-4 py-5 space-y-3">
 
         {/* ── Section 1: My QR Code ── */}
-        <CollapsibleSection title="My QR Code" icon={<QrCode size={18} />} emoji="📱" defaultOpen={false}>
+        <CollapsibleSection title="My QR Code" icon={<QrCode size={18} />} emoji="📱" sectionId="qr-code" defaultOpen={linkedSection === 'qr-code'}>
           <div className="pt-3">
             {qrCode ? (
               <div className="flex items-center gap-4">
@@ -486,7 +681,7 @@ export default function ProfileScreen() {
         </CollapsibleSection>
 
         {/* ── Section 2: Registration Details ── */}
-        <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" defaultOpen={false}>
+        <CollapsibleSection title="Registration Details" icon={<User size={18} />} emoji="📋" sectionId="registration" defaultOpen={linkedSection === 'registration'}>
           <div className="pt-3 space-y-3">
             <InputField label="Preferred Name" value={form.preferred_name} onChange={v => setField('preferred_name', v)} placeholder="How you'd like to be called" />
             <InputField label="Email" value={form.email} onChange={v => setField('email', v)} type="email" placeholder="your@email.com" />
@@ -569,7 +764,7 @@ export default function ProfileScreen() {
 
             <div className="border-t border-gray-100 pt-3">
               <button
-                onClick={handleSave}
+                onClick={() => handleSave()}
                 disabled={saving}
                 className={`w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
                   saveError
@@ -606,52 +801,55 @@ export default function ProfileScreen() {
         </CollapsibleSection>
 
         {/* ── Section 3: Pre Departure Information ── */}
-        <CollapsibleSection title="Pre Departure Information" icon={<FileText size={18} />} emoji="🧳" defaultOpen={false}>
+        <CollapsibleSection title="Pre Departure Information" icon={<FileText size={18} />} emoji="🧳" sectionId="pre-departure" defaultOpen={linkedSection === 'pre-departure'}>
           <div className="pt-3 space-y-3">
-            <SelectField label="Visa Status" value={form.visa_status} onChange={v => setField('visa_status', v)} options={VISA_STATUS_OPTIONS} />
+            <SelectField label="Visa Status" value={form.visa_status} onChange={v => setField('visa_status', v)} options={VISA_STATUS_OPTIONS} required error={validationErrors.visa_status} />
 
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Arrival</p>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <InputField label="Arrival Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} type="date" />
+                <div data-testid="arrival-date-time-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField label="Arrival Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} type="date" required error={validationErrors.arrival_date} />
                   <InputField label="Arrival Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} type="time" />
                 </div>
-                <InputField label="Arrival Airport and Flight" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. GRU, AA 1234" />
-                <SelectField label="Checked Bags" value={form.checked_bags} onChange={v => setField('checked_bags', v)} options={CHECKED_BAGS_OPTIONS} />
-                <SelectField label="Need help with early arrival or longer stay?" value={form.extended_stay_help} onChange={v => setField('extended_stay_help', v)} options={[
+                <InputField label="Arrival Airport and Flight" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. GRU, AA 1234" required error={validationErrors.arrival_flight} />
+                <SelectField label="Checked Bags" value={form.checked_bags} onChange={v => setField('checked_bags', v)} options={CHECKED_BAGS_OPTIONS} required error={validationErrors.checked_bags} />
+                <SelectField label="Need help with early arrival or longer stay?" value={form.extended_stay_help} onChange={v => setField('extended_stay_help', v)} required error={validationErrors.extended_stay_help} options={[
                   { value: 'Yes, please', label: 'Yes, please' },
                   { value: 'No, thanks', label: 'No, thanks' },
                 ]} />
                 {form.extended_stay_help === 'Yes, please' && (
-                  <TextAreaField label="How can we help?" value={form.extended_stay_help_details} onChange={v => setField('extended_stay_help_details', v)} />
+                  <TextAreaField label="How can we help?" value={form.extended_stay_help_details} onChange={v => setField('extended_stay_help_details', v)} required error={validationErrors.extended_stay_help_details} />
                 )}
-                <SelectField label="Early Check-in Preference" value={form.early_check_in_preference} onChange={v => setField('early_check_in_preference', v)} options={EARLY_CHECK_IN_OPTIONS} />
+                <InfoCallout>
+                  Hotels usually have a 2 PM check-in time. While we always strive to have your room ready upon arrival for the trek, it’s not guaranteed. While bag drop and common areas are okay, early check-in may involve a fee
+                </InfoCallout>
+                <SelectField label="Early Check-in Preference" value={form.early_check_in_preference} onChange={v => setField('early_check_in_preference', v)} options={EARLY_CHECK_IN_OPTIONS} required error={validationErrors.early_check_in_preference} />
               </div>
             </div>
 
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Departure</p>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <InputField label="Departure Date" value={form.departure_date} onChange={v => setField('departure_date', v)} type="date" />
+                <div data-testid="departure-date-time-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField label="Departure Date" value={form.departure_date} onChange={v => setField('departure_date', v)} type="date" required error={validationErrors.departure_date} />
                   <InputField label="Departure Time" value={form.departure_time} onChange={v => setField('departure_time', v)} type="time" />
                 </div>
-                <InputField label="Departure Airport and Flight" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. GIG, LA 4567" />
+                <InputField label="Departure Airport and Flight" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. GIG, LA 4567" required error={validationErrors.departure_flight} />
               </div>
             </div>
 
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Travel Insurance</p>
               <div className="space-y-3">
-                <SelectField label="Travel Insurance Status" value={form.travel_insurance_status} onChange={v => setField('travel_insurance_status', v)} options={TRAVEL_INSURANCE_STATUS_OPTIONS} />
-                <SelectField label="Medical Coverage in Brazil" value={form.travel_insurance_brazil_medical_coverage} onChange={v => setField('travel_insurance_brazil_medical_coverage', v)} options={[
+                <SelectField label="Travel Insurance Status" value={form.travel_insurance_status} onChange={v => setField('travel_insurance_status', v)} options={TRAVEL_INSURANCE_STATUS_OPTIONS} required error={validationErrors.travel_insurance_status} />
+                <SelectField label="Medical Coverage in Brazil" value={form.travel_insurance_brazil_medical_coverage} onChange={v => setField('travel_insurance_brazil_medical_coverage', v)} required error={validationErrors.travel_insurance_brazil_medical_coverage} options={[
                   { value: 'Yes', label: 'Yes' },
                   { value: 'No', label: 'No' },
                   { value: 'Not sure, but I will find out', label: 'Not sure, but I will find out' },
                 ]} />
-                <InputField label="Insurance Provider" value={form.travel_insurance_provider} onChange={v => setField('travel_insurance_provider', v)} />
-                <InputField label="Policy Number" value={form.travel_insurance_policy_number} onChange={v => setField('travel_insurance_policy_number', v)} />
+                <InputField label="Insurance Provider" value={form.travel_insurance_provider} onChange={v => setField('travel_insurance_provider', v)} required error={validationErrors.travel_insurance_provider} />
+                <InputField label="Policy Number" value={form.travel_insurance_policy_number} onChange={v => setField('travel_insurance_policy_number', v)} required error={validationErrors.travel_insurance_policy_number} />
                 <TextAreaField label="Travel Insurance Notes" value={form.travel_insurance_notes} onChange={v => setField('travel_insurance_notes', v)} />
               </div>
             </div>
@@ -659,25 +857,40 @@ export default function ProfileScreen() {
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Room Preferences</p>
               <div className="space-y-3">
-                <SelectField label="Do you know who you will share the room with?" value={form.roommate_status} onChange={v => setField('roommate_status', v)} options={ROOMMATE_STATUS_OPTIONS} />
-                <InputField label="Requested Roommate Email" value={form.roommate_email} onChange={v => setField('roommate_email', v)} type="email" />
-                <SelectField label="Room Configuration" value={form.room_configuration} onChange={v => setField('room_configuration', v)} options={ROOM_CONFIGURATION_OPTIONS} />
-                <SelectField label="Roommate Gender Preference" value={form.roommate_gender_preference} onChange={v => setField('roommate_gender_preference', v)} options={[
-                  { value: 'Female', label: 'Female' },
-                  { value: 'Male', label: 'Male' },
-                  { value: 'No preference', label: 'No preference' },
-                ]} />
+                <SelectField label="Do you know who you will share the room with?" value={form.roommate_status} onChange={setRoommateStatus} options={ROOMMATE_STATUS_OPTIONS} required error={validationErrors.roommate_status} />
+                {form.roommate_status === 'Yes' && (
+                  <SelectField
+                    label="Requested Roommate"
+                    value={form.roommate_user_id}
+                    onChange={v => setField('roommate_user_id', v)}
+                    options={roommateOptions}
+                    required
+                    error={validationErrors.roommate_user_id}
+                    disabled={roommateOptions.length === 0}
+                  />
+                )}
+                <SelectField label="Room Configuration" value={form.room_configuration} onChange={v => setField('room_configuration', v)} options={ROOM_CONFIGURATION_OPTIONS} required error={validationErrors.room_configuration} />
+                {form.roommate_status === 'No, please match me with someone.' && (
+                  <SelectField label="Roommate Gender Preference" value={form.roommate_gender_preference} onChange={v => setField('roommate_gender_preference', v)} required error={validationErrors.roommate_gender_preference} options={[
+                    { value: 'Female', label: 'Female' },
+                    { value: 'Male', label: 'Male' },
+                    { value: 'No preference', label: 'No preference' },
+                  ]} />
+                )}
               </div>
             </div>
 
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Contact & Social</p>
               <div className="space-y-3">
-                <InputField label="Emergency Contact" value={form.emergency_contact} onChange={v => setField('emergency_contact', v)} placeholder="Name and phone number" />
+                <InputField label="Emergency Contact" value={form.emergency_contact} onChange={v => setField('emergency_contact', v)} placeholder="Name and phone number" required error={validationErrors.emergency_contact} />
+                <InfoCallout>
+                  We will be posting moments of the trip in our Instagram account. If want to be tagged and followed by us, put your @ here :)
+                </InfoCallout>
                 <InputField label="Instagram Handle" value={form.instagram_handle} onChange={v => setField('instagram_handle', v)} placeholder="@yourhandle" />
-                <TextAreaField label="Trip Mood" value={form.trip_mood} onChange={v => setField('trip_mood', v)} />
-                <InputField label="Social Topic" value={form.social_topic} onChange={v => setField('social_topic', v)} />
-                <TextAreaField label="Always Up For" value={form.always_up_for} onChange={v => setField('always_up_for', v)} />
+                <InfoCallout>
+                  Some hotels ask for this info on the check in and if you want to speed it up, please inform here. Totally optional :)
+                </InfoCallout>
                 <InputField label="Home Address" value={form.home_address} onChange={v => setField('home_address', v)} />
                 <TextAreaField label="Final Considerations" value={form.final_considerations} onChange={v => setField('final_considerations', v)} />
               </div>
@@ -685,7 +898,7 @@ export default function ProfileScreen() {
 
             <div className="border-t border-gray-100 pt-3">
               <button
-                onClick={handleSave}
+                onClick={() => handleSave({ validate: true })}
                 disabled={saving}
                 className={`w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
                   saveError
@@ -722,7 +935,7 @@ export default function ProfileScreen() {
         </CollapsibleSection>
 
         {/* ── Section 2: Packages (non-editable basic package + Add-ons) ── */}
-        <CollapsibleSection title="Packages" icon={<ShoppingCart size={18} />} emoji="🛒" defaultOpen={false}>
+        <CollapsibleSection title="Packages" icon={<ShoppingCart size={18} />} emoji="🛒" sectionId="packages" defaultOpen={linkedSection === 'packages'}>
           <div className="pt-3 space-y-4">
             <div>
               <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Your Package</p>
@@ -764,7 +977,7 @@ export default function ProfileScreen() {
         </CollapsibleSection>
 
         {/* ── Section 3: Service Agreement (per-trip, read-only) ── */}
-        <CollapsibleSection title="Service Agreement" icon={<FileText size={18} />} emoji="📄" defaultOpen={false}>
+        <CollapsibleSection title="Service Agreement" icon={<FileText size={18} />} emoji="📄" sectionId="service-agreement" defaultOpen={linkedSection === 'service-agreement'}>
           <div className="pt-3 space-y-3">
             {tripInfo?.service_agreement_url ? (
               <div className="space-y-3">

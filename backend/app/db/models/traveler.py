@@ -55,6 +55,11 @@ class TravelerProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     travel_insurance_policy_number: Mapped[str | None] = mapped_column(Text)
     travel_insurance_notes: Mapped[str | None] = mapped_column(Text)
     roommate_status: Mapped[str | None] = mapped_column(Text)
+    roommate_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
     roommate_email: Mapped[str | None] = mapped_column(Text)
     room_configuration: Mapped[str | None] = mapped_column(Text)
     roommate_gender_preference: Mapped[str | None] = mapped_column(Text)

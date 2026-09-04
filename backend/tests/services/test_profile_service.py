@@ -1,8 +1,9 @@
 import asyncio
+from datetime import date
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.db.models.traveler import TravelerProfile
 from app.db.models.trip import TripTraveler
@@ -19,6 +20,19 @@ async def seed_profile_context(session_factory, *, phone="+5511999000000"):
     async with session_factory() as session:
         from app.db.models.user import User
         from app.db.models.trip import TripTraveler
+        await session.execute(
+            text(
+                "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                " VALUES (:uuid, :title, :dest, :sd, :ed)"
+            ),
+            {
+                "uuid": trip_uuid,
+                "title": "Test Trip",
+                "dest": "Brazil",
+                "sd": date(2027, 7, 1),
+                "ed": date(2027, 7, 10),
+            },
+        )
         user = User(phone=phone, full_name="Test User", status="active")
         session.add(user)
         await session.flush()
@@ -34,9 +48,24 @@ async def seed_trip_assignment(
     phone="+5511222222222",
     name=None,
     wetravel_trip_uuid=TEST_TRIP_A,
+    role="traveler",
 ):
     async with session_factory() as session:
-        user = User(phone=phone, full_name=name, status="active")
+        await session.execute(
+            text(
+                "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                " VALUES (:uuid, :title, :dest, :sd, :ed)"
+                " ON CONFLICT (trip_uuid) DO NOTHING"
+            ),
+            {
+                "uuid": wetravel_trip_uuid,
+                "title": "Test Trip",
+                "dest": "Brazil",
+                "sd": date(2027, 7, 1),
+                "ed": date(2027, 7, 10),
+            },
+        )
+        user = User(phone=phone, full_name=name, status="active", role=role)
         session.add(user)
         await session.flush()
 
@@ -156,6 +185,38 @@ def test_update_profile_persists_pre_departure_information(session_factory):
     asyncio.run(run_test())
 
 
+def test_update_profile_persists_selected_roommate_user_id(session_factory):
+    async def run_test():
+        seeded = await seed_trip_assignment(session_factory, phone="+5511222222201")
+        roommate = await seed_trip_assignment(
+            session_factory,
+            phone="+5511222222202",
+            name="Bea Santos",
+            wetravel_trip_uuid=seeded["wetravel_trip_uuid"],
+        )
+
+        async with session_factory() as session:
+            update_response = await update_profile(
+                seeded["user_id"],
+                seeded["wetravel_trip_uuid"],
+                {
+                    "roommate_status": "Yes",
+                    "roommate_user_id": roommate["user_id"],
+                },
+                session,
+            )
+            profile_response = await get_profile(
+                seeded["user_id"], seeded["wetravel_trip_uuid"], session
+            )
+
+        assert update_response["message"] == "Profile updated"
+        assert set(update_response["updated_fields"]) == {"roommate_status", "roommate_user_id"}
+        assert profile_response["profile"]["roommate_status"] == "Yes"
+        assert profile_response["profile"]["roommate_user_id"] == roommate["user_id"]
+
+    asyncio.run(run_test())
+
+
 def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(session_factory):
     async def run_test():
         primary = await seed_trip_assignment(
@@ -169,6 +230,13 @@ def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(sessio
             phone="+5511444444444",
             name="Bia",
             wetravel_trip_uuid=TEST_TRIP_B,
+        )
+        await seed_trip_assignment(
+            session_factory,
+            phone="+5511555555555",
+            name="Staff With Traveler View",
+            wetravel_trip_uuid=TEST_TRIP_A,
+            role="staff",
         )
 
         async with session_factory() as session:
