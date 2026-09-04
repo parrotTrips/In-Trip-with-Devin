@@ -7,7 +7,7 @@ from datetime import UTC, datetime as _datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.trip import (
@@ -110,18 +110,28 @@ def compute_current_phase_id(
 
 
 async def _get_trip_uuid(user_id: str, session: AsyncSession) -> str:
-    """Retorna o wetravel_trip_uuid do primeiro trip do usuário."""
+    """Return the user's next active trip uuid."""
     try:
-        uid = _uuid.UUID(user_id)
+        _uuid.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    tt = await session.scalar(
-        select(TripTraveler).where(TripTraveler.user_id == uid).limit(1)
+    result = await session.execute(
+        text("""
+            SELECT tt.wetravel_trip_uuid
+            FROM trip_travelers tt
+            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+            WHERE tt.user_id = CAST(:user_id AS uuid)
+              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
+            ORDER BY wt.start_date ASC
+            LIMIT 1
+        """),
+        {"user_id": user_id},
     )
-    if not tt:
+    row = result.mappings().first()
+    if not row:
         raise HTTPException(status_code=404, detail="Viagem não encontrada para este usuário")
-    return tt.wetravel_trip_uuid
+    return row["wetravel_trip_uuid"]
 
 
 async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
@@ -269,7 +279,10 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
     tt_result = await session.execute(
         select(TripTraveler, User)
         .join(User, User.id == TripTraveler.user_id)
-        .where(TripTraveler.wetravel_trip_uuid == trip_uuid)
+        .where(
+            TripTraveler.wetravel_trip_uuid == trip_uuid,
+            User.role == "traveler",
+        )
     )
     rows = tt_result.all()
 

@@ -10,3 +10,6 @@ codex resume 01a0017b-c901-7830-bff2-0d28ee14d160 <- Correcoes pontuais de layou
 codex resume 01a00bf1-f5ec-7a80-add6-e5f7a028cd62 <- Alinhamento planilha e supabase
 codex resume 01a02400-a183-7000-846a-bd6dcf30aeeb <- Carga inicial casamento e alteracoes de layout que o Sanches pediu
 codex resume 01a034cc-a7ce-7230-978c-fccfffbec6ad <- Metricas PostHog
+codex resume 01a044da-ec6c-7ef0-a3b1-fb4d6026f1ba <- Feedbacks das viagens
+codex resume 01a06420-1bc1-71e3-9885-747cabe5b24b <- Pre Departure Form no app e no supabase
+codex resume 01a06cb2-a14e-7330-bf03-427e32026263 <- Link direcionando para cada uma das secoes por exemplo (Pre Departure Information)

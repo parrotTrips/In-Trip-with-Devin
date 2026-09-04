@@ -13,9 +13,13 @@ import { AvatarContext, loadStoredAvatar, persistAvatar } from './providers/avat
 import { NotificationProvider } from './providers/notification-context';
 import AppRouter from './router';
 
+function initialTravelerViewRequested() {
+  return new URLSearchParams(window.location.search).get('view') === 'traveler';
+}
+
 function AppContent() {
   const { isLoggedIn, user } = useAuth();
-  const [viewingAsTraveler, setViewingAsTraveler] = useState(false);
+  const [viewingAsTraveler, setViewingAsTraveler] = useState(() => initialTravelerViewRequested());
   const userId = user?.userId ?? '';
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
     userId ? loadStoredAvatar(userId) : null

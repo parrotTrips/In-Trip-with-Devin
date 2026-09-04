@@ -17,7 +17,14 @@ TEST_TRIP_UUID = "trip-routes-test-001"
 
 # ── Seed helpers ──────────────────────────────────────────────────────────────
 
-async def _seed_trip(session_factory, *, user_phone: str, trip_uuid: str = TEST_TRIP_UUID):
+async def _seed_trip(
+    session_factory,
+    *,
+    user_phone: str,
+    trip_uuid: str = TEST_TRIP_UUID,
+    start_date: date = date(2027, 7, 1),
+    end_date: date | None = date(2027, 7, 10),
+):
     """Create user + synced trip_traveler assignment."""
     async with session_factory() as session:
         from sqlalchemy import text
@@ -31,8 +38,8 @@ async def _seed_trip(session_factory, *, user_phone: str, trip_uuid: str = TEST_
                 "uuid": trip_uuid,
                 "title": "Test Trip",
                 "dest": "Brazil",
-                "sd": date(2027, 7, 1),
-                "ed": date(2027, 7, 10),
+                "sd": start_date,
+                "ed": end_date,
             },
         )
         user = User(phone=user_phone, full_name="Trip Tester", status="active")
@@ -460,22 +467,56 @@ def test_get_my_trip_phases_returns_404_when_no_trip_assigned(seeded_client, ses
     assert response.status_code == 404
 
 
+def test_get_my_trip_phases_returns_404_when_only_trip_is_ended(seeded_client, session_factory):
+    """Ended trips remain stored but are not visible in the traveler app."""
+    phone = "+5511333000022"
+    trip_uuid = "trip-ended-traveler-hidden"
+    asyncio.run(
+        _seed_trip(
+            session_factory,
+            user_phone=phone,
+            trip_uuid=trip_uuid,
+            start_date=date(2000, 1, 1),
+            end_date=date(2000, 1, 2),
+        )
+    )
+    asyncio.run(_seed_phases(session_factory, trip_uuid=trip_uuid))
+    headers = _auth(seeded_client, phone)
+
+    trip_response = seeded_client.get("/me/trip", headers=headers)
+    phases_response = seeded_client.get("/me/trip/phases", headers=headers)
+
+    assert trip_response.status_code == 200
+    assert trip_response.json()["trip"] is None
+    assert phases_response.status_code == 404
+
+
 def test_get_my_trip_travelers_returns_all_trip_members(seeded_client, session_factory):
     """GET /me/trip/travelers returns all travelers in the same trip."""
     phone_a = "+5511333000005"
     phone_b = "+5511333000006"
+    staff_phone = "+5511333000023"
     trip_uuid = "trip-travelers-test-001"
 
     asyncio.run(_seed_trip(session_factory, user_phone=phone_a, trip_uuid=trip_uuid))
 
-    async def _seed_second_traveler():
+    async def _seed_trip_members():
         async with session_factory() as session:
             user_b = User(phone=phone_b, full_name="Traveler B", status="active")
-            session.add(user_b)
+            staff_user = User(
+                phone=staff_phone,
+                full_name="Staff With Traveler View",
+                status="active",
+                role="staff",
+            )
+            session.add_all([user_b, staff_user])
             await session.flush()
-            session.add(TripTraveler(wetravel_trip_uuid=trip_uuid, user_id=user_b.id))
+            session.add_all([
+                TripTraveler(wetravel_trip_uuid=trip_uuid, user_id=user_b.id),
+                TripTraveler(wetravel_trip_uuid=trip_uuid, user_id=staff_user.id),
+            ])
             await session.commit()
-    asyncio.run(_seed_second_traveler())
+    asyncio.run(_seed_trip_members())
 
     headers = _auth(seeded_client, phone_a)
     response = seeded_client.get("/me/trip/travelers", headers=headers)
@@ -485,6 +526,7 @@ def test_get_my_trip_travelers_returns_all_trip_members(seeded_client, session_f
     phones = {t["phone"] for t in travelers}
     assert phone_a in phones
     assert phone_b in phones
+    assert staff_phone not in phones
 
 
 def test_get_my_trip_travelers_includes_current_phase_id(seeded_client, session_factory):

@@ -1,5 +1,8 @@
 import asyncio
+from datetime import date
 from uuid import UUID
+
+from sqlalchemy import text
 
 from app.db.models.trip import TripTraveler
 
@@ -8,9 +11,50 @@ TEST_TRIP_UUID = "test_trip_001"
 
 async def seed_trip_assignment(session_factory, *, user_id):
     async with session_factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                " VALUES (:uuid, :title, :dest, :sd, :ed)"
+                " ON CONFLICT (trip_uuid) DO NOTHING"
+            ),
+            {
+                "uuid": TEST_TRIP_UUID,
+                "title": "Test Trip",
+                "dest": "Brazil",
+                "sd": date(2027, 7, 1),
+                "ed": date(2027, 7, 10),
+            },
+        )
         session.add(TripTraveler(wetravel_trip_uuid=TEST_TRIP_UUID, user_id=UUID(user_id)))
         await session.commit()
         return TEST_TRIP_UUID
+
+
+async def seed_synced_trip_assignment(
+    session_factory,
+    *,
+    user_id: str,
+    trip_uuid: str,
+    start_date: date,
+    end_date: date | None,
+):
+    async with session_factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                " VALUES (:uuid, :title, :dest, :sd, :ed)"
+            ),
+            {
+                "uuid": trip_uuid,
+                "title": "Ended Trip",
+                "dest": "Brazil",
+                "sd": start_date,
+                "ed": end_date,
+            },
+        )
+        session.add(TripTraveler(wetravel_trip_uuid=trip_uuid, user_id=UUID(user_id)))
+        await session.commit()
+        return trip_uuid
 
 
 def create_user(seeded_client, phone="+5511990000000"):
@@ -68,6 +112,24 @@ def test_trip_travelers_route_scopes_roommate_selection_to_the_trip(
     traveler_phones = {t["phone"] for t in response.json()["travelers"]}
     assert "+5511990000001" in traveler_phones
     assert "+5511990000002" in traveler_phones
+
+
+def test_profile_route_without_trip_id_ignores_ended_trip_assignment(seeded_client, session_factory):
+    user_id, token = create_user(seeded_client, phone="+5511990000003")
+    headers = {"Authorization": f"Bearer {token}"}
+    asyncio.run(
+        seed_synced_trip_assignment(
+            session_factory,
+            user_id=user_id,
+            trip_uuid="profile-ended-trip",
+            start_date=date(2000, 1, 1),
+            end_date=date(2000, 1, 2),
+        )
+    )
+
+    response = seeded_client.get(f"/profile/{user_id}", headers=headers)
+
+    assert response.status_code == 404
 
 
 def test_profile_route_ignores_unsupported_orphan_fields(seeded_client, session_factory):

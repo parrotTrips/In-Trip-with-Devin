@@ -127,4 +127,34 @@ describe('App composition', () => {
     expect(screen.getByRole('button', { name: 'Staff view' })).toBeInTheDocument();
     expect(screen.queryByText('Viewing as traveler')).not.toBeInTheDocument();
   });
+
+  test('opens traveler profile deep links directly for staff when requested', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 'uid-3', phone: '+15553333333', name: 'Carol Staff', token: 'tok', role: 'staff' })
+    );
+    window.history.pushState({}, '', '/profile?section=pre-departure&view=traveler');
+
+    server.use(
+      http.get('http://localhost:8000/profile/uid-3', () =>
+        HttpResponse.json({
+          user_id: 'uid-3',
+          wetravel_trip_uuid: 'test-001',
+          phone: '+15553333333',
+          name: 'Carol Staff',
+          profile: {
+            preferred_name: 'Carol',
+            email: 'carol@example.com',
+          },
+          roommate: null,
+        })
+      )
+    );
+
+    render(<App />);
+
+    await screen.findByText('My Profile');
+    expect(screen.queryByText('Staff shell')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/visa status/i)).toBeInTheDocument();
+  });
 });
