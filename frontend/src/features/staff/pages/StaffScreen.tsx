@@ -452,6 +452,14 @@ function ItineraryTab({
                               </button>
                             </div>
 
+                            {scanActivityId === act.id && (
+                              <ActivityScanPanel
+                                activity={act}
+                                onCheckedIn={onActivityCheckedIn}
+                                onClose={() => setScanActivityId(null)}
+                              />
+                            )}
+
                             {/* Steps with present travelers */}
                             {Array.from({ length: act.max_checkins }, (_, i) => i + 1).map(step => {
                               const stepData = act.checkin_steps.find((s: CheckinStep) => s.step === step);
@@ -495,13 +503,6 @@ function ItineraryTab({
                               </div>
                             )}
                           </div>
-                          {scanActivityId === act.id && (
-                            <ActivityScanPanel
-                              activity={act}
-                              onCheckedIn={onActivityCheckedIn}
-                              onClose={() => setScanActivityId(null)}
-                            />
-                          )}
                           {act.staff_tasks.length > 0 && (
                             <div className="bg-white rounded-lg border border-emerald-100 overflow-hidden">
                               <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-100">

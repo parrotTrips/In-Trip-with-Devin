@@ -154,7 +154,8 @@ describe('StaffScreen', () => {
     await user.click(screen.getByText('Airport Transfer'));
     await user.click(screen.getByRole('button', { name: /^scan$/i }));
 
-    expect(await screen.findByText(/camera scanner/i)).toBeInTheDocument();
+    const scannerHeading = await screen.findByText(/camera scanner/i);
+    expect(scannerHeading.compareDocumentPosition(screen.getByText(/step 1/i))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     await waitFor(() => {
       expect(scannerStart).toHaveBeenCalled();
     });
