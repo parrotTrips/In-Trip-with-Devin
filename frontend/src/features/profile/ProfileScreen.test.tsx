@@ -147,11 +147,11 @@ describe('ProfileScreen', () => {
     expect(within(preDepartureContainer).getByTestId('arrival-date-time-grid')).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
     expect(within(preDepartureContainer).getByTestId('departure-date-time-grid')).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
 
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '2026-10-03');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival time/i), '14:30');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '10/03/2026');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival time/i), '2:30 PM');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), 'GRU, AA 1234');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '2026-10-12');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure time/i), '21:45');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '10/12/2026');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure time/i), '9:45 PM');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), 'GIG, LA 4567');
     await userEvent.selectOptions(
       within(preDepartureContainer).getByLabelText(/checked bags/i),
@@ -305,7 +305,9 @@ describe('ProfileScreen', () => {
               phases: [],
               travelers: [
                 { id: 'traveler-1', name: 'Alice', phone: '+15550000001', current_phase_id: null },
+                { id: 'traveler-3', name: 'Zoe Rivera', phone: '+15550000003', current_phase_id: null },
                 { id: 'traveler-2', name: 'Bea Santos', phone: '+15550000002', current_phase_id: null },
+                { id: 'traveler-4', name: 'Ana Baker', phone: '+15550000004', current_phase_id: null },
               ],
               idealPacePhaseId: null,
               loading: false,
@@ -333,9 +335,9 @@ describe('ProfileScreen', () => {
       within(preDepartureContainer).getByLabelText(/visa status/i),
       'Yes, I already have a visa / I can enter Brazil without a visa'
     );
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '2026-10-03');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '10/03/2026');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), 'GRU, AA 1234');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '2026-10-12');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '10/12/2026');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), 'GIG, LA 4567');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/checked bags/i), 'No checked bags, I travel light');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/travel insurance status/i), 'Already hired one');
@@ -343,7 +345,16 @@ describe('ProfileScreen', () => {
     await userEvent.type(within(preDepartureContainer).getByLabelText(/insurance provider/i), 'SafetyWing');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/policy number/i), 'POL-123');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/do you know who you will share the room with/i), 'Yes');
-    await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/requested roommate/i), 'traveler-2');
+    const roommateInput = within(preDepartureContainer).getByLabelText(/requested roommate/i);
+    await userEvent.click(roommateInput);
+    const roommateList = within(preDepartureContainer).getByRole('listbox', { name: /requested roommate suggestions/i });
+    expect(within(roommateList).getAllByRole('option').map(option => option.textContent)).toEqual([
+      'Ana Baker',
+      'Bea Santos',
+      'Zoe Rivera',
+    ]);
+    await userEvent.type(roommateInput, 'bea');
+    await userEvent.click(within(roommateList).getByRole('option', { name: 'Bea Santos' }));
     expect(within(preDepartureContainer).queryByLabelText(/roommate gender preference/i)).not.toBeInTheDocument();
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/room configuration/i), 'Two twin beds (one single bed each)');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/need help with early arrival or longer stay/i), 'No, thanks');

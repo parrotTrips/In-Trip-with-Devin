@@ -72,7 +72,7 @@ function InfoCallout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function InputField({ label, value, onChange, type = 'text', placeholder, disabled = false, required = false, error }: {
+function InputField({ label, value, onChange, type = 'text', placeholder, disabled = false, required = false, error, inputMode }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -81,6 +81,7 @@ function InputField({ label, value, onChange, type = 'text', placeholder, disabl
   disabled?: boolean;
   required?: boolean;
   error?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }) {
   const fieldId = useId();
   const errorId = `${fieldId}-error`;
@@ -99,6 +100,7 @@ function InputField({ label, value, onChange, type = 'text', placeholder, disabl
         placeholder={placeholder}
         disabled={disabled}
         required={required}
+        inputMode={inputMode}
         aria-invalid={Boolean(error)}
         aria-describedby={error ? errorId : undefined}
         className={`w-full min-w-0 px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${
@@ -356,6 +358,190 @@ function DateSelectField({ label, value, onChange }: {
           ))}
         </select>
       </div>
+    </div>
+  );
+}
+
+function formatIsoDateForUS(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value;
+  return `${match[2]}/${match[3]}/${match[1]}`;
+}
+
+function parseUSDateInput(value: string) {
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  if (month < 1 || month > 12) return null;
+  const maxDay = new Date(year, month, 0).getDate();
+  if (day < 1 || day > maxDay) return null;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function formatTimeForUS(value: string) {
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return value;
+  const hour24 = Number(match[1]);
+  const minute = match[2];
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${minute} ${period}`;
+}
+
+function parseUSTimeInput(value: string) {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (!match) return null;
+  const hour12 = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) return null;
+  const period = match[3].toUpperCase();
+  const hour24 = period === 'PM' ? (hour12 % 12) + 12 : hour12 % 12;
+  return `${String(hour24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function USDateField({ label, value, onChange, required = false, error }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  required?: boolean;
+  error?: string;
+}) {
+  const [displayValue, setDisplayValue] = useState(formatIsoDateForUS(value));
+
+  useEffect(() => {
+    setDisplayValue(formatIsoDateForUS(value));
+  }, [value]);
+
+  return (
+    <InputField
+      label={label}
+      value={displayValue}
+      onChange={v => {
+        setDisplayValue(v);
+        onChange(v.trim() ? parseUSDateInput(v) ?? '' : '');
+      }}
+      placeholder="MM/DD/YYYY"
+      inputMode="numeric"
+      required={required}
+      error={error}
+    />
+  );
+}
+
+function USTimeField({ label, value, onChange }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [displayValue, setDisplayValue] = useState(formatTimeForUS(value));
+
+  useEffect(() => {
+    setDisplayValue(formatTimeForUS(value));
+  }, [value]);
+
+  return (
+    <InputField
+      label={label}
+      value={displayValue}
+      onChange={v => {
+        setDisplayValue(v);
+        onChange(v.trim() ? parseUSTimeInput(v) ?? '' : '');
+      }}
+      placeholder="h:mm AM"
+    />
+  );
+}
+
+function RoommateAutocompleteField({ label, value, onChange, options, required = false, error, disabled = false }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  required?: boolean;
+  error?: string;
+  disabled?: boolean;
+}) {
+  const fieldId = useId();
+  const errorId = `${fieldId}-error`;
+  const listboxId = `${fieldId}-listbox`;
+  const sortedOptions = [...options].sort((a, b) => a.label.localeCompare(b.label));
+  const selectedOption = sortedOptions.find(option => option.value === value);
+  const [query, setQuery] = useState(selectedOption?.label ?? '');
+  const [open, setOpen] = useState(false);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleOptions = sortedOptions.filter(option =>
+    !normalizedQuery || option.label.toLowerCase().includes(normalizedQuery)
+  );
+
+  useEffect(() => {
+    if (value) {
+      setQuery(selectedOption?.label ?? '');
+    } else if (!open) {
+      setQuery('');
+    }
+  }, [open, selectedOption?.label, value]);
+
+  return (
+    <div className="space-y-1">
+      <label htmlFor={fieldId} className="flex items-center gap-1 text-xs font-medium text-gray-500">
+        {label}
+        {required && <RequiredMark />}
+      </label>
+      <div className="relative">
+        <input
+          id={fieldId}
+          type="text"
+          value={query}
+          onChange={e => {
+            setQuery(e.target.value);
+            if (value) onChange('');
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder={disabled ? 'No travelers available' : 'Start typing a traveler name'}
+          disabled={disabled}
+          required={required}
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          className={`w-full min-w-0 px-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${
+            error ? 'border-red-300 bg-red-50/40' : 'border-gray-200 bg-white'
+          }`}
+        />
+        {open && !disabled && (
+          <div
+            id={listboxId}
+            role="listbox"
+            aria-label={`${label} suggestions`}
+            className="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+          >
+            {visibleOptions.length > 0 ? visibleOptions.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => {
+                  onChange(option.value);
+                  setQuery(option.label);
+                  setOpen(false);
+                }}
+                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-emerald-50"
+              >
+                {option.label}
+              </button>
+            )) : (
+              <div className="px-3 py-2 text-sm text-gray-400">No travelers found</div>
+            )}
+          </div>
+        )}
+      </div>
+      <FieldError id={errorId} error={error} />
     </div>
   );
 }
@@ -809,8 +995,8 @@ export default function ProfileScreen() {
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Arrival</p>
               <div className="space-y-3">
                 <div data-testid="arrival-date-time-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InputField label="Arrival Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} type="date" required error={validationErrors.arrival_date} />
-                  <InputField label="Arrival Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} type="time" />
+                  <USDateField label="Arrival Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} required error={validationErrors.arrival_date} />
+                  <USTimeField label="Arrival Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} />
                 </div>
                 <InputField label="Arrival Airport and Flight" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. GRU, AA 1234" required error={validationErrors.arrival_flight} />
                 <SelectField label="Checked Bags" value={form.checked_bags} onChange={v => setField('checked_bags', v)} options={CHECKED_BAGS_OPTIONS} required error={validationErrors.checked_bags} />
@@ -832,8 +1018,8 @@ export default function ProfileScreen() {
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Departure</p>
               <div className="space-y-3">
                 <div data-testid="departure-date-time-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InputField label="Departure Date" value={form.departure_date} onChange={v => setField('departure_date', v)} type="date" required error={validationErrors.departure_date} />
-                  <InputField label="Departure Time" value={form.departure_time} onChange={v => setField('departure_time', v)} type="time" />
+                  <USDateField label="Departure Date" value={form.departure_date} onChange={v => setField('departure_date', v)} required error={validationErrors.departure_date} />
+                  <USTimeField label="Departure Time" value={form.departure_time} onChange={v => setField('departure_time', v)} />
                 </div>
                 <InputField label="Departure Airport and Flight" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. GIG, LA 4567" required error={validationErrors.departure_flight} />
               </div>
@@ -859,7 +1045,7 @@ export default function ProfileScreen() {
               <div className="space-y-3">
                 <SelectField label="Do you know who you will share the room with?" value={form.roommate_status} onChange={setRoommateStatus} options={ROOMMATE_STATUS_OPTIONS} required error={validationErrors.roommate_status} />
                 {form.roommate_status === 'Yes' && (
-                  <SelectField
+                  <RoommateAutocompleteField
                     label="Requested Roommate"
                     value={form.roommate_user_id}
                     onChange={v => setField('roommate_user_id', v)}
