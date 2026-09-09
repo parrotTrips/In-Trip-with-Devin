@@ -7,6 +7,7 @@ import {
   getStaffAnnouncements,
   getStaffContacts,
   getStaffTrip,
+  previewActivityTravelerScan,
   scanActivityTraveler,
   sendAnnouncement,
   updateAnnouncement,
@@ -14,6 +15,7 @@ import {
   type ActivityTraveler,
   type StaffAnnouncement,
   type ActivityScanResponse,
+  type ActivityScanPreviewResponse,
   type CheckinDetail,
   type CheckinStep,
   type StaffActivity,
@@ -59,8 +61,10 @@ function ActivityScanPanel({
   const scannerElementId = useRef(`staff-activity-scanner-${activity.id}-${Math.random().toString(36).slice(2)}`);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const submittingRef = useRef(false);
+  const pendingPayloadRef = useRef<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ActivityScanResponse | null>(null);
+  const [preview, setPreview] = useState<ActivityScanPreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
@@ -68,28 +72,56 @@ function ActivityScanPanel({
   const [travelerList, setTravelerList] = useState<ActivityTraveler[]>([]);
   const [loadingTravelers, setLoadingTravelers] = useState(false);
 
-  const submitScan = useCallback(async (payload: string) => {
+  const previewScan = useCallback(async (payload: string) => {
     const trimmedPayload = payload.trim();
     if (!trimmedPayload) return;
     if (submittingRef.current) return;
+    if (pendingPayloadRef.current) return;
 
     submittingRef.current = true;
     setSubmitting(true);
     setError(null);
     setResult(null);
+    setPreview(null);
     try {
-      const response = await scanActivityTraveler(activity.id, trimmedPayload);
-      setResult(response);
-      if (response.status === 'checked_in') {
-        onCheckedIn(activity.id);
-      }
+      const response = await previewActivityTravelerScan(activity.id, trimmedPayload);
+      setPreview(response);
+      pendingPayloadRef.current = trimmedPayload;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to scan traveler');
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
-  }, [activity.id, onCheckedIn]);
+  }, [activity.id]);
+
+  const clearPendingScan = useCallback(() => {
+    pendingPayloadRef.current = null;
+    setPreview(null);
+  }, []);
+
+  const confirmPendingScan = useCallback(async () => {
+    const payload = pendingPayloadRef.current;
+    if (!payload || submittingRef.current) return;
+
+    submittingRef.current = true;
+    setSubmitting(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await scanActivityTraveler(activity.id, payload);
+      setResult(response);
+      if (response.status === 'checked_in') {
+        onCheckedIn(activity.id);
+      }
+      clearPendingScan();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to confirm check-in');
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  }, [activity.id, clearPendingScan, onCheckedIn]);
 
   useEffect(() => {
     const scanner = new Html5Qrcode(scannerElementId.current);
@@ -101,7 +133,7 @@ function ActivityScanPanel({
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 240, height: 240 } },
         decodedText => {
-          void submitScan(decodedText);
+          void previewScan(decodedText);
         },
         () => {}
       )
@@ -130,9 +162,10 @@ function ActivityScanPanel({
           activeScanner.clear();
         });
     };
-  }, [submitScan]);
+  }, [previewScan]);
 
   const travelerName = result?.traveler_name ?? 'Traveler';
+  const previewTravelerName = preview?.traveler_name ?? 'Traveler';
 
   return (
     <div className="bg-white rounded-lg border border-emerald-100 p-3 space-y-3">
@@ -198,14 +231,64 @@ function ActivityScanPanel({
                 key={traveler.id}
                 type="button"
                 disabled={submitting}
-                onClick={() => submitScan(traveler.qr_payload)}
+                onClick={() => previewScan(traveler.qr_payload)}
                 className="w-full flex items-center justify-between px-3 py-2.5 text-left border-b border-gray-50 last:border-0 hover:bg-emerald-50 transition-colors disabled:opacity-50"
               >
                 <span className="text-sm font-medium text-gray-800">{traveler.name}</span>
-                <span className="text-xs text-emerald-700 font-semibold">Check in →</span>
+                <span className="text-xs text-emerald-700 font-semibold">Select</span>
               </button>
             ))
           )}
+        </div>
+      )}
+
+      {preview?.status === 'ready_to_check_in' && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-3 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-emerald-900">{previewTravelerName}</p>
+            <p className="text-xs text-emerald-700">
+              Ready for scan {preview.scan_number} of {preview.max_checkins}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={confirmPendingScan}
+              disabled={submitting}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+              Confirm check-in
+            </button>
+            <button
+              type="button"
+              onClick={clearPendingScan}
+              disabled={submitting}
+              className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {preview?.status === 'already_checked_in' && (
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-3 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-amber-800">
+              {preview.traveler_name || previewTravelerName} already completed all {preview.max_checkins} scan{(preview.max_checkins ?? 1) > 1 ? 's' : ''}.
+            </p>
+            {preview.scanned_by_name && (
+              <p className="text-xs text-amber-700">Last scan by {preview.scanned_by_name}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={clearPendingScan}
+            className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700"
+          >
+            Scan another
+          </button>
         </div>
       )}
 

@@ -34,6 +34,17 @@ export interface ActivityScanResponse {
   max_checkins?: number | null;
 }
 
+export interface ActivityScanPreviewResponse {
+  status: 'ready_to_check_in' | 'already_checked_in';
+  traveler_name?: string | null;
+  scanned_by_name?: string | null;
+  checked_in_at?: string | null;
+  scan_number?: number | null;
+  max_checkins?: number | null;
+  trip_activity_id?: string;
+  trip_traveler_id?: string;
+}
+
 export interface CheckinDetail {
   name: string;
   checked_in_at: string | null;
@@ -70,6 +81,13 @@ export async function getStaffTrip() {
 
 export async function scanActivityTraveler(activityId: string, qrPayload: string) {
   return request<ActivityScanResponse>(`/me/staff/activities/${activityId}/checkins/scan`, {
+    method: 'POST',
+    body: JSON.stringify({ qr_payload: qrPayload }),
+  });
+}
+
+export async function previewActivityTravelerScan(activityId: string, qrPayload: string) {
+  return request<ActivityScanPreviewResponse>(`/me/staff/activities/${activityId}/checkins/preview`, {
     method: 'POST',
     body: JSON.stringify({ qr_payload: qrPayload }),
   });

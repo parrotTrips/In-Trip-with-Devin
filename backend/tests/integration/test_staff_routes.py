@@ -241,6 +241,42 @@ def test_scan_activity_checkin_returns_checked_in(seeded_client, session_factory
     assert data["checked_in_at"]
 
 
+def test_preview_activity_checkin_identifies_traveler_without_checking_in(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/preview",
+        headers=headers,
+        json={"qr_payload": seed["qr_payload"]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ready_to_check_in"
+    assert data["trip_activity_id"] == seed["activity_id"]
+    assert data["trip_traveler_id"] == seed["trip_traveler_id"]
+    assert data["traveler_name"] == "Traveler One"
+    assert data["scan_number"] == 1
+    assert data["max_checkins"] == 1
+
+    async def _count_checkins():
+        async with session_factory() as session:
+            return await session.scalar(
+                select(func.count())
+                .select_from(ActivityCheckin)
+                .where(
+                    ActivityCheckin.trip_activity_id == seed["activity_id"],
+                    ActivityCheckin.trip_traveler_id == seed["trip_traveler_id"],
+                )
+            )
+
+    assert asyncio.run(_count_checkins()) == 0
+
+
 def test_scan_activity_checkin_duplicate_returns_existing_checkin(
     seeded_client,
     session_factory,

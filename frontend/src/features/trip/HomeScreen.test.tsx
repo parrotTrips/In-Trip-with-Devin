@@ -117,7 +117,7 @@ describe('HomeScreen', () => {
     setupHandlers();
   });
 
-  test('shows the traveler home without the QR code section', async () => {
+  test('shows the trip title only in the app header', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <AuthProvider>
@@ -130,7 +130,7 @@ describe('HomeScreen', () => {
       </MemoryRouter>
     );
 
-    expect((await screen.findAllByText('Peru Adventure')).length).toBeGreaterThan(0);
+    expect(await screen.findAllByText('Peru Adventure')).toHaveLength(1);
     expect(screen.queryByRole('heading', { name: 'My QR Code' })).not.toBeInTheDocument();
   });
 

@@ -151,9 +151,6 @@ export default function HomeScreen() {
 
           <div className="relative z-10 flex items-start justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white font-[Fredoka] leading-tight">
-                {displayTitle || 'Sua Viagem'}
-              </h2>
               {displayDates && <p className="text-emerald-100 text-sm mt-1">{displayDates}</p>}
             </div>
             {onSwitchToStaffView && (

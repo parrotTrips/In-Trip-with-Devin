@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import JWTError
 from pydantic import BaseModel
 from sqlalchemy import func, select, text
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
@@ -60,6 +59,158 @@ async def _record_scan_event(
             raw_payload_hash=_payload_hash(raw_payload),
         )
     )
+
+
+async def _resolve_activity_checkin_scan(
+    session: AsyncSession,
+    *,
+    activity_id: uuid.UUID,
+    qr_payload: str,
+    staff_user_id: uuid.UUID,
+    staff_trip_uuid: str,
+) -> dict:
+    try:
+        payload = decode_traveler_qr_payload(qr_payload)
+        trip_traveler_id = uuid.UUID(str(payload["trip_traveler_id"]))
+        payload_trip_uuid = payload["trip_uuid"]
+    except (KeyError, TypeError, ValueError, JWTError):
+        await _record_scan_event(
+            session,
+            trip_activity_id=None,
+            trip_traveler_id=None,
+            scanned_by_user_id=staff_user_id,
+            status="invalid_qr",
+            raw_payload=qr_payload,
+            failure_reason="Invalid QR payload",
+        )
+        await session.commit()
+        raise HTTPException(status_code=400, detail="Invalid QR payload") from None
+
+    activity_trip_uuid = await session.scalar(
+        select(TripPhase.wetravel_trip_uuid)
+        .join(TripActivity, TripActivity.trip_phase_id == TripPhase.id)
+        .where(TripActivity.id == activity_id)
+    )
+    if activity_trip_uuid is None:
+        await _record_scan_event(
+            session,
+            trip_activity_id=None,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="activity_not_found",
+            raw_payload=qr_payload,
+            failure_reason="Activity not found",
+        )
+        await session.commit()
+        raise HTTPException(status_code=404, detail="Activity not found")
+    if activity_trip_uuid != staff_trip_uuid:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="activity_outside_staff_trip",
+            raw_payload=qr_payload,
+            failure_reason="Activity is outside staff active trip",
+        )
+        await session.commit()
+        raise HTTPException(status_code=403, detail="Activity is outside staff active trip")
+
+    trip_traveler = await session.scalar(
+        select(TripTraveler).where(TripTraveler.id == trip_traveler_id)
+    )
+    if trip_traveler is None:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=None,
+            scanned_by_user_id=staff_user_id,
+            status="traveler_not_found",
+            raw_payload=qr_payload,
+            failure_reason="Traveler not found",
+        )
+        await session.commit()
+        raise HTTPException(status_code=404, detail="Traveler not found")
+    if payload_trip_uuid != staff_trip_uuid or trip_traveler.wetravel_trip_uuid != staff_trip_uuid:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="traveler_outside_staff_trip",
+            raw_payload=qr_payload,
+            failure_reason="Traveler is outside staff active trip",
+        )
+        await session.commit()
+        raise HTTPException(status_code=403, detail="Traveler is outside staff active trip")
+
+    traveler_row = await session.execute(
+        select(User.full_name, User.role)
+        .join(TripTraveler, TripTraveler.user_id == User.id)
+        .where(TripTraveler.id == trip_traveler_id)
+    )
+    traveler_name, traveler_role = traveler_row.one()
+    if traveler_role != "traveler":
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="not_traveler",
+            raw_payload=qr_payload,
+            failure_reason="QR code does not belong to a traveler",
+        )
+        await session.commit()
+        raise HTTPException(status_code=403, detail="QR code does not belong to a traveler")
+
+    participant_count = await session.scalar(
+        select(func.count())
+        .select_from(ActivityParticipant)
+        .where(ActivityParticipant.trip_activity_id == activity_id)
+    )
+    if participant_count:
+        allowed = await session.scalar(
+            select(ActivityParticipant.id).where(
+                ActivityParticipant.trip_activity_id == activity_id,
+                ActivityParticipant.trip_traveler_id == trip_traveler_id,
+                ActivityParticipant.status == "allowed",
+            )
+        )
+        if allowed is None:
+            await _record_scan_event(
+                session,
+                trip_activity_id=activity_id,
+                trip_traveler_id=trip_traveler_id,
+                scanned_by_user_id=staff_user_id,
+                status="not_authorized_for_activity",
+                raw_payload=qr_payload,
+                failure_reason="Traveler is not authorized for this activity",
+            )
+            await session.commit()
+            raise HTTPException(status_code=403, detail="Traveler is not authorized for this activity")
+
+    activity = await session.scalar(select(TripActivity).where(TripActivity.id == activity_id))
+    if activity is None:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    max_checkins = activity.max_checkins or 1
+
+    existing_scans = await session.execute(
+        select(ActivityCheckin)
+        .where(
+            ActivityCheckin.trip_activity_id == activity_id,
+            ActivityCheckin.trip_traveler_id == trip_traveler_id,
+        )
+        .order_by(ActivityCheckin.scan_number)
+    )
+    existing_checkins = existing_scans.scalars().all()
+
+    return {
+        "trip_traveler_id": trip_traveler_id,
+        "traveler_name": traveler_name,
+        "max_checkins": max_checkins,
+        "existing_checkins": existing_checkins,
+        "next_scan_number": len(existing_checkins) + 1,
+    }
 
 
 async def _get_staff_trip_uuid(user_id: str, session: AsyncSession) -> str:
@@ -502,6 +653,55 @@ async def get_activity_travelers(
     return {"travelers": travelers}
 
 
+@router.post("/activities/{activity_id}/checkins/preview")
+async def preview_activity_checkin(
+    activity_id: uuid.UUID,
+    body: StaffCheckinScanRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Validate a traveler's QR code for an activity without creating a check-in."""
+    staff_user_id = uuid.UUID(str(request.state.user_id))
+    staff_trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
+    scan = await _resolve_activity_checkin_scan(
+        session,
+        activity_id=activity_id,
+        qr_payload=body.qr_payload,
+        staff_user_id=staff_user_id,
+        staff_trip_uuid=staff_trip_uuid,
+    )
+
+    existing_checkins = scan["existing_checkins"]
+    next_scan_number = scan["next_scan_number"]
+    max_checkins = scan["max_checkins"]
+    if next_scan_number > max_checkins:
+        last = existing_checkins[-1]
+        scanned_by_name = await session.scalar(
+            select(User.full_name).where(User.id == last.scanned_by_user_id)
+        )
+        return {
+            "status": "already_checked_in",
+            "checkin_id": str(last.id),
+            "trip_activity_id": str(last.trip_activity_id),
+            "trip_traveler_id": str(last.trip_traveler_id),
+            "checked_in_at": last.checked_in_at.isoformat(),
+            "scanned_by_user_id": str(last.scanned_by_user_id),
+            "scanned_by_name": scanned_by_name,
+            "scan_number": last.scan_number,
+            "max_checkins": max_checkins,
+            "traveler_name": scan["traveler_name"],
+        }
+
+    return {
+        "status": "ready_to_check_in",
+        "trip_activity_id": str(activity_id),
+        "trip_traveler_id": str(scan["trip_traveler_id"]),
+        "traveler_name": scan["traveler_name"],
+        "scan_number": next_scan_number,
+        "max_checkins": max_checkins,
+    }
+
+
 @router.post("/activities/{activity_id}/checkins/scan")
 async def scan_activity_checkin(
     activity_id: uuid.UUID,
@@ -512,140 +712,17 @@ async def scan_activity_checkin(
     """Scan a traveler's QR code into a staff activity."""
     staff_user_id = uuid.UUID(str(request.state.user_id))
     staff_trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
-
-    try:
-        payload = decode_traveler_qr_payload(body.qr_payload)
-        trip_traveler_id = uuid.UUID(str(payload["trip_traveler_id"]))
-        payload_trip_uuid = payload["trip_uuid"]
-    except (KeyError, TypeError, ValueError, JWTError):
-        await _record_scan_event(
-            session,
-            trip_activity_id=None,
-            trip_traveler_id=None,
-            scanned_by_user_id=staff_user_id,
-            status="invalid_qr",
-            raw_payload=body.qr_payload,
-            failure_reason="Invalid QR payload",
-        )
-        await session.commit()
-        raise HTTPException(status_code=400, detail="Invalid QR payload") from None
-
-    activity_trip_uuid = await session.scalar(
-        select(TripPhase.wetravel_trip_uuid)
-        .join(TripActivity, TripActivity.trip_phase_id == TripPhase.id)
-        .where(TripActivity.id == activity_id)
+    scan = await _resolve_activity_checkin_scan(
+        session,
+        activity_id=activity_id,
+        qr_payload=body.qr_payload,
+        staff_user_id=staff_user_id,
+        staff_trip_uuid=staff_trip_uuid,
     )
-    if activity_trip_uuid is None:
-        await _record_scan_event(
-            session,
-            trip_activity_id=None,
-            trip_traveler_id=trip_traveler_id,
-            scanned_by_user_id=staff_user_id,
-            status="activity_not_found",
-            raw_payload=body.qr_payload,
-            failure_reason="Activity not found",
-        )
-        await session.commit()
-        raise HTTPException(status_code=404, detail="Activity not found")
-    if activity_trip_uuid != staff_trip_uuid:
-        await _record_scan_event(
-            session,
-            trip_activity_id=activity_id,
-            trip_traveler_id=trip_traveler_id,
-            scanned_by_user_id=staff_user_id,
-            status="activity_outside_staff_trip",
-            raw_payload=body.qr_payload,
-            failure_reason="Activity is outside staff active trip",
-        )
-        await session.commit()
-        raise HTTPException(status_code=403, detail="Activity is outside staff active trip")
-
-    trip_traveler = await session.scalar(
-        select(TripTraveler).where(TripTraveler.id == trip_traveler_id)
-    )
-    if trip_traveler is None:
-        await _record_scan_event(
-            session,
-            trip_activity_id=activity_id,
-            trip_traveler_id=None,
-            scanned_by_user_id=staff_user_id,
-            status="traveler_not_found",
-            raw_payload=body.qr_payload,
-            failure_reason="Traveler not found",
-        )
-        await session.commit()
-        raise HTTPException(status_code=404, detail="Traveler not found")
-    if payload_trip_uuid != staff_trip_uuid or trip_traveler.wetravel_trip_uuid != staff_trip_uuid:
-        await _record_scan_event(
-            session,
-            trip_activity_id=activity_id,
-            trip_traveler_id=trip_traveler_id,
-            scanned_by_user_id=staff_user_id,
-            status="traveler_outside_staff_trip",
-            raw_payload=body.qr_payload,
-            failure_reason="Traveler is outside staff active trip",
-        )
-        await session.commit()
-        raise HTTPException(status_code=403, detail="Traveler is outside staff active trip")
-    traveler_role = await session.scalar(
-        select(User.role).where(User.id == trip_traveler.user_id)
-    )
-    if traveler_role != "traveler":
-        await _record_scan_event(
-            session,
-            trip_activity_id=activity_id,
-            trip_traveler_id=trip_traveler_id,
-            scanned_by_user_id=staff_user_id,
-            status="not_traveler",
-            raw_payload=body.qr_payload,
-            failure_reason="QR code does not belong to a traveler",
-        )
-        await session.commit()
-        raise HTTPException(status_code=403, detail="QR code does not belong to a traveler")
-
-    participant_count = await session.scalar(
-        select(func.count())
-        .select_from(ActivityParticipant)
-        .where(ActivityParticipant.trip_activity_id == activity_id)
-    )
-    if participant_count:
-        allowed = await session.scalar(
-            select(ActivityParticipant.id).where(
-                ActivityParticipant.trip_activity_id == activity_id,
-                ActivityParticipant.trip_traveler_id == trip_traveler_id,
-                ActivityParticipant.status == "allowed",
-            )
-        )
-        if allowed is None:
-            await _record_scan_event(
-                session,
-                trip_activity_id=activity_id,
-                trip_traveler_id=trip_traveler_id,
-                scanned_by_user_id=staff_user_id,
-                status="not_authorized_for_activity",
-                raw_payload=body.qr_payload,
-                failure_reason="Traveler is not authorized for this activity",
-            )
-            await session.commit()
-            raise HTTPException(status_code=403, detail="Traveler is not authorized for this activity")
-
-    # Fetch activity to get max_checkins
-    activity = await session.scalar(select(TripActivity).where(TripActivity.id == activity_id))
-    if activity is None:
-        raise HTTPException(status_code=404, detail="Activity not found")
-    max_checkins = activity.max_checkins or 1
-
-    # Count how many scans this traveler already has for this activity
-    existing_scans = await session.execute(
-        select(ActivityCheckin)
-        .where(
-            ActivityCheckin.trip_activity_id == activity_id,
-            ActivityCheckin.trip_traveler_id == trip_traveler_id,
-        )
-        .order_by(ActivityCheckin.scan_number)
-    )
-    existing_checkins = existing_scans.scalars().all()
-    next_scan_number = len(existing_checkins) + 1
+    trip_traveler_id = scan["trip_traveler_id"]
+    existing_checkins = scan["existing_checkins"]
+    next_scan_number = scan["next_scan_number"]
+    max_checkins = scan["max_checkins"]
 
     if next_scan_number > max_checkins:
         await _record_scan_event(
@@ -657,14 +734,10 @@ async def scan_activity_checkin(
             raw_payload=body.qr_payload,
         )
         await session.commit()
-        traveler_name_row = await session.execute(
-            select(User.full_name)
-            .join(TripTraveler, TripTraveler.user_id == User.id)
-            .where(TripTraveler.id == trip_traveler_id)
-        )
-        traveler_name = traveler_name_row.scalar()
         last = existing_checkins[-1]
-        scanned_by_row = await session.scalar(select(User.full_name).where(User.id == last.scanned_by_user_id))
+        scanned_by_name = await session.scalar(
+            select(User.full_name).where(User.id == last.scanned_by_user_id)
+        )
         return {
             "status": "already_checked_in",
             "checkin_id": str(last.id),
@@ -672,10 +745,10 @@ async def scan_activity_checkin(
             "trip_traveler_id": str(last.trip_traveler_id),
             "checked_in_at": last.checked_in_at.isoformat(),
             "scanned_by_user_id": str(last.scanned_by_user_id),
-            "scanned_by_name": scanned_by_row,
+            "scanned_by_name": scanned_by_name,
             "scan_number": last.scan_number,
             "max_checkins": max_checkins,
-            "traveler_name": traveler_name,
+            "traveler_name": scan["traveler_name"],
         }
 
     new_checkin = ActivityCheckin(
@@ -696,12 +769,6 @@ async def scan_activity_checkin(
     )
     await session.commit()
 
-    traveler_name_row = await session.execute(
-        select(User.full_name)
-        .join(TripTraveler, TripTraveler.user_id == User.id)
-        .where(TripTraveler.id == trip_traveler_id)
-    )
-    traveler_name = traveler_name_row.scalar()
     return {
         "status": "checked_in",
         "checkin_id": str(new_checkin.id),
@@ -711,6 +778,5 @@ async def scan_activity_checkin(
         "scanned_by_user_id": str(new_checkin.scanned_by_user_id),
         "scan_number": next_scan_number,
         "max_checkins": max_checkins,
-        "traveler_name": traveler_name,
+        "traveler_name": scan["traveler_name"],
     }
-
