@@ -7,6 +7,7 @@ from app.db.session import get_db_session
 from app.schemas.console import PhaseCreate, PhaseUpdate
 from app.services.console_service import (
     create_phase,
+    delete_phase,
     get_phases,
     set_phase_visibility,
     update_phase,
@@ -82,3 +83,14 @@ async def unpublish_phase_handler(
     """Return the phase to draft state."""
     await require_admin(request, session)
     return await set_phase_visibility(session, phase_id, False)
+
+
+@router.delete("/phases/{phase_id}")
+async def delete_phase_handler(
+    phase_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Delete a phase and its checklist items and links."""
+    await require_admin(request, session)
+    return await delete_phase(session, phase_id)

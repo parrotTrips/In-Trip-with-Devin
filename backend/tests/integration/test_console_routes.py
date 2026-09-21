@@ -172,3 +172,73 @@ def test_publish_and_unpublish_toggle_visibility(client, session_factory):
     ).json()["is_visible"] is False
     phases = client.get("/console/trips/console-test/phases", headers=headers).json()["phases"]
     assert phases[0]["is_visible"] is False
+
+
+def test_delete_phase_removes_checklist_and_links(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory))
+    headers = _auth(client, "+5511777000001")
+    phase_id = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]["id"]
+
+    assert client.delete(f"/console/phases/{phase_id}", headers=headers).status_code == 200
+
+    async def _counts():
+        async with session_factory() as session:
+            return (
+                await session.scalar(
+                    text("SELECT count(*) FROM trip_phases WHERE id = CAST(:p AS uuid)"),
+                    {"p": phase_id},
+                ),
+                await session.scalar(
+                    text("SELECT count(*) FROM trip_phase_checklist_items"
+                         " WHERE trip_phase_id = CAST(:p AS uuid)"),
+                    {"p": phase_id},
+                ),
+                await session.scalar(
+                    text("SELECT count(*) FROM trip_phase_links"
+                         " WHERE trip_phase_id = CAST(:p AS uuid)"),
+                    {"p": phase_id},
+                ),
+            )
+
+    assert asyncio.run(_counts()) == (0, 0, 0)
+
+
+def test_delete_phase_refuses_when_activities_exist(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory))
+    headers = _auth(client, "+5511777000001")
+    phase_id = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]["id"]
+
+    async def _add_activity():
+        async with session_factory() as session:
+            await session.execute(
+                text("""
+                    INSERT INTO trip_activities
+                        (id, trip_phase_id, name, activity_type, short_description,
+                         practical_info, sort_order, created_at, updated_at)
+                    VALUES (gen_random_uuid(), CAST(:p AS uuid), 'Atividade', 'included',
+                            '', '', 0, now(), now())
+                """),
+                {"p": phase_id},
+            )
+            await session.commit()
+
+    asyncio.run(_add_activity())
+
+    res = client.delete(f"/console/phases/{phase_id}", headers=headers)
+
+    assert res.status_code == 409
+
+    async def _still_there():
+        async with session_factory() as session:
+            return await session.scalar(
+                text("SELECT count(*) FROM trip_phases WHERE id = CAST(:p AS uuid)"),
+                {"p": phase_id},
+            )
+
+    assert asyncio.run(_still_there()) == 1

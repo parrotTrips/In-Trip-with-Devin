@@ -172,3 +172,44 @@ async def set_phase_visibility(session: AsyncSession, phase_id: str, is_visible:
         raise HTTPException(status_code=404, detail="Phase not found")
     await session.commit()
     return {"id": phase_id, "is_visible": is_visible}
+
+
+async def delete_phase(session: AsyncSession, phase_id: str) -> dict:
+    """Delete a phase and its children. Refuse if activities hang off it."""
+    exists = await session.scalar(
+        text("SELECT count(*) FROM trip_phases WHERE id = CAST(:p AS uuid)"), {"p": phase_id}
+    )
+    if not exists:
+        raise HTTPException(status_code=404, detail="Phase not found")
+
+    # Pre-trip phases carry no activities today, but nothing in the schema forbids
+    # it. Refusing beats hitting the foreign key violation that motivated this work.
+    activity_count = await session.scalar(
+        text("SELECT count(*) FROM trip_activities WHERE trip_phase_id = CAST(:p AS uuid)"),
+        {"p": phase_id},
+    )
+    if activity_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Phase has {activity_count} activity(ies); delete them first",
+        )
+
+    await session.execute(
+        text("""
+            DELETE FROM traveler_checklist_progress
+            WHERE trip_phase_checklist_item_id IN (
+                SELECT id FROM trip_phase_checklist_items WHERE trip_phase_id = CAST(:p AS uuid)
+            )
+        """),
+        {"p": phase_id},
+    )
+    for stmt in (
+        "DELETE FROM traveler_phase_progress WHERE trip_phase_id = CAST(:p AS uuid)",
+        "DELETE FROM trip_phase_checklist_items WHERE trip_phase_id = CAST(:p AS uuid)",
+        "DELETE FROM trip_phase_links WHERE trip_phase_id = CAST(:p AS uuid)",
+        "DELETE FROM trip_phases WHERE id = CAST(:p AS uuid)",
+    ):
+        await session.execute(text(stmt), {"p": phase_id})
+
+    await session.commit()
+    return {"id": phase_id, "deleted": True}
