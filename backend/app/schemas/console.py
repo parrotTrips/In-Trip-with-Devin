@@ -19,3 +19,21 @@ class PhaseUpdate(BaseModel):
     icon: str | None = None
     short_description: str | None = None
     detailed_description: str | None = None
+
+
+class ChecklistItemIn(BaseModel):
+    label: str
+    is_required: bool = False
+
+
+class ChecklistReplace(BaseModel):
+    items: list[ChecklistItemIn] = []
+
+
+class LinkIn(BaseModel):
+    label: str
+    url: str
+
+
+class LinkReplace(BaseModel):
+    links: list[LinkIn] = []

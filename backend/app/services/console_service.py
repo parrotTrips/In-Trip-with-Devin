@@ -213,3 +213,53 @@ async def delete_phase(session: AsyncSession, phase_id: str) -> dict:
 
     await session.commit()
     return {"id": phase_id, "deleted": True}
+
+
+async def replace_checklist(session: AsyncSession, phase_id: str, items: list[dict]) -> dict:
+    """Replace every checklist item of the phase; list position becomes sort_order."""
+    await session.execute(
+        text("""
+            DELETE FROM traveler_checklist_progress
+            WHERE trip_phase_checklist_item_id IN (
+                SELECT id FROM trip_phase_checklist_items WHERE trip_phase_id = CAST(:p AS uuid)
+            )
+        """),
+        {"p": phase_id},
+    )
+    await session.execute(
+        text("DELETE FROM trip_phase_checklist_items WHERE trip_phase_id = CAST(:p AS uuid)"),
+        {"p": phase_id},
+    )
+    for index, item in enumerate(items):
+        await session.execute(
+            text("""
+                INSERT INTO trip_phase_checklist_items
+                    (id, trip_phase_id, label, sort_order, is_required, created_at, updated_at)
+                VALUES (gen_random_uuid(), CAST(:p AS uuid), :label, :sort_order, :is_required,
+                        now(), now())
+            """),
+            {"p": phase_id, "label": item["label"],
+             "sort_order": index, "is_required": item["is_required"]},
+        )
+    await session.commit()
+    return {"count": len(items)}
+
+
+async def replace_links(session: AsyncSession, phase_id: str, links: list[dict]) -> dict:
+    """Replace every link of the phase; list position becomes sort_order."""
+    await session.execute(
+        text("DELETE FROM trip_phase_links WHERE trip_phase_id = CAST(:p AS uuid)"),
+        {"p": phase_id},
+    )
+    for index, link in enumerate(links):
+        await session.execute(
+            text("""
+                INSERT INTO trip_phase_links
+                    (id, trip_phase_id, label, url, sort_order, created_at, updated_at)
+                VALUES (gen_random_uuid(), CAST(:p AS uuid), :label, :url, :sort_order,
+                        now(), now())
+            """),
+            {"p": phase_id, "label": link["label"], "url": link["url"], "sort_order": index},
+        )
+    await session.commit()
+    return {"count": len(links)}

@@ -242,3 +242,51 @@ def test_delete_phase_refuses_when_activities_exist(client, session_factory):
             )
 
     assert asyncio.run(_still_there()) == 1
+
+
+def test_put_checklist_replaces_list_and_sets_order(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory))
+    headers = _auth(client, "+5511777000001")
+    phase_id = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]["id"]
+
+    res = client.put(
+        f"/console/phases/{phase_id}/checklist",
+        headers=headers,
+        json={"items": [
+            {"label": "Segundo", "is_required": False},
+            {"label": "Primeiro", "is_required": True},
+        ]},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["count"] == 2
+    checklist = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]["checklist"]
+    assert [i["label"] for i in checklist] == ["Segundo", "Primeiro"]
+    assert [i["sort_order"] for i in checklist] == [0, 1]
+    assert [i["is_required"] for i in checklist] == [False, True]
+
+
+def test_put_links_replaces_list(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory))
+    headers = _auth(client, "+5511777000001")
+    phase_id = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]["id"]
+
+    res = client.put(
+        f"/console/phases/{phase_id}/links",
+        headers=headers,
+        json={"links": [{"label": "Novo", "url": "https://novo.example.com"}]},
+    )
+
+    assert res.status_code == 200
+    links = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]["links"]
+    assert [link["label"] for link in links] == ["Novo"]
