@@ -13,3 +13,59 @@ export interface Trip {
 export function listTrips() {
   return request<{ trips: Trip[] }>('/console/trips');
 }
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  is_required: boolean;
+  sort_order: number;
+}
+
+export interface PhaseLink {
+  id: string;
+  label: string;
+  url: string;
+  sort_order: number;
+}
+
+export interface Phase {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  icon: string | null;
+  short_description: string;
+  detailed_description: string | null;
+  sort_order: number;
+  is_visible: boolean;
+  checklist: ChecklistItem[];
+  links: PhaseLink[];
+}
+
+export function getPhases(tripUuid: string) {
+  return request<{ phases: Phase[] }>(`/console/trips/${tripUuid}/phases`);
+}
+
+export function createPhase(tripUuid: string, body: { title: string; short_description: string }) {
+  return request<{ id: string; is_visible: boolean }>(
+    `/console/trips/${tripUuid}/phases`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export function publishPhase(phaseId: string) {
+  return request<{ id: string; is_visible: boolean }>(
+    `/console/phases/${phaseId}/publish`, { method: 'POST' }
+  );
+}
+
+export function unpublishPhase(phaseId: string) {
+  return request<{ id: string; is_visible: boolean }>(
+    `/console/phases/${phaseId}/unpublish`, { method: 'POST' }
+  );
+}
+
+export function deletePhase(phaseId: string) {
+  return request<{ id: string; deleted: boolean }>(
+    `/console/phases/${phaseId}`, { method: 'DELETE' }
+  );
+}
