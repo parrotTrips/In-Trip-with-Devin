@@ -4,7 +4,7 @@ Documento de validação. Resume o que estamos construindo, por quê, e como con
 
 - **Design completo:** `docs/superpowers/specs/2026-09-21-content-console-design.md`
 - **Plano do backend:** `docs/superpowers/plans/2026-09-21-content-console-backend.md`
-- **Plano do console (frontend):** a escrever, depois que o backend estiver pronto
+- **Plano do console (frontend):** `docs/superpowers/plans/2026-09-21-content-console-frontend.md`
 
 ---
 
@@ -46,7 +46,7 @@ completo está abaixo — é por ele que se mede se chegamos lá.
 
 | Fatia | Cobre | Abas / ações de origem | Status |
 |---|---|---|---|
-| **A** | Jogo da vida (pré-trip) | Fases, Checklist, Links | Backend pronto |
+| **A** | Jogo da vida (pré-trip) | Fases, Checklist, Links | **Concluída** |
 | **B** | Roteiro | Roteiro (dias e atividades) | Não iniciada |
 | **C** | Informações | Emergency Contacts, Recomendacoes, FAQ, Cancellation Policy | Não iniciada |
 | **D** | Staff | Staff, Contatos, Tarefas Staff, Participantes Atividades | Não iniciada |
@@ -67,7 +67,9 @@ em nenhum menu — precisa ser migrada ou pode ser descartada?
 
 ---
 
-## Progresso da fatia A — backend
+## Progresso da fatia A
+
+### Backend
 
 | # | Entrega | Como validar | Status |
 |---|---|---|---|
@@ -91,10 +93,7 @@ em nenhum menu — precisa ser migrada ou pode ser descartada?
 | 6 | Reordenar fases | Botão Subir grava a nova ordem | ✅ |
 | 7 | Deploy | `netlify.toml` e `make console-deploy` | ✅ |
 
-**Fatia A concluída de ponta a ponta.** 12 testes novos, todos contra um Postgres real com as
-migrations aplicadas. Suíte do backend: **196 passam**. A única falha
-(`test_activity_checkins_table_metadata`) é anterior a este trabalho — a migration `0016`
-mudou a chave única de `activity_checkins` e o teste não foi atualizado junto.
+**Fatia A concluída de ponta a ponta.**
 
 Backend: 12 testes novos, **196 passam**. Console: **9 testes**, build limpo. A única falha
 (`test_activity_checkins_table_metadata`) é anterior a este trabalho — a migration `0016`
@@ -147,6 +146,8 @@ Quem abrir esse link cai direto na seção **Pre Departure Information**, já ab
 
 ---
 
-## Fora de escopo nesta fatia
+## Fora de escopo da fatia A
 
-Roteiro, Informações, Staff, criação de viagens, tela de usuários, histórico de alterações, upload de imagens, e qualquer alteração no app do viajante, no Apps Script ou nos endpoints `/admin`.
+Fatias B, C, D e E (ver o mapa de paridade acima), criação de viagens, tela de usuários,
+histórico de alterações, upload de imagens, e qualquer alteração no app do viajante, no
+Apps Script ou nos endpoints `/admin`.
