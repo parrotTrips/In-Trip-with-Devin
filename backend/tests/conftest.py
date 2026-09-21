@@ -29,6 +29,8 @@ MODULES_TO_CLEAR = [
     "app.routers.trip",
     "app.routers.staff",
     "app.routers.checklist",
+    "app.routers.console",
+    "app.services.console_service",
     "app.middleware.auth",
 ]
 

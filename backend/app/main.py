@@ -8,6 +8,7 @@ from app.middleware.auth import JWTAuthMiddleware
 from app.routers.admin import router as admin_router
 from app.routers.auth import router as auth_router
 from app.routers.checklist import router as checklist_router
+from app.routers.console import router as console_router
 from app.routers.health import router as health_router
 from app.routers.profile import router as profile_router
 from app.routers.staff import router as staff_router
@@ -40,3 +41,4 @@ app.include_router(profile_router)
 app.include_router(trip_router)
 app.include_router(staff_router)
 app.include_router(checklist_router)
+app.include_router(console_router)
