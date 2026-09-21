@@ -309,3 +309,36 @@ def test_reorder_phases_sets_sort_order_by_position(client, session_factory):
     assert res.status_code == 200
     phases = client.get("/console/trips/console-test/phases", headers=headers).json()["phases"]
     assert [p["title"] for p in phases] == ["B", "A"]
+
+
+def test_phase_dates_can_be_set_and_cleared(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+    phase_id = client.post(
+        "/console/trips/console-test/phases",
+        headers=headers,
+        json={"title": "Fase com data", "short_description": ""},
+    ).json()["id"]
+
+    res = client.patch(
+        f"/console/phases/{phase_id}",
+        headers=headers,
+        json={"starts_at": "2027-07-01T09:00:00-03:00", "ends_at": "2027-07-02T18:00:00-03:00"},
+    )
+
+    assert res.status_code == 200
+    phase = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]
+    assert phase["starts_at"].startswith("2027-07-01T12:00")
+    assert phase["ends_at"].startswith("2027-07-02T21:00")
+
+    clear = client.patch(f"/console/phases/{phase_id}", headers=headers,
+                         json={"starts_at": None, "ends_at": None})
+
+    assert clear.status_code == 200
+    phase = client.get(
+        "/console/trips/console-test/phases", headers=headers
+    ).json()["phases"][0]
+    assert phase["starts_at"] is None
+    assert phase["ends_at"] is None

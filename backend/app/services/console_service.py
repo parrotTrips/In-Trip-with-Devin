@@ -55,7 +55,8 @@ async def get_phases(session: AsyncSession, trip_uuid: str) -> dict:
     phase_rows = await session.execute(
         text("""
             SELECT id, title, subtitle, icon, short_description,
-                   detailed_description, sort_order, is_visible
+                   detailed_description, sort_order, is_visible,
+                   starts_at, ends_at
             FROM trip_phases
             WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = 'pre-trip'
             ORDER BY sort_order ASC
@@ -140,16 +141,31 @@ async def create_phase(session: AsyncSession, trip_uuid: str, data: dict) -> dic
     return {"id": str(phase_id), "is_visible": False}
 
 
-_PHASE_UPDATABLE = ("title", "subtitle", "icon", "short_description", "detailed_description")
+# Columns that are NOT NULL in the database: a null sent for these is ignored
+# rather than allowed to hit a constraint violation.
+_PHASE_REQUIRED = ("title", "short_description")
+# Nullable columns: sending null clears them, which is how a date is removed.
+_PHASE_NULLABLE = ("subtitle", "icon", "detailed_description", "starts_at", "ends_at")
+_PHASE_TIMESTAMPS = ("starts_at", "ends_at")
 
 
 async def update_phase(session: AsyncSession, phase_id: str, data: dict) -> dict:
-    """Update only the fields explicitly provided."""
-    fields = {k: v for k, v in data.items() if k in _PHASE_UPDATABLE and v is not None}
+    """Update only the fields explicitly provided.
+
+    `data` comes from model_dump(exclude_unset=True), so a key being present means
+    the caller sent it — including when the value is null.
+    """
+    fields = {
+        k: v for k, v in data.items()
+        if (k in _PHASE_REQUIRED and v is not None) or k in _PHASE_NULLABLE
+    }
     if not fields:
         return {"id": phase_id, "updated": False}
 
-    assignments = ", ".join(f"{k} = :{k}" for k in fields)
+    assignments = ", ".join(
+        f"{k} = CAST(:{k} AS timestamptz)" if k in _PHASE_TIMESTAMPS else f"{k} = :{k}"
+        for k in fields
+    )
     result = await session.execute(
         text(f"UPDATE trip_phases SET {assignments}, updated_at = now() "
              f"WHERE id = CAST(:phase_id AS uuid)"),

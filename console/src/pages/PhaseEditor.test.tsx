@@ -53,3 +53,41 @@ test('saving sends title and checklist in screen order', async () => {
   expect(JSON.parse(checklistCall![1].body).items.map((i: { label: string }) => i.label))
     .toEqual(['Visto', 'Passaporte']);
 });
+
+test('sends the dates typed in the form', async () => {
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ phases: [phase] }) })
+    .mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  vi.stubGlobal('fetch', fetchMock);
+
+  renderEditor();
+
+  await userEvent.type(await screen.findByLabelText('Início'), '2027-07-01T09:00');
+  await userEvent.type(screen.getByLabelText('Fim'), '2027-07-02T18:00');
+  await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+  await screen.findByText('Salvo');
+
+  const patchCall = fetchMock.mock.calls.find(c => c[1]?.method === 'PATCH');
+  const body = JSON.parse(patchCall![1].body);
+  expect(body.starts_at).toBe('2027-07-01T09:00');
+  expect(body.ends_at).toBe('2027-07-02T18:00');
+});
+
+test('sends null when a date is left empty', async () => {
+  const withDates = { ...phase, starts_at: '2027-07-01T12:00:00+00:00', ends_at: null };
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ phases: [withDates] }) })
+    .mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  vi.stubGlobal('fetch', fetchMock);
+
+  renderEditor();
+
+  await userEvent.clear(await screen.findByLabelText('Início'));
+  await userEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+
+  await screen.findByText('Salvo');
+
+  const patchCall = fetchMock.mock.calls.find(c => c[1]?.method === 'PATCH');
+  expect(JSON.parse(patchCall![1].body).starts_at).toBeNull();
+});

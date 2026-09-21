@@ -7,11 +7,23 @@ import {
 } from '../api/console-api';
 import { moveUp } from '../lib/move-up';
 
+/** ISO do servidor para o formato que <input type="datetime-local"> aceita. */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function PhaseEditor() {
   const { tripUuid = '', phaseId = '' } = useParams();
   const [phase, setPhase] = useState<Phase | null>(null);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [links, setLinks] = useState<PhaseLink[]>([]);
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,6 +34,8 @@ export default function PhaseEditor() {
         setPhase(found);
         setChecklist(found?.checklist ?? []);
         setLinks(found?.links ?? []);
+        setStartsAt(toLocalInput(found?.starts_at ?? null));
+        setEndsAt(toLocalInput(found?.ends_at ?? null));
       })
       .catch(err => setError((err as Error).message));
   }, [tripUuid, phaseId]);
@@ -39,6 +53,8 @@ export default function PhaseEditor() {
         icon: phase.icon,
         short_description: phase.short_description,
         detailed_description: phase.detailed_description,
+        starts_at: startsAt || null,
+        ends_at: endsAt || null,
       });
       await replaceChecklist(
         phaseId, checklist.map(i => ({ label: i.label, is_required: i.is_required }))
@@ -73,8 +89,30 @@ export default function PhaseEditor() {
       <textarea
         id="detailed" value={phase.detailed_description ?? ''}
         onChange={e => setPhase({ ...phase, detailed_description: e.target.value })}
-        className="w-full border rounded px-3 py-2 mb-6"
+        className="w-full border rounded px-3 py-2 mb-3"
       />
+
+      <div className="flex gap-3 mb-6">
+        <div className="flex-1">
+          <label htmlFor="starts_at" className="block text-sm">Início</label>
+          <input
+            id="starts_at" type="datetime-local" value={startsAt}
+            onChange={e => setStartsAt(e.target.value)}
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+        <div className="flex-1">
+          <label htmlFor="ends_at" className="block text-sm">Fim</label>
+          <input
+            id="ends_at" type="datetime-local" value={endsAt}
+            onChange={e => setEndsAt(e.target.value)}
+            className="w-full border rounded px-3 py-2"
+          />
+        </div>
+      </div>
+      <p className="text-xs text-gray-500 -mt-4 mb-6">
+        Datas são opcionais. Deixe em branco se a fase não tiver data.
+      </p>
 
       <h2 className="font-bold mb-2">Checklist</h2>
       <ul className="space-y-2 mb-3">

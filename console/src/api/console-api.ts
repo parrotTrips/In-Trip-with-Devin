@@ -37,6 +37,8 @@ export interface Phase {
   detailed_description: string | null;
   sort_order: number;
   is_visible: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
   checklist: ChecklistItem[];
   links: PhaseLink[];
 }
@@ -71,7 +73,8 @@ export function deletePhase(phaseId: string) {
 }
 
 export function updatePhase(phaseId: string, body: Partial<Pick<Phase,
-  'title' | 'subtitle' | 'icon' | 'short_description' | 'detailed_description'>>) {
+  'title' | 'subtitle' | 'icon' | 'short_description' | 'detailed_description'
+  | 'starts_at' | 'ends_at'>>) {
   return request<{ id: string; updated: boolean }>(
     `/console/phases/${phaseId}`, { method: 'PATCH', body: JSON.stringify(body) }
   );

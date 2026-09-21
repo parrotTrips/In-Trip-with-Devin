@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -19,6 +21,8 @@ class PhaseUpdate(BaseModel):
     icon: str | None = None
     short_description: str | None = None
     detailed_description: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
 
 
 class ChecklistItemIn(BaseModel):
