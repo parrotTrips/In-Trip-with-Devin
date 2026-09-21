@@ -36,12 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // run before the parent's, so a child fetching on mount would otherwise go
   // out without an Authorization header.
   const [user, setUser] = useState<AuthUser | null>(() => {
-    const stored = getStoredUser();
-    if (stored) return stored;
-
+    // With the dev flag on, .env wins over localStorage: otherwise a token
+    // left from an earlier session keeps being sent after .env changes, and
+    // every request fails with a stale credential.
     const devUser = getDevAutoLoginUser();
-    if (devUser) localStorage.setItem(STORAGE_KEY, JSON.stringify(devUser));
-    return devUser;
+    if (devUser) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(devUser));
+      return devUser;
+    }
+    return getStoredUser();
   });
 
   const login = (newUser: AuthUser) => {

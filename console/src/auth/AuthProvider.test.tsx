@@ -38,9 +38,19 @@ test('auto-logs in as admin when the dev flag is set', () => {
   expect(screen.getByText('entrou:admin')).toBeInTheDocument();
 });
 
-test('a stored user wins over the dev flag', () => {
+test('the dev token replaces a stale one left in localStorage', () => {
   vi.stubEnv('VITE_DEV_AUTO_LOGIN', 'true');
   vi.stubEnv('VITE_DEV_TOKEN', 'dev-token');
+  localStorage.setItem('parrot_console_user', JSON.stringify({
+    userId: 'old', phone: '+5511000000000', name: 'Antigo', token: 'stale-token', role: 'admin',
+  }));
+
+  render(<AuthProvider><Probe /></AuthProvider>);
+
+  expect(JSON.parse(localStorage.getItem('parrot_console_user')!).token).toBe('dev-token');
+});
+
+test('a stored user is kept when the dev flag is off', () => {
   localStorage.setItem('parrot_console_user', JSON.stringify({
     userId: 'real', phone: '+5511000000000', name: 'Real', token: 'real-token', role: 'admin',
   }));
