@@ -8,6 +8,9 @@ import LoginScreen from './LoginScreen';
 beforeEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
+  // The local .env sets VITE_DEV_AUTO_LOGIN; pin it off so tests do not
+  // depend on the developer's machine.
+  vi.stubEnv('VITE_DEV_AUTO_LOGIN', '');
 });
 
 afterEach(() => {

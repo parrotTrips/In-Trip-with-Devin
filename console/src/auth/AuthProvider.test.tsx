@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
+import { request } from '../api/client';
 import { AuthProvider } from './AuthProvider';
 import { useAuth } from './auth-context';
 
@@ -12,6 +13,9 @@ function Probe() {
 beforeEach(() => {
   localStorage.clear();
   vi.unstubAllEnvs();
+  // The local .env sets VITE_DEV_AUTO_LOGIN; pin it off so tests do not
+  // depend on the developer's machine.
+  vi.stubEnv('VITE_DEV_AUTO_LOGIN', '');
 });
 
 afterEach(() => {
@@ -44,4 +48,16 @@ test('a stored user wins over the dev flag', () => {
 
   expect(screen.getByText('entrou:admin')).toBeInTheDocument();
   expect(JSON.parse(localStorage.getItem('parrot_console_user')!).token).toBe('real-token');
+});
+
+test('the dev auto-login token reaches the HTTP client', async () => {
+  vi.stubEnv('VITE_DEV_AUTO_LOGIN', 'true');
+  vi.stubEnv('VITE_DEV_TOKEN', 'dev-token');
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+  vi.stubGlobal('fetch', fetchMock);
+
+  render(<AuthProvider><Probe /></AuthProvider>);
+  await request('/console/trips');
+
+  expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer dev-token');
 });

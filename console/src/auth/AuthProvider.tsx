@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { STORAGE_KEY } from '../api/client';
 import { AuthContext, type AuthUser } from './auth-context';
@@ -34,6 +34,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(
     () => getStoredUser() ?? getDevAutoLoginUser()
   );
+
+  // The HTTP client reads the token from localStorage, so the dev auto-login
+  // has to land there too — otherwise the app looks logged in but every
+  // request goes out without an Authorization header.
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+      return;
+    }
+    localStorage.removeItem(STORAGE_KEY);
+  }, [user]);
 
   const login = (newUser: AuthUser) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
