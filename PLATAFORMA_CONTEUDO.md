@@ -79,14 +79,34 @@ em nenhum menu — precisa ser migrada ou pode ser descartada?
 | 6 | Editar checklist e links | Salva a lista na ordem em que está na tela | ✅ |
 | 7 | Reordenar fases | A ordem da tela é a ordem que o viajante vê | ✅ |
 
-**Backend da fatia A concluído.** 12 testes novos, todos contra um Postgres real com as
+### Console (interface)
+
+| # | Entrega | Como validar | Status |
+|---|---|---|---|
+| 1 | Projeto `console/` | `npm run build` e `npm run test` rodam | ✅ |
+| 2 | Login por WhatsApp | Quem não é admin é recusado e nada fica salvo | ✅ |
+| 3 | Tela de viagens | Lista as viagens; botão copia o link de pré-embarque | ✅ |
+| 4 | Tela de fases | Mostra Rascunho/Publicada; criar, publicar, excluir | ✅ |
+| 5 | Editor de fase | Campos, checklist e links; salva na ordem da tela | ✅ |
+| 6 | Reordenar fases | Botão Subir grava a nova ordem | ✅ |
+| 7 | Deploy | `netlify.toml` e `make console-deploy` | ✅ |
+
+**Fatia A concluída de ponta a ponta.** 12 testes novos, todos contra um Postgres real com as
 migrations aplicadas. Suíte do backend: **196 passam**. A única falha
 (`test_activity_checkins_table_metadata`) é anterior a este trabalho — a migration `0016`
 mudou a chave única de `activity_checkins` e o teste não foi atualizado junto.
 
-Ainda **não está no ar**: o backend roda no Cloud Run e precisa de `make deploy-backend`.
+Backend: 12 testes novos, **196 passam**. Console: **9 testes**, build limpo. A única falha
+(`test_activity_checkins_table_metadata`) é anterior a este trabalho — a migration `0016`
+mudou a chave única de `activity_checkins` e o teste não foi atualizado junto.
 
-Próximo: o app `console/` (plano a escrever).
+### Para colocar no ar
+
+1. `make deploy-backend` — a API `/console` e o fix dos scan events ainda não estão publicados
+2. Criar o site Netlify do console e definir `CONSOLE_NETLIFY_SITE`, depois `make console-deploy`
+3. Promover o primeiro admin, uma vez: `UPDATE users SET role = 'admin' WHERE phone = '<telefone>';`
+
+Próximo: fatias B, C, D e E, até a paridade total.
 
 ---
 
