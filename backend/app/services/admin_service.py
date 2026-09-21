@@ -496,6 +496,24 @@ async def admin_reset_content(trip_uuid: str) -> dict:
                     "DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[])",
                     tt_ids,
                 )
+            activity_ids = [str(r["id"]) for r in await conn.fetch(
+                "SELECT id FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", phase_ids
+            )]
+            if activity_ids:
+                # Scan events are an append-only audit log: keep the rows, drop the link.
+                await conn.execute(
+                    "UPDATE activity_checkin_scan_events SET trip_activity_id = NULL "
+                    "WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
+                )
+                await conn.execute(
+                    "DELETE FROM activity_participants WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
+                )
+                await conn.execute(
+                    "DELETE FROM activity_checkins WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
+                )
+                await conn.execute(
+                    "DELETE FROM staff_tasks WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
+                )
             await conn.execute(
                 "DELETE FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", phase_ids
             )

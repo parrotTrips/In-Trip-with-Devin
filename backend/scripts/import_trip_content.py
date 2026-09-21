@@ -500,6 +500,11 @@ async def write_to_db(
                 "SELECT id FROM trip_activities WHERE trip_phase_id = ANY($1::uuid[])", ids
             )]
             if activity_ids:
+                # Scan events are an append-only audit log: keep the rows, drop the link.
+                await conn.execute(
+                    "UPDATE activity_checkin_scan_events SET trip_activity_id = NULL "
+                    "WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
+                )
                 await conn.execute(
                     "DELETE FROM activity_participants WHERE trip_activity_id = ANY($1::uuid[])", activity_ids
                 )
