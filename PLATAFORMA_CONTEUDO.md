@@ -52,15 +52,22 @@ A plataforma resolve os quatro: campo obrigatório no formulário, referência e
 
 | # | Entrega | Como validar | Status |
 |---|---|---|---|
-| 1 | API autenticada e lista de viagens | Sem login não entra; quem não é admin recebe "acesso negado" | ⬜ |
-| 2 | Ler fases com checklist e links | A tela consegue carregar o conteúdo de uma viagem | ⬜ |
-| 3 | Criar fase (nasce em rascunho) | Fase nova **não** aparece no app do viajante | ⬜ |
-| 4 | Editar, publicar e despublicar | Publicou, apareceu; despublicou, sumiu | ⬜ |
-| 5 | Excluir fase | Exclui fase e filhos, e recusa se houver atividade vinculada | ⬜ |
-| 6 | Editar checklist e links | Salva a lista na ordem em que está na tela | ⬜ |
-| 7 | Reordenar fases | A ordem da tela é a ordem que o viajante vê | ⬜ |
+| 1 | API autenticada e lista de viagens | Sem login não entra; quem não é admin recebe "acesso negado" | ✅ |
+| 2 | Ler fases com checklist e links | A tela consegue carregar o conteúdo de uma viagem | ✅ |
+| 3 | Criar fase (nasce em rascunho) | Fase nova **não** aparece no app do viajante | ✅ |
+| 4 | Editar, publicar e despublicar | Publicou, apareceu; despublicou, sumiu | ✅ |
+| 5 | Excluir fase | Exclui fase e filhos, e recusa se houver atividade vinculada | ✅ |
+| 6 | Editar checklist e links | Salva a lista na ordem em que está na tela | ✅ |
+| 7 | Reordenar fases | A ordem da tela é a ordem que o viajante vê | ✅ |
 
-*(Atualizo esta tabela conforme cada etapa fica pronta e testada.)*
+**Backend da fatia A concluído.** 12 testes novos, todos contra um Postgres real com as
+migrations aplicadas. Suíte do backend: **196 passam**. A única falha
+(`test_activity_checkins_table_metadata`) é anterior a este trabalho — a migration `0016`
+mudou a chave única de `activity_checkins` e o teste não foi atualizado junto.
+
+Ainda **não está no ar**: o backend roda no Cloud Run e precisa de `make deploy-backend`.
+
+Próximo: o app `console/` (plano a escrever).
 
 ---
 
