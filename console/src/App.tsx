@@ -1,3 +1,10 @@
+import { AuthProvider } from './auth/AuthProvider';
+import LoginScreen from './auth/LoginScreen';
+
 export default function App() {
-  return <h1>Parrot Trips — Console</h1>;
+  return (
+    <AuthProvider>
+      <LoginScreen />
+    </AuthProvider>
+  );
 }
