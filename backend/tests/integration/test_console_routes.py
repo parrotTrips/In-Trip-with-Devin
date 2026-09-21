@@ -105,3 +105,31 @@ def test_get_phases_returns_checklist_and_links(client, session_factory):
     assert phases[0]["is_visible"] is True
     assert [i["label"] for i in phases[0]["checklist"]] == ["Passaporte"]
     assert [link["url"] for link in phases[0]["links"]] == ["https://example.com"]
+
+
+def test_created_phase_starts_invisible_to_travelers(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+
+    res = client.post(
+        "/console/trips/console-test/phases",
+        headers=headers,
+        json={"title": "Nova Fase", "short_description": "curta"},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["is_visible"] is False
+
+    phases = client.get("/console/trips/console-test/phases", headers=headers).json()["phases"]
+    assert [p["title"] for p in phases] == ["Nova Fase"]
+
+    async def _count_visible():
+        async with session_factory() as session:
+            return await session.scalar(
+                text("""
+                    SELECT count(*) FROM trip_phases
+                    WHERE wetravel_trip_uuid='console-test' AND is_visible IS TRUE
+                """)
+            )
+
+    assert asyncio.run(_count_visible()) == 0

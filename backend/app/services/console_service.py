@@ -112,3 +112,29 @@ async def get_phases(session: AsyncSession, trip_uuid: str) -> dict:
             for p in phases
         ]
     }
+
+
+async def create_phase(session: AsyncSession, trip_uuid: str, data: dict) -> dict:
+    """Create a pre-trip phase in draft state, appended at the end."""
+    next_order = await session.scalar(
+        text("""
+            SELECT COALESCE(MAX(sort_order) + 1, 0) FROM trip_phases
+            WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = 'pre-trip'
+        """),
+        {"trip_uuid": trip_uuid},
+    )
+    phase_id = await session.scalar(
+        text("""
+            INSERT INTO trip_phases
+                (id, wetravel_trip_uuid, phase_type, title, subtitle, icon,
+                 short_description, detailed_description, sort_order,
+                 is_locked_by_default, is_visible, created_at, updated_at)
+            VALUES (gen_random_uuid(), :trip_uuid, 'pre-trip', :title, :subtitle, :icon,
+                    :short_description, :detailed_description, :sort_order,
+                    false, false, now(), now())
+            RETURNING id
+        """),
+        {"trip_uuid": trip_uuid, "sort_order": next_order, **data},
+    )
+    await session.commit()
+    return {"id": str(phase_id), "is_visible": False}
