@@ -24,7 +24,7 @@
 ### Task 1: Scaffold do projeto
 
 **Files:**
-- Create: `console/package.json`, `console/vite.config.ts`, `console/tsconfig.json`, `console/tsconfig.node.json`, `console/index.html`, `console/tailwind.config.js`, `console/postcss.config.js`, `console/.gitignore`, `console/src/index.css`, `console/src/main.tsx`, `console/src/App.tsx`, `console/src/test/setup.ts`, `console/src/vite-env.d.ts`
+- Create: `console/package.json`, `console/vite.config.ts`, `console/tsconfig.json`, `console/tsconfig.node.json`, `console/index.html`, `console/tailwind.config.js`, `console/postcss.config.js`, `console/vitest.config.ts`, `console/.gitignore`, `console/src/index.css`, `console/src/main.tsx`, `console/src/App.tsx`, `console/src/test/setup.ts`, `console/src/vite-env.d.ts`
 - Test: `console/src/App.test.tsx`
 
 **Interfaces:**
@@ -72,10 +72,9 @@
 }
 ```
 
-`console/vite.config.ts` — note o bloco `test`, que o app do viajante mantém em arquivo separado; aqui fica junto por ser um projeto menor:
+`console/vite.config.ts` — a config de teste fica em arquivo separado, como no app do viajante. Juntar as duas quebra o build: o Vitest 2 traz um Vite aninhado cujos tipos de plugin não batem com os do Vite 6, e `tsc -b` falha. Mantendo `vitest.config.ts` fora do `include` do tsconfig, o conflito não existe.
 
 ```typescript
-/// <reference types="vitest" />
 import path from "path"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
@@ -85,12 +84,23 @@ export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
   },
-  test: {
-    globals: true,
-    environment: "jsdom",
-    setupFiles: "./src/test/setup.ts",
-  },
 })
+```
+
+`console/vitest.config.ts`:
+
+```typescript
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/test/setup.ts',
+  },
+});
 ```
 
 `console/tsconfig.json`:
@@ -135,7 +145,7 @@ export default defineConfig({
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true,
+    "composite": true,
     "strict": true
   },
   "include": ["vite.config.ts"]
