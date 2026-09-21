@@ -69,3 +69,26 @@ export function deletePhase(phaseId: string) {
     `/console/phases/${phaseId}`, { method: 'DELETE' }
   );
 }
+
+export function updatePhase(phaseId: string, body: Partial<Pick<Phase,
+  'title' | 'subtitle' | 'icon' | 'short_description' | 'detailed_description'>>) {
+  return request<{ id: string; updated: boolean }>(
+    `/console/phases/${phaseId}`, { method: 'PATCH', body: JSON.stringify(body) }
+  );
+}
+
+export function replaceChecklist(
+  phaseId: string, items: { label: string; is_required: boolean }[]
+) {
+  return request<{ count: number }>(
+    `/console/phases/${phaseId}/checklist`,
+    { method: 'PUT', body: JSON.stringify({ items }) }
+  );
+}
+
+export function replaceLinks(phaseId: string, links: { label: string; url: string }[]) {
+  return request<{ count: number }>(
+    `/console/phases/${phaseId}/links`,
+    { method: 'PUT', body: JSON.stringify({ links }) }
+  );
+}
