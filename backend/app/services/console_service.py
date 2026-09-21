@@ -138,3 +138,37 @@ async def create_phase(session: AsyncSession, trip_uuid: str, data: dict) -> dic
     )
     await session.commit()
     return {"id": str(phase_id), "is_visible": False}
+
+
+_PHASE_UPDATABLE = ("title", "subtitle", "icon", "short_description", "detailed_description")
+
+
+async def update_phase(session: AsyncSession, phase_id: str, data: dict) -> dict:
+    """Update only the fields explicitly provided."""
+    fields = {k: v for k, v in data.items() if k in _PHASE_UPDATABLE and v is not None}
+    if not fields:
+        return {"id": phase_id, "updated": False}
+
+    assignments = ", ".join(f"{k} = :{k}" for k in fields)
+    result = await session.execute(
+        text(f"UPDATE trip_phases SET {assignments}, updated_at = now() "
+             f"WHERE id = CAST(:phase_id AS uuid)"),
+        {"phase_id": phase_id, **fields},
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    await session.commit()
+    return {"id": phase_id, "updated": True}
+
+
+async def set_phase_visibility(session: AsyncSession, phase_id: str, is_visible: bool) -> dict:
+    """Publish (visible) or unpublish (draft) a phase."""
+    result = await session.execute(
+        text("UPDATE trip_phases SET is_visible = :is_visible, updated_at = now() "
+             "WHERE id = CAST(:phase_id AS uuid)"),
+        {"phase_id": phase_id, "is_visible": is_visible},
+    )
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    await session.commit()
+    return {"id": phase_id, "is_visible": is_visible}

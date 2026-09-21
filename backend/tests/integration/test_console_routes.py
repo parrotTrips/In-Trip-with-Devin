@@ -133,3 +133,42 @@ def test_created_phase_starts_invisible_to_travelers(client, session_factory):
             )
 
     assert asyncio.run(_count_visible()) == 0
+
+
+def test_patch_phase_updates_only_provided_fields(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+    phase_id = client.post(
+        "/console/trips/console-test/phases",
+        headers=headers,
+        json={"title": "Antigo", "short_description": "curta"},
+    ).json()["id"]
+
+    res = client.patch(f"/console/phases/{phase_id}", headers=headers, json={"title": "Novo"})
+
+    assert res.status_code == 200
+    phases = client.get("/console/trips/console-test/phases", headers=headers).json()["phases"]
+    assert phases[0]["title"] == "Novo"
+    assert phases[0]["short_description"] == "curta"
+
+
+def test_publish_and_unpublish_toggle_visibility(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+    phase_id = client.post(
+        "/console/trips/console-test/phases",
+        headers=headers,
+        json={"title": "Fase", "short_description": "curta"},
+    ).json()["id"]
+
+    assert client.post(
+        f"/console/phases/{phase_id}/publish", headers=headers
+    ).json()["is_visible"] is True
+    phases = client.get("/console/trips/console-test/phases", headers=headers).json()["phases"]
+    assert phases[0]["is_visible"] is True
+
+    assert client.post(
+        f"/console/phases/{phase_id}/unpublish", headers=headers
+    ).json()["is_visible"] is False
+    phases = client.get("/console/trips/console-test/phases", headers=headers).json()["phases"]
+    assert phases[0]["is_visible"] is False
