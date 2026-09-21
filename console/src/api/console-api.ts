@@ -92,3 +92,10 @@ export function replaceLinks(phaseId: string, links: { label: string; url: strin
     { method: 'PUT', body: JSON.stringify({ links }) }
   );
 }
+
+export function reorderPhases(tripUuid: string, phaseIds: string[]) {
+  return request<{ count: number }>(
+    `/console/trips/${tripUuid}/phases/order`,
+    { method: 'PUT', body: JSON.stringify({ phase_ids: phaseIds }) }
+  );
+}

@@ -53,3 +53,18 @@ test('publishing calls the API and shows the phase as published', async () => {
   expect(await screen.findByText('Publicada')).toBeInTheDocument();
   expect(fetchMock.mock.calls[1][0]).toContain('/console/phases/p1/publish');
 });
+
+test('moving a phase up sends the new order', async () => {
+  const two = [phase(), phase({ id: 'p2', title: 'Bagagem', sort_order: 1 })];
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ phases: two }) })
+    .mockResolvedValue({ ok: true, json: async () => ({ count: 2 }) });
+  vi.stubGlobal('fetch', fetchMock);
+
+  renderAt('T1');
+  await screen.findByText('Bagagem');
+  await userEvent.click(screen.getAllByRole('button', { name: 'Subir' })[1]);
+
+  const orderCall = fetchMock.mock.calls.find(c => String(c[0]).endsWith('/phases/order'));
+  expect(JSON.parse(orderCall![1].body).phase_ids).toEqual(['p2', 'p1']);
+});

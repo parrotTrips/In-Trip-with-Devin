@@ -144,3 +144,13 @@ help:
 	@echo "  Variáveis:"
 	@echo "    IMAGE_TAG=<tag>          — sobrescreve a tag da imagem (padrão: git commit hash)"
 	@echo "    Ex: make deploy-backend IMAGE_TAG=v1.2.3"
+
+.PHONY: console-build
+console-build:
+	@echo "Building console..."
+	cd console && npm run build
+
+.PHONY: console-deploy
+console-deploy: console-build
+	@echo "Deploying console to Netlify..."
+	cd console && netlify deploy --prod --dir=dist --site=$(CONSOLE_NETLIFY_SITE)

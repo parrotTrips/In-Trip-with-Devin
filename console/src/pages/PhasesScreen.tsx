@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import {
-  createPhase, deletePhase, getPhases, publishPhase, unpublishPhase, type Phase,
+  createPhase, deletePhase, getPhases, publishPhase, reorderPhases, unpublishPhase, type Phase,
 } from '../api/console-api';
+import { moveUp } from '../lib/move-up';
 
 export default function PhasesScreen() {
   const { tripUuid = '' } = useParams();
@@ -37,7 +38,7 @@ export default function PhasesScreen() {
       {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
       <ul className="space-y-2 mb-6">
-        {phases.map(phase => (
+        {phases.map((phase, index) => (
           <li key={phase.id} className="border rounded p-3 flex items-center gap-3">
             <div className="flex-1">
               <Link to={`/trips/${tripUuid}/phases/${phase.id}`} className="font-medium underline">
@@ -50,6 +51,16 @@ export default function PhasesScreen() {
             <span className={phase.is_visible ? 'text-green-700 text-sm' : 'text-amber-700 text-sm'}>
               {phase.is_visible ? 'Publicada' : 'Rascunho'}
             </span>
+            <button
+              className="border rounded px-2 py-1 text-sm"
+              onClick={() => {
+                const reordered = moveUp(phases, index);
+                setPhases(reordered);
+                void act(() => reorderPhases(tripUuid, reordered.map(p => p.id)));
+              }}
+            >
+              Subir
+            </button>
             <button
               className="border rounded px-2 py-1 text-sm"
               onClick={() => act(() =>
