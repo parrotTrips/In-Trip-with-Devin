@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { useEffect } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import { request } from '../api/client';
@@ -59,5 +60,25 @@ test('the dev auto-login token reaches the HTTP client', async () => {
   render(<AuthProvider><Probe /></AuthProvider>);
   await request('/console/trips');
 
+  expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer dev-token');
+});
+
+test('a child fetching on mount already has the token', async () => {
+  vi.stubEnv('VITE_DEV_AUTO_LOGIN', 'true');
+  vi.stubEnv('VITE_DEV_TOKEN', 'dev-token');
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+  vi.stubGlobal('fetch', fetchMock);
+
+  // Mirrors TripsScreen: a child that fires a request from its own effect.
+  // Child effects run before the parent's, which is what broke in the browser.
+  function FetchesOnMount() {
+    useEffect(() => { void request('/console/trips'); }, []);
+    return <p>filho</p>;
+  }
+
+  render(<AuthProvider><FetchesOnMount /></AuthProvider>);
+  await screen.findByText('filho');
+
+  expect(fetchMock).toHaveBeenCalled();
   expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer dev-token');
 });
