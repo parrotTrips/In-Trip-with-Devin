@@ -263,3 +263,17 @@ async def replace_links(session: AsyncSession, phase_id: str, links: list[dict])
         )
     await session.commit()
     return {"count": len(links)}
+
+
+async def reorder_phases(session: AsyncSession, trip_uuid: str, phase_ids: list[str]) -> dict:
+    """Set sort_order from the position of each id in the list."""
+    for index, phase_id in enumerate(phase_ids):
+        await session.execute(
+            text("""
+                UPDATE trip_phases SET sort_order = :sort_order, updated_at = now()
+                WHERE id = CAST(:phase_id AS uuid) AND wetravel_trip_uuid = :trip_uuid
+            """),
+            {"sort_order": index, "phase_id": phase_id, "trip_uuid": trip_uuid},
+        )
+    await session.commit()
+    return {"count": len(phase_ids)}

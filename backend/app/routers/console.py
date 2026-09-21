@@ -8,6 +8,7 @@ from app.schemas.console import (
     ChecklistReplace,
     LinkReplace,
     PhaseCreate,
+    PhaseOrder,
     PhaseUpdate,
 )
 from app.services.console_service import (
@@ -15,6 +16,7 @@ from app.services.console_service import (
     delete_phase,
     get_phases,
     list_trips,
+    reorder_phases,
     replace_checklist,
     replace_links,
     require_admin,
@@ -125,3 +127,15 @@ async def replace_links_handler(
     """Replace the phase links with the list sent, in order."""
     await require_admin(request, session)
     return await replace_links(session, phase_id, [link.model_dump() for link in body.links])
+
+
+@router.put("/trips/{trip_uuid}/phases/order")
+async def reorder_phases_handler(
+    trip_uuid: str,
+    body: PhaseOrder,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Reorder the trip phases according to the list sent."""
+    await require_admin(request, session)
+    return await reorder_phases(session, trip_uuid, body.phase_ids)

@@ -290,3 +290,22 @@ def test_put_links_replaces_list(client, session_factory):
         "/console/trips/console-test/phases", headers=headers
     ).json()["phases"][0]["links"]
     assert [link["label"] for link in links] == ["Novo"]
+
+
+def test_reorder_phases_sets_sort_order_by_position(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+    first = client.post("/console/trips/console-test/phases", headers=headers,
+                        json={"title": "A", "short_description": ""}).json()["id"]
+    second = client.post("/console/trips/console-test/phases", headers=headers,
+                         json={"title": "B", "short_description": ""}).json()["id"]
+
+    res = client.put(
+        "/console/trips/console-test/phases/order",
+        headers=headers,
+        json={"phase_ids": [second, first]},
+    )
+
+    assert res.status_code == 200
+    phases = client.get("/console/trips/console-test/phases", headers=headers).json()["phases"]
+    assert [p["title"] for p in phases] == ["B", "A"]

@@ -37,3 +37,7 @@ class LinkIn(BaseModel):
 
 class LinkReplace(BaseModel):
     links: list[LinkIn] = []
+
+
+class PhaseOrder(BaseModel):
+    phase_ids: list[str] = []
