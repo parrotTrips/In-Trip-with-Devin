@@ -16,7 +16,19 @@ Hoje todo o conteúdo operacional das viagens é digitado em uma planilha Google
 
 A decisão é **parar de usar planilha como entrada** e construir uma plataforma própria (o *console*), desenhada em torno das informações que já existem no app. As planilhas permanecem funcionando exatamente como hoje e passam a ser, na prática, apenas leitura.
 
-Esta é a **fatia A** de quatro. As demais (Roteiro, Informações, Staff) repetirão o padrão estabelecido aqui.
+O objetivo do projeto é **paridade total**: a plataforma precisa fazer tudo o que as duas planilhas fazem hoje. O inventário completo, levantado a partir de `Code.gs` e `CodeStaff.gs`, define cinco fatias:
+
+| Fatia | Cobre | Abas / ações de origem |
+|---|---|---|
+| **A** | Jogo da vida (pré-trip) | Fases, Checklist, Links |
+| **B** | Roteiro | Roteiro (dias e atividades) |
+| **C** | Informações | Emergency Contacts, Recomendacoes, FAQ, Cancellation Policy |
+| **D** | Staff | Staff, Contatos, Tarefas Staff, Participantes Atividades |
+| **E** | Operação | Start Trip, Reset Trip, Clear Content, ver Feedbacks |
+
+Não migram, por existirem apenas para manter a planilha: `Setup Sheet Headers`, `Import Trips from App`, `sync-to-sheet` e `write-staff-bios`.
+
+**Este documento especifica a fatia A.** As demais repetirão o padrão estabelecido aqui e terão seus próprios specs.
 
 ---
 
@@ -196,9 +208,7 @@ Todo o desenvolvimento segue TDD: teste falhando primeiro, verificado falhando p
 
 ## Fora de escopo
 
-- Fatia B (Roteiro: dias e atividades)
-- Fatia C (Informações: FAQ, política de cancelamento, contatos de emergência, recomendações)
-- Fatia D (Staff: equipe, tarefas, participantes de atividades)
+- Fatias B, C, D e E (ver a tabela de paridade no Contexto) — cada uma terá seu próprio spec
 - Criação e edição de viagens
 - Tela de gestão de usuários e papéis
 - Histórico de alterações e auditoria de edições

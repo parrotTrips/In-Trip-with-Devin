@@ -37,14 +37,33 @@ A plataforma resolve os quatro: campo obrigatório no formulário, referência e
 
 ---
 
-## Fatias
+## Objetivo: paridade total com as planilhas
 
-| Fatia | Conteúdo | Status |
-|---|---|---|
-| **A** | Fases, Checklist, Links | Em andamento |
-| B | Roteiro (dias e atividades) | Não iniciada |
-| C | Informações (FAQ, política, contatos, recomendações) | Não iniciada |
-| D | Staff (equipe, tarefas, participantes) | Não iniciada |
+A plataforma tem que fazer **tudo** o que as duas planilhas fazem hoje. O inventário
+completo está abaixo — é por ele que se mede se chegamos lá.
+
+### Fatias
+
+| Fatia | Cobre | Abas / ações de origem | Status |
+|---|---|---|---|
+| **A** | Jogo da vida (pré-trip) | Fases, Checklist, Links | Backend pronto |
+| **B** | Roteiro | Roteiro (dias e atividades) | Não iniciada |
+| **C** | Informações | Emergency Contacts, Recomendacoes, FAQ, Cancellation Policy | Não iniciada |
+| **D** | Staff | Staff, Contatos, Tarefas Staff, Participantes Atividades | Não iniciada |
+| **E** | Operação | Start Trip, Reset Trip, Clear Content, ver Feedbacks | Não iniciada |
+
+### O que não migra
+
+Três ações existem só para manter a planilha viva e deixam de fazer sentido:
+
+| Ação | Por quê |
+|---|---|
+| 🔧 Setup Sheet Headers | Cria as abas da planilha |
+| ⬇️ Import Trips from App | Copia viagens para a aba; na plataforma o dado já vem do banco |
+| sync-to-sheet / write-staff-bios | Devolvem `address`, `max_checkins` e bios **para** a planilha |
+
+Pendente de confirmação: a aba **Viajantes Teste** da planilha de conteúdo não aparece
+em nenhum menu — precisa ser migrada ou pode ser descartada?
 
 ---
 
