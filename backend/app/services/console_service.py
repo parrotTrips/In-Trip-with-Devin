@@ -48,3 +48,67 @@ async def list_trips(session: AsyncSession) -> dict:
             for r in rows
         ]
     }
+
+
+async def get_phases(session: AsyncSession, trip_uuid: str) -> dict:
+    """Return pre-trip phases of a trip with their checklist items and links."""
+    phase_rows = await session.execute(
+        text("""
+            SELECT id, title, subtitle, icon, short_description,
+                   detailed_description, sort_order, is_visible
+            FROM trip_phases
+            WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = 'pre-trip'
+            ORDER BY sort_order ASC
+        """),
+        {"trip_uuid": trip_uuid},
+    )
+    phases = [dict(r._mapping) for r in phase_rows]
+    if not phases:
+        return {"phases": []}
+
+    # JOIN instead of passing the id list: ANY(:ids) inside text() relies on array
+    # type inference and is brittle; joining on trip_uuid is equivalent and safe.
+    checklist_rows = await session.execute(
+        text("""
+            SELECT i.id, i.trip_phase_id, i.label, i.is_required, i.sort_order
+            FROM trip_phase_checklist_items i
+            JOIN trip_phases p ON p.id = i.trip_phase_id
+            WHERE p.wetravel_trip_uuid = :trip_uuid AND p.phase_type = 'pre-trip'
+            ORDER BY i.sort_order ASC
+        """),
+        {"trip_uuid": trip_uuid},
+    )
+    link_rows = await session.execute(
+        text("""
+            SELECT l.id, l.trip_phase_id, l.label, l.url, l.sort_order
+            FROM trip_phase_links l
+            JOIN trip_phases p ON p.id = l.trip_phase_id
+            WHERE p.wetravel_trip_uuid = :trip_uuid AND p.phase_type = 'pre-trip'
+            ORDER BY l.sort_order ASC
+        """),
+        {"trip_uuid": trip_uuid},
+    )
+
+    by_phase_checklist: dict = {}
+    for r in checklist_rows:
+        by_phase_checklist.setdefault(r.trip_phase_id, []).append({
+            "id": str(r.id), "label": r.label,
+            "is_required": r.is_required, "sort_order": r.sort_order,
+        })
+    by_phase_links: dict = {}
+    for r in link_rows:
+        by_phase_links.setdefault(r.trip_phase_id, []).append({
+            "id": str(r.id), "label": r.label,
+            "url": r.url, "sort_order": r.sort_order,
+        })
+
+    return {
+        "phases": [
+            {
+                **{k: (str(v) if k == "id" else v) for k, v in p.items()},
+                "checklist": by_phase_checklist.get(p["id"], []),
+                "links": by_phase_links.get(p["id"], []),
+            }
+            for p in phases
+        ]
+    }

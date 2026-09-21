@@ -55,3 +55,53 @@ def test_console_trips_lists_trips_for_admin(client, session_factory):
     res = client.get("/console/trips", headers=headers)
     assert res.status_code == 200
     assert "console-test" in [t["trip_uuid"] for t in res.json()["trips"]]
+
+
+async def _seed_phase_with_children(session_factory):
+    async with session_factory() as session:
+        await session.execute(
+            text("""
+                INSERT INTO trip_phases
+                    (id, wetravel_trip_uuid, phase_type, title, subtitle, icon,
+                     short_description, detailed_description, sort_order,
+                     is_locked_by_default, is_visible, created_at, updated_at)
+                VALUES (gen_random_uuid(), 'console-test', 'pre-trip', 'Documentos', 'sub',
+                        'passport', 'curta', 'longa', 0, false, true, now(), now())
+            """)
+        )
+        phase_id = await session.scalar(
+            text("SELECT id FROM trip_phases WHERE wetravel_trip_uuid='console-test' LIMIT 1")
+        )
+        await session.execute(
+            text("""
+                INSERT INTO trip_phase_checklist_items
+                    (id, trip_phase_id, label, sort_order, is_required, created_at, updated_at)
+                VALUES (gen_random_uuid(), :pid, 'Passaporte', 0, true, now(), now())
+            """),
+            {"pid": phase_id},
+        )
+        await session.execute(
+            text("""
+                INSERT INTO trip_phase_links
+                    (id, trip_phase_id, label, url, sort_order, created_at, updated_at)
+                VALUES (gen_random_uuid(), :pid, 'Portal', 'https://example.com', 0, now(), now())
+            """),
+            {"pid": phase_id},
+        )
+        await session.commit()
+
+
+def test_get_phases_returns_checklist_and_links(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory))
+    headers = _auth(client, "+5511777000001")
+
+    res = client.get("/console/trips/console-test/phases", headers=headers)
+
+    assert res.status_code == 200
+    phases = res.json()["phases"]
+    assert len(phases) == 1
+    assert phases[0]["title"] == "Documentos"
+    assert phases[0]["is_visible"] is True
+    assert [i["label"] for i in phases[0]["checklist"]] == ["Passaporte"]
+    assert [link["url"] for link in phases[0]["links"]] == ["https://example.com"]
