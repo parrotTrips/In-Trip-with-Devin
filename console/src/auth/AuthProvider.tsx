@@ -1,64 +1,53 @@
-import { useState, type ReactNode } from 'react';
+import { googleLogout } from '@react-oauth/google';
+import { useEffect, useState, type ReactNode } from 'react';
 
-import { STORAGE_KEY } from '../api/client';
-import { AuthContext, type AuthUser } from './auth-context';
+import type { ConsoleConfig } from '../config';
+import {
+  acceptCredential,
+  clearCredential,
+  restoreCredential,
+  subscribeSession,
+  type GooglePrincipal,
+} from './google-session';
+import { AuthContext } from './auth-context';
 
-function getStoredUser(): AuthUser | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as AuthUser) : null;
-  } catch {
-    return null;
-  }
-}
+const localPrincipal: GooglePrincipal = {
+  sub: 'local-console',
+  email: 'local@parrottrips.com',
+  credential: '',
+  expiresAt: Number.MAX_SAFE_INTEGER,
+};
 
-/** Skips the OTP screen while developing locally.
- *
- * Guarded by import.meta.env.DEV, so a production build can never take this
- * path however the variables are set. Mirrors the traveler app's dev login.
- */
-function getDevAutoLoginUser(): AuthUser | null {
-  if (!import.meta.env.DEV || import.meta.env.VITE_DEV_AUTO_LOGIN !== 'true') {
-    return null;
-  }
-  return {
-    userId: import.meta.env.VITE_DEV_USER_ID ?? 'dev-admin',
-    phone: import.meta.env.VITE_DEV_USER_PHONE ?? '+5511999000001',
-    name: import.meta.env.VITE_DEV_USER_NAME ?? 'Admin Demo',
-    token: import.meta.env.VITE_DEV_TOKEN ?? '',
-    role: 'admin',
-  };
-}
+export function AuthProvider({
+  children,
+  config,
+}: {
+  children: ReactNode;
+  config: ConsoleConfig;
+}) {
+  const readPrincipal = () => config.localBypass
+    ? localPrincipal
+    : restoreCredential(config.allowedEmailDomain);
+  const [principal, setPrincipal] = useState<GooglePrincipal | null>(readPrincipal);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  // The HTTP client reads the token from localStorage, so the dev auto-login
-  // must land there during initialisation — not in an effect. Child effects
-  // run before the parent's, so a child fetching on mount would otherwise go
-  // out without an Authorization header.
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    // With the dev flag on, .env wins over localStorage: otherwise a token
-    // left from an earlier session keeps being sent after .env changes, and
-    // every request fails with a stale credential.
-    const devUser = getDevAutoLoginUser();
-    if (devUser) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(devUser));
-      return devUser;
-    }
-    return getStoredUser();
-  });
+  useEffect(() => subscribeSession(() => setPrincipal(readPrincipal())), [config]);
 
-  const login = (newUser: AuthUser) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser));
-    setUser(newUser);
+  const login = (credential: string) => {
+    const accepted = acceptCredential(credential, config.allowedEmailDomain);
+    setPrincipal(accepted);
+    return accepted !== null;
   };
 
   const logout = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setUser(null);
+    clearCredential();
+    googleLogout();
+    setPrincipal(config.localBypass ? localPrincipal : null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoggedIn: !!user }}>
+    <AuthContext.Provider value={{
+      principal, config, login, logout, isLoggedIn: principal !== null,
+    }}>
       {children}
     </AuthContext.Provider>
   );

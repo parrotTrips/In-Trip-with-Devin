@@ -1,23 +1,20 @@
 import { createContext, useContext } from 'react';
 
-export interface AuthUser {
-  userId: string;
-  phone: string;
-  name: string | null;
-  token: string;
-  role: string;
-}
+import type { ConsoleConfig } from '../config';
+import type { GooglePrincipal } from './google-session';
 
 export interface AuthContextType {
-  user: AuthUser | null;
-  login: (user: AuthUser) => void;
+  principal: GooglePrincipal | null;
+  config: ConsoleConfig;
+  login: (credential: string) => boolean;
   logout: () => void;
   isLoggedIn: boolean;
 }
 
 export const AuthContext = createContext<AuthContextType>({
-  user: null,
-  login: () => {},
+  principal: null,
+  config: { apiUrl: '', googleClientId: '', allowedEmailDomain: '', localBypass: false },
+  login: () => false,
   logout: () => {},
   isLoggedIn: false,
 });

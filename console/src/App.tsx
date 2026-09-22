@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 import { AuthProvider } from './auth/AuthProvider';
 import { useAuth } from './auth/auth-context';
 import LoginScreen from './auth/LoginScreen';
+import { readConfig, type ConsoleConfig } from './config';
 import PhaseEditor from './pages/PhaseEditor';
 import PhasesScreen from './pages/PhasesScreen';
 import TripsScreen from './pages/TripsScreen';
@@ -21,11 +23,30 @@ function Routed() {
 }
 
 export default function App() {
-  return (
-    <AuthProvider>
+  const result = readConfig();
+  if (!result.ok) {
+    return (
+      <main className="max-w-lg mx-auto p-6">
+        <h1 className="text-xl font-bold">Console indisponível</h1>
+        <p className="mt-2 text-red-700">{result.error}</p>
+      </main>
+    );
+  }
+  return <ConfiguredApp config={result.value} />;
+}
+
+function ConfiguredApp({ config }: { config: ConsoleConfig }) {
+  const content = (
+    <AuthProvider config={config}>
       <BrowserRouter>
         <Routed />
       </BrowserRouter>
     </AuthProvider>
+  );
+  if (config.localBypass) return content;
+  return (
+    <GoogleOAuthProvider clientId={config.googleClientId}>
+      {content}
+    </GoogleOAuthProvider>
   );
 }
