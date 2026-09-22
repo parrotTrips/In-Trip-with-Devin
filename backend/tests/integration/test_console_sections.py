@@ -304,3 +304,137 @@ def test_sections_listing_marks_which_ones_are_editable(client, session_factory)
     assert sections["contatos_operacionais"]["editable"] is True
     assert sections["viajantes"]["editable"] is False
     assert sections["roteiro"]["editable"] is False
+
+
+def _rec(**overrides) -> dict:
+    return {"name": "Aprazível", "category": "restaurants", **overrides}
+
+
+def test_put_recommendations_saves_rich_fields(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/recomendacoes",
+        headers=headers,
+        json={"items": [
+            _rec(name="Segundo", neighborhood="Urca", rating="4.5",
+                 map_url="https://maps.example.com/x", description="Vista linda"),
+            _rec(name="Primeiro", neighborhood="Santa Teresa"),
+        ]},
+    )
+
+    assert res.status_code == 200
+    rows = client.get(
+        f"/console/trips/{TRIP}/sections/recomendacoes", headers=headers
+    ).json()["rows"]
+    assert [r["name"] for r in rows] == ["Segundo", "Primeiro"]
+    assert rows[0]["neighborhood"] == "Urca"
+
+
+def test_put_recommendations_requires_name_and_category(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    sem_nome = client.put(
+        f"/console/trips/{TRIP}/sections/recomendacoes",
+        headers=headers, json={"items": [_rec(name="")]},
+    )
+    assert sem_nome.status_code == 422
+    assert "name" in sem_nome.json()["detail"]
+
+    sem_categoria = client.put(
+        f"/console/trips/{TRIP}/sections/recomendacoes",
+        headers=headers, json={"items": [_rec(category="")]},
+    )
+    assert sem_categoria.status_code == 422
+
+
+def test_put_recommendations_rejects_unknown_category(client, session_factory):
+    asyncio.run(_seed(session_factory))
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/recomendacoes",
+        headers=_admin(client), json={"items": [_rec(category="teleporte")]},
+    )
+
+    assert res.status_code == 422
+    assert "category" in res.json()["detail"]
+
+
+def test_put_recommendations_rejects_rating_out_of_range(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    for invalid in ("9", "-1", "abc"):
+        res = client.put(
+            f"/console/trips/{TRIP}/sections/recomendacoes",
+            headers=headers, json={"items": [_rec(rating=invalid)]},
+        )
+        assert res.status_code == 422, f"rating {invalid} deveria ser recusado"
+
+
+def test_put_recommendations_rejects_invalid_url(client, session_factory):
+    asyncio.run(_seed(session_factory))
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/recomendacoes",
+        headers=_admin(client), json={"items": [_rec(map_url="ftp://x.com")]},
+    )
+
+    assert res.status_code == 422
+    assert "map_url" in res.json()["detail"]
+
+
+def test_put_recommendations_accepts_empty_optional_number(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/recomendacoes",
+        headers=headers, json={"items": [_rec(rating="", map_url="")]},
+    )
+
+    assert res.status_code == 200
+    rows = client.get(
+        f"/console/trips/{TRIP}/sections/recomendacoes", headers=headers
+    ).json()["rows"]
+    assert rows[0]["rating"] is None
+
+
+def test_recommendation_columns_carry_kind_and_choices(client, session_factory):
+    asyncio.run(_seed(session_factory))
+
+    columns = {c["key"]: c for c in client.get(
+        f"/console/trips/{TRIP}/sections/recomendacoes", headers=_admin(client)
+    ).json()["columns"]}
+
+    assert columns["category"]["kind"] == "select"
+    assert "restaurants" in columns["category"]["choices"]
+    assert columns["description"]["kind"] == "textarea"
+    assert columns["rating"]["kind"] == "number"
+    assert columns["map_url"]["kind"] == "url"
+    assert columns["photo_url"] is None if "photo_url" in columns else True
+
+
+def test_legacy_category_outside_the_list_is_still_shown(client, session_factory):
+    asyncio.run(_seed(session_factory))
+
+    async def _legacy():
+        async with session_factory() as session:
+            await session.execute(
+                text("INSERT INTO trip_recommendations (id, wetravel_trip_uuid, name,"
+                     " category, sort_order, created_at, updated_at)"
+                     " VALUES (gen_random_uuid(), :u, 'Legado', 'Restaurants', 9,"
+                     "         now(), now())"),
+                {"u": TRIP},
+            )
+            await session.commit()
+
+    asyncio.run(_legacy())
+
+    rows = client.get(
+        f"/console/trips/{TRIP}/sections/recomendacoes", headers=_admin(client)
+    ).json()["rows"]
+    legado = [r for r in rows if r["name"] == "Legado"]
+    assert legado and legado[0]["category"] == "Restaurants"

@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { getSection, replaceSection, type SectionColumn, type SectionRows } from '../api/console-api';
 import { formatCell } from '../lib/section-columns';
 import { moveUp } from '../lib/move-up';
+import SectionField from '../components/SectionField';
 
 const EDITING_NOT_BUILT =
   'Somente leitura por enquanto — a edição desta seção ainda não foi construída.';
@@ -12,6 +13,12 @@ const IMMEDIATE_WARNING =
 
 type Row = Record<string, unknown>;
 
+function toggle(set: Set<number>, value: number): Set<number> {
+  const next = new Set(set);
+  if (!next.delete(value)) next.add(value);
+  return next;
+}
+
 export default function SectionScreen() {
   const { tripUuid = '', sectionKey = '' } = useParams();
   const [section, setSection] = useState<SectionRows | null>(null);
@@ -19,6 +26,7 @@ export default function SectionScreen() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     setSection(null);
@@ -38,7 +46,15 @@ export default function SectionScreen() {
   // Colunas vêm do servidor; sem elas, as chaves da primeira linha servem de guia.
   const columns: SectionColumn[] = section.columns?.length
     ? section.columns
-    : Object.keys(rows[0] ?? {}).map(key => ({ key, label: key, required: false }));
+    : Object.keys(rows[0] ?? {}).map(key => ({
+        key, label: key, required: false, kind: 'text' as const, choices: [],
+      }));
+
+  // Até quatro campos cabem numa linha (é o caso das seções simples); daí em
+  // diante vira cartão, com os dois principais à vista e o resto sob demanda.
+  const isCard = columns.length > 4;
+  const primary = isCard ? columns.slice(0, 2) : columns;
+  const secondary = isCard ? columns.slice(2) : [];
 
   const save = async () => {
     setStatus(null);
@@ -112,27 +128,40 @@ export default function SectionScreen() {
             {rows.map((row, index) => (
               <li key={index} className="rounded border p-3">
                 <div className="mb-2 flex gap-2">
-                  {columns.map(column => (
-                    <div key={column.key} className="flex-1">
-                      <label
-                        htmlFor={`${column.key}-${index}`}
-                        className="block text-xs text-gray-600"
-                      >
-                        {column.label}{column.required && ' *'}
-                      </label>
-                      <input
-                        id={`${column.key}-${index}`}
-                        aria-label={`${column.label} ${index + 1}`}
-                        value={String(row[column.key] ?? '')}
-                        onChange={e => setRows(rows.map(
-                          (r, i) => i === index ? { ...r, [column.key]: e.target.value } : r
-                        ))}
-                        className="w-full rounded border px-2 py-1 text-sm"
-                      />
-                    </div>
+                  {primary.map(column => (
+                    <SectionField
+                      key={column.key} column={column} index={index}
+                      value={row[column.key]}
+                      onChange={value => setRows(rows.map(
+                        (r, i) => i === index ? { ...r, [column.key]: value } : r
+                      ))}
+                    />
                   ))}
                 </div>
+
+                {isCard && expanded.has(index) && (
+                  <div className="mb-2 grid grid-cols-2 gap-2">
+                    {secondary.map(column => (
+                      <SectionField
+                        key={column.key} column={column} index={index}
+                        value={row[column.key]}
+                        onChange={value => setRows(rows.map(
+                          (r, i) => i === index ? { ...r, [column.key]: value } : r
+                        ))}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex gap-2">
+                  {isCard && (
+                    <button
+                      className="rounded border px-2 py-1 text-xs"
+                      onClick={() => setExpanded(toggle(expanded, index))}
+                    >
+                      {expanded.has(index) ? 'Menos campos' : `Mais campos (${secondary.length})`}
+                    </button>
+                  )}
                   <button
                     className="rounded border px-2 py-1 text-xs"
                     onClick={() => setRows(moveUp(rows, index))}

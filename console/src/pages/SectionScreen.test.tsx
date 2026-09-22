@@ -154,3 +154,60 @@ test('removing a row drops it from what is saved', async () => {
   const put = fetchMock.mock.calls.find(c => c[1]?.method === 'PUT');
   expect(JSON.parse(put![1].body).items).toEqual([]);
 });
+
+const RECOMENDACOES = {
+  key: 'recomendacoes', label: 'Recomendações', readonly_note: null, editable: true,
+  columns: [
+    { key: 'name', label: 'Nome', required: true, kind: 'text', choices: [] },
+    { key: 'category', label: 'Categoria', required: true, kind: 'select',
+      choices: ['restaurants', 'bars'] },
+    { key: 'description', label: 'Descrição', required: false, kind: 'textarea', choices: [] },
+    { key: 'rating', label: 'Nota', required: false, kind: 'number', choices: [] },
+    { key: 'map_url', label: 'Mapa', required: false, kind: 'url', choices: [] },
+  ],
+  rows: [{ name: 'Aprazível', category: 'restaurants', description: 'Vista', rating: 4.5, map_url: null }],
+};
+
+test('a select column renders its choices', async () => {
+  mockSection(RECOMENDACOES);
+
+  renderSection('recomendacoes');
+
+  const select = await screen.findByLabelText('Categoria 1');
+  expect(select.tagName).toBe('SELECT');
+  expect(screen.getByRole('option', { name: 'restaurants' })).toBeInTheDocument();
+});
+
+test('a legacy category outside the list stays selectable', async () => {
+  mockSection({
+    ...RECOMENDACOES,
+    rows: [{ name: 'Legado', category: 'Restaurants', description: null, rating: null, map_url: null }],
+  });
+
+  renderSection('recomendacoes');
+
+  const select = await screen.findByLabelText('Categoria 1') as HTMLSelectElement;
+  expect(select.value).toBe('Restaurants');
+});
+
+test('a textarea column renders as a textarea once expanded', async () => {
+  mockSection(RECOMENDACOES);
+
+  renderSection('recomendacoes');
+  // Descrição não é um dos dois campos principais do cartão.
+  await userEvent.click(await screen.findByRole('button', { name: /Mais campos/i }));
+
+  expect(screen.getByLabelText('Descrição 1').tagName).toBe('TEXTAREA');
+});
+
+test('the card shows name and category without expanding', async () => {
+  mockSection(RECOMENDACOES);
+
+  renderSection('recomendacoes');
+
+  expect(await screen.findByDisplayValue('Aprazível')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Mapa 1')).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: /Mais campos/i }));
+  expect(screen.getByLabelText('Mapa 1')).toBeInTheDocument();
+});

@@ -29,11 +29,24 @@ GROUP_LABELS = {
 }
 
 
+# Categorias em minúscula. O banco tem variações legadas ("Restaurants", "Beauty");
+# elas continuam sendo lidas, mas só estes valores podem ser gravados.
+RECOMMENDATION_CATEGORIES = (
+    "restaurants", "bars", "cafes", "beaches", "landmarks", "shopping",
+    "wellness", "sports", "sightseeing", "logistics", "transportation", "beauty",
+)
+
+
 @dataclass(frozen=True)
 class Column:
     key: str
     label: str
     required: bool = False
+    # Como o editor desenha o campo: text, textarea, select, url, number.
+    kind: str = "text"
+    choices: tuple[str, ...] = ()
+    minimum: float | None = None
+    maximum: float | None = None
 
 
 @dataclass(frozen=True)
@@ -97,16 +110,41 @@ SECTIONS: dict[str, Section] = {
     ),
     "recomendacoes": Section(
         key="recomendacoes",
-        columns=(Column("name", "Nome"), Column("category", "Categoria"), Column("neighborhood", "Bairro"), Column("address", "Endereço"),),
+        columns=(
+            Column("name", "Nome", True),
+            Column("category", "Categoria", True, kind="select",
+                   choices=RECOMMENDATION_CATEGORIES),
+            Column("description", "Descrição", kind="textarea"),
+            Column("neighborhood", "Bairro"),
+            Column("location", "Cidade/Região"),
+            Column("highlight", "Destaque"),
+            Column("price_range", "Faixa de preço"),
+            Column("address", "Endereço"),
+            Column("phone", "Telefone"),
+            Column("whatsapp_url", "WhatsApp", kind="url"),
+            Column("map_url", "Mapa", kind="url"),
+            Column("emoji", "Emoji"),
+            Column("rating", "Nota", kind="number", minimum=0, maximum=5),
+            Column("contact_label", "Rótulo do contato"),
+        ),
         label="Recomendações",
         group=GROUP_CONTENT,
         count_sql="SELECT count(*) FROM trip_recommendations WHERE wetravel_trip_uuid = :trip_uuid",
         rows_sql="""
-            SELECT name, category, neighborhood, address
+            SELECT name, category, description, neighborhood, location, highlight,
+                   price_range, address, phone, whatsapp_url, map_url, emoji,
+                   rating, contact_label
             FROM trip_recommendations
             WHERE wetravel_trip_uuid = :trip_uuid
             ORDER BY sort_order, name
         """,
+        editable=Editable(
+            "trip_recommendations",
+            ("name", "category", "description", "neighborhood", "location", "highlight",
+             "price_range", "address", "phone", "whatsapp_url", "map_url", "emoji",
+             "rating", "contact_label"),
+            ("name", "category"),
+        ),
     ),
     "faq": Section(
         key="faq",
@@ -307,6 +345,8 @@ async def get_section_rows(session: AsyncSession, trip_uuid: str, key: str) -> d
                 "key": c.key,
                 "label": c.label,
                 "required": c.key in (section.editable.required if section.editable else ()),
+                "kind": c.kind,
+                "choices": list(c.choices),
             }
             for c in section.columns
         ],
@@ -320,6 +360,38 @@ def _clean(value: object) -> str | None:
         return None
     text_value = str(value).strip()
     return text_value or None
+
+
+def _validate_value(column: "Column | None", value: str | None, index: int):
+    """Check one value against its column kind, returning what should be stored."""
+    if column is None or value is None:
+        return value
+
+    where = f"Item {index + 1}: '{column.key}'"
+
+    if column.kind == "select" and value not in column.choices:
+        allowed = ", ".join(column.choices)
+        raise HTTPException(status_code=422, detail=f"{where} must be one of: {allowed}")
+
+    if column.kind == "url" and not value.startswith(("http://", "https://")):
+        raise HTTPException(status_code=422, detail=f"{where} must start with http:// or https://")
+
+    if column.kind == "number":
+        try:
+            number = float(value)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"{where} must be a number") from None
+        if column.minimum is not None and number < column.minimum:
+            raise HTTPException(
+                status_code=422, detail=f"{where} must be at least {column.minimum}"
+            )
+        if column.maximum is not None and number > column.maximum:
+            raise HTTPException(
+                status_code=422, detail=f"{where} must be at most {column.maximum}"
+            )
+        return number
+
+    return value
 
 
 async def replace_section(
@@ -339,17 +411,21 @@ async def replace_section(
         )
 
     spec = section.editable
+    by_key = {c.key: c for c in section.columns}
 
-    # Validate everything before writing anything.
+    # Validate everything before writing anything: a rejected item leaves the
+    # section exactly as it was.
     cleaned: list[dict] = []
     for index, item in enumerate(items):
-        row = {column: _clean(item.get(column)) for column in spec.columns}
+        row: dict = {column: _clean(item.get(column)) for column in spec.columns}
         for column in spec.required:
             if row[column] is None:
                 raise HTTPException(
                     status_code=422,
                     detail=f"Item {index + 1}: '{column}' is required",
                 )
+        for key, value in list(row.items()):
+            row[key] = _validate_value(by_key.get(key), value, index)
         cleaned.append(row)
 
     columns = ", ".join(spec.columns)

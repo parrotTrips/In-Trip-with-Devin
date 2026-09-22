@@ -117,6 +117,8 @@ export interface SectionColumn {
   key: string;
   label: string;
   required: boolean;
+  kind: 'text' | 'textarea' | 'select' | 'url' | 'number';
+  choices: string[];
 }
 
 export interface SectionRows {
