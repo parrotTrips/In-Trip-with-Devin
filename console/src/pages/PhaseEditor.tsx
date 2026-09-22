@@ -68,7 +68,7 @@ export default function PhaseEditor() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <Link to={`/trips/${tripUuid}/phases`} className="text-sm underline">← Fases</Link>
+      <Link to={`/trips/${tripUuid}/fases`} className="text-sm underline">← Fases</Link>
       <h1 className="text-xl font-bold my-4">Editar fase</h1>
 
       <label htmlFor="title" className="block text-sm">Título</label>

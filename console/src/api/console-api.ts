@@ -102,3 +102,28 @@ export function reorderPhases(tripUuid: string, phaseIds: string[]) {
     { method: 'PUT', body: JSON.stringify({ phase_ids: phaseIds }) }
   );
 }
+
+export interface TripSection {
+  key: string;
+  label: string;
+  group: string;
+  group_label: string;
+  count: number;
+  editable: boolean;
+  readonly_note: string | null;
+}
+
+export interface SectionRows {
+  key: string;
+  label: string;
+  readonly_note: string | null;
+  rows: Record<string, unknown>[];
+}
+
+export function listSections(tripUuid: string) {
+  return request<{ sections: TripSection[] }>(`/console/trips/${tripUuid}/sections`);
+}
+
+export function getSection(tripUuid: string, sectionKey: string) {
+  return request<SectionRows>(`/console/trips/${tripUuid}/sections/${sectionKey}`);
+}

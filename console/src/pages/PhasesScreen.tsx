@@ -41,7 +41,7 @@ export default function PhasesScreen() {
         {phases.map((phase, index) => (
           <li key={phase.id} className="border rounded p-3 flex items-center gap-3">
             <div className="flex-1">
-              <Link to={`/trips/${tripUuid}/phases/${phase.id}`} className="font-medium underline">
+              <Link to={`/trips/${tripUuid}/fases/${phase.id}`} className="font-medium underline">
                 {phase.title}
               </Link>
               <p className="text-sm text-gray-600">

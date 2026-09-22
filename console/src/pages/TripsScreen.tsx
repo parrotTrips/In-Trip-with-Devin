@@ -26,7 +26,7 @@ export default function TripsScreen() {
       <ul className="space-y-2 mb-6">
         {trips.map(trip => (
           <li key={trip.trip_uuid} className="border rounded p-3">
-            <Link to={`/trips/${trip.trip_uuid}/phases`} className="font-medium underline">
+            <Link to={`/trips/${trip.trip_uuid}/fases`} className="font-medium underline">
               {trip.title}
             </Link>
             <p className="text-sm text-gray-600">
