@@ -21,6 +21,7 @@ beforeEach(() => {
 test('lists trips returned by the API', async () => {
   render(<MemoryRouter><TripsScreen /></MemoryRouter>);
   expect(await screen.findByText('Viagem Um')).toBeInTheDocument();
+  expect(screen.getByText(/Não importe esta viagem pela planilha/)).toBeInTheDocument();
 });
 
 test('copies the pre-departure link to the clipboard', async () => {

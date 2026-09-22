@@ -22,6 +22,10 @@ export default function TripsScreen() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-xl font-bold mb-4">Viagens</h1>
+      <p className="border border-amber-300 bg-amber-50 text-amber-900 rounded p-3 text-sm mb-4">
+        Não importe esta viagem pela planilha depois de editá-la aqui. O import legado pode
+        substituir fases, checklist e links.
+      </p>
       {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
       <ul className="space-y-2 mb-6">
         {trips.map(trip => (

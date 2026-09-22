@@ -5,9 +5,9 @@ import App from './App';
 
 beforeEach(() => {
   localStorage.clear();
-  // The local .env sets VITE_DEV_AUTO_LOGIN; pin it off so tests do not
-  // depend on the developer's machine.
-  vi.stubEnv('VITE_DEV_AUTO_LOGIN', '');
+  sessionStorage.clear();
+  vi.stubEnv('VITE_ENABLE_CONSOLE_LOCAL', 'false');
+  vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'client.apps.googleusercontent.com');
 });
 
 test('shows the login screen when nobody is signed in', () => {
