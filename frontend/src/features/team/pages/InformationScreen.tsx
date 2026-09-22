@@ -6,10 +6,12 @@ import {
   getMyTeam,
   getMyEmergencyContacts,
   getMyFaq,
+  getMyCancellationPolicy,
   sendMyAppFeedback,
   type TeamMember,
   type EmergencyContact,
   type FaqItem,
+  type CancellationPolicyItem,
 } from '../../trip/services/trip-api';
 import AppHeader from '../../../shared/components/AppHeader';
 
@@ -102,6 +104,17 @@ function FaqRow({ item }: { item: FaqItem }) {
   );
 }
 
+// ── Cancellation Policy ───────────────────────────────────────────────────────
+
+function CancellationPolicyRow({ item }: { item: CancellationPolicyItem }) {
+  return (
+    <div className="py-3 border-b border-gray-50 last:border-0">
+      <p className="text-sm font-semibold text-gray-800">{item.title}</p>
+      <p className="text-sm text-gray-600 leading-relaxed mt-1">{item.body}</p>
+    </div>
+  );
+}
+
 // ── Empty ──────────────────────────────────────────────────────────────────────
 
 function Empty({ label }: { label: string }) {
@@ -114,6 +127,7 @@ export default function InformationScreen() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [emergency, setEmergency] = useState<EmergencyContact[]>([]);
   const [faq, setFaq] = useState<FaqItem[]>([]);
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicyItem[]>([]);
   const [appFeedback, setAppFeedback] = useState('');
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
@@ -125,6 +139,7 @@ export default function InformationScreen() {
       getMyTeam().then(r => setTeam(r.team)),
       getMyEmergencyContacts().then(r => setEmergency(r.emergency_contacts)),
       getMyFaq().then(r => setFaq(r.faq)),
+      getMyCancellationPolicy().then(r => setCancellationPolicy(r.cancellation_policy)),
     ])
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -189,6 +204,12 @@ export default function InformationScreen() {
             {faq.length === 0
               ? <Empty label="No FAQ yet" />
               : faq.map(item => <FaqRow key={item.id} item={item} />)}
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Cancellation Policy" emoji="📄">
+            {cancellationPolicy.length === 0
+              ? <Empty label="No cancellation policy yet" />
+              : cancellationPolicy.map(item => <CancellationPolicyRow key={item.id} item={item} />)}
           </CollapsibleSection>
 
           <CollapsibleSection title="Feedback" emoji="💬">

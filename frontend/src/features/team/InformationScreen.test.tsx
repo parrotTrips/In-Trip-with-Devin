@@ -103,12 +103,30 @@ describe('InformationScreen', () => {
     expect(screen.queryByRole('button', { name: /local recommendations/i })).not.toBeInTheDocument();
   });
 
-  test('does not show or load cancellation policy in Information', async () => {
+  test('shows cancellation policy from the active trip', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/cancellation-policy', () => {
+        cancellationPolicyRequest();
+        return HttpResponse.json({
+          cancellation_policy: [
+            {
+              id: 'policy-1',
+              title: 'Internal test cancellation flow',
+              body: 'Use My Profile > Packages > Transfer or Cancel your Package to validate the internal cancellation and transfer request workflow.',
+              sort_order: 1,
+            },
+          ],
+        });
+      })
+    );
+
     renderInformationScreen('OTHER-TRIP');
 
-    await screen.findByRole('button', { name: /parrot team/i });
+    const cancellationPolicyButton = await screen.findByRole('button', { name: /cancellation policy/i });
+    expect(cancellationPolicyRequest).toHaveBeenCalledOnce();
 
-    expect(screen.queryByRole('button', { name: /cancellation policy/i })).not.toBeInTheDocument();
-    expect(cancellationPolicyRequest).not.toHaveBeenCalled();
+    await userEvent.click(cancellationPolicyButton);
+    expect(screen.getByText('Internal test cancellation flow')).toBeInTheDocument();
+    expect(screen.getByText(/Transfer or Cancel your Package/i)).toBeInTheDocument();
   });
 });
