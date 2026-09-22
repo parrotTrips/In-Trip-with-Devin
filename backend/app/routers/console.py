@@ -11,6 +11,7 @@ from app.schemas.console import (
     PhaseOrder,
     PhaseUpdate,
 )
+from app.services.console_sections import get_section_rows, list_sections
 from app.services.console_service import (
     create_phase,
     delete_phase,
@@ -139,3 +140,26 @@ async def reorder_phases_handler(
     """Reorder the trip phases according to the list sent."""
     await require_admin(request, session)
     return await reorder_phases(session, trip_uuid, body.phase_ids)
+
+
+@router.get("/trips/{trip_uuid}/sections")
+async def list_sections_handler(
+    trip_uuid: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return every section of the trip with its group and row count."""
+    await require_admin(request, session)
+    return await list_sections(session, trip_uuid)
+
+
+@router.get("/trips/{trip_uuid}/sections/{section_key}")
+async def get_section_handler(
+    trip_uuid: str,
+    section_key: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return the rows of one read-only section."""
+    await require_admin(request, session)
+    return await get_section_rows(session, trip_uuid, section_key)

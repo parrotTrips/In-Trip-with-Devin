@@ -31,6 +31,7 @@ MODULES_TO_CLEAR = [
     "app.routers.checklist",
     "app.routers.console",
     "app.services.console_service",
+    "app.services.console_sections",
     "app.middleware.auth",
 ]
 
