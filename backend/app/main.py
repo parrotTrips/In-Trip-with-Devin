@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import get_app_env, get_cors_allowed_origins
 from app.db.session import dispose_engine
 from app.middleware.auth import JWTAuthMiddleware
 from app.routers.admin import router as admin_router
@@ -22,16 +23,24 @@ async def lifespan(app_instance: FastAPI):
     await dispose_engine()
 
 
-app = FastAPI(lifespan=lifespan)
+is_development = get_app_env() == "development"
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if is_development else None,
+    redoc_url="/redoc" if is_development else None,
+    openapi_url="/openapi.json" if is_development else None,
+)
 
+# Starlette wraps middleware in reverse registration order. Register the JWT
+# middleware first so CORS remains outermost and decorates authentication errors.
+app.add_middleware(JWTAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=get_cors_allowed_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
-app.add_middleware(JWTAuthMiddleware)
 
 app.include_router(health_router)
 app.include_router(auth_router)

@@ -8,23 +8,9 @@ requires role=admin.
 
 from __future__ import annotations
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-
-async def require_admin(request: Request, session: AsyncSession) -> str:
-    """Return the caller's user_id, or raise 403 if they are not an admin."""
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    role = await session.scalar(
-        text("SELECT role FROM users WHERE id = CAST(:user_id AS uuid)"),
-        {"user_id": user_id},
-    )
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return str(user_id)
 
 
 async def list_trips(session: AsyncSession) -> dict:

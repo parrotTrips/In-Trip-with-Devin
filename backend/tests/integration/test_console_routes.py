@@ -1,9 +1,8 @@
 import asyncio
 from datetime import date
 
+import pytest
 from sqlalchemy import text
-
-from app.db.models.user import User
 
 
 async def _seed_admin_and_trip(session_factory):
@@ -22,31 +21,62 @@ async def _seed_admin_and_trip(session_factory):
                 "ed": date(2027, 7, 10),
             },
         )
-        session.add_all([
-            User(phone="+5511777000001", full_name="Admin", status="active", role="admin"),
-            User(phone="+5511777000002", full_name="Trav", status="active", role="traveler"),
-        ])
         await session.commit()
 
 
 def _auth(client, phone: str) -> dict:
-    otp_res = client.post("/auth/request-otp", json={"phone": phone})
-    verify_res = client.post(
-        "/auth/verify-otp",
-        json={"phone": phone, "code": otp_res.json()["debug_code"]},
-    )
-    return {"Authorization": f"Bearer {verify_res.json()['access_token']}"}
+    del client, phone
+    return {}
 
 
-def test_console_trips_requires_a_token(client, session_factory):
+def test_console_trips_requires_a_google_token(client, session_factory, monkeypatch):
     asyncio.run(_seed_admin_and_trip(session_factory))
+    monkeypatch.setenv("ENABLE_CONSOLE_LOCAL", "false")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "client.apps.googleusercontent.com")
     assert client.get("/console/trips").status_code == 401
 
 
-def test_console_trips_rejects_non_admin(client, session_factory):
+def test_console_accepts_workspace_identity_without_database_user(
+    client, session_factory, monkeypatch
+):
+    from app.core import console_auth
+
     asyncio.run(_seed_admin_and_trip(session_factory))
-    headers = _auth(client, "+5511777000002")
-    assert client.get("/console/trips", headers=headers).status_code == 403
+    monkeypatch.setenv("ENABLE_CONSOLE_LOCAL", "false")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "client.apps.googleusercontent.com")
+    monkeypatch.setattr(console_auth, "_verify_google_token_sync", lambda *_: {
+        "sub": "workspace-user", "email": "user@parrottrips.com",
+        "email_verified": True, "hd": "parrottrips.com",
+    })
+
+    response = client.get(
+        "/console/trips", headers={"Authorization": "Bearer google-id-token"}
+    )
+
+    assert response.status_code == 200
+    assert "console-test" in [trip["trip_uuid"] for trip in response.json()["trips"]]
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "json"),
+    [
+        ("GET", "/console/trips", None),
+        ("GET", "/console/trips/trip/phases", None),
+        ("POST", "/console/trips/trip/phases", {"title": "F", "short_description": "D"}),
+        ("PATCH", "/console/phases/00000000-0000-0000-0000-000000000000", {"title": "F"}),
+        ("POST", "/console/phases/00000000-0000-0000-0000-000000000000/publish", None),
+        ("DELETE", "/console/phases/00000000-0000-0000-0000-000000000000", None),
+        ("PUT", "/console/phases/00000000-0000-0000-0000-000000000000/checklist", {"items": []}),
+        ("PUT", "/console/phases/00000000-0000-0000-0000-000000000000/links", {"links": []}),
+        ("PUT", "/console/trips/trip/phases/order", {"phase_ids": []}),
+    ],
+)
+def test_every_console_route_rejects_missing_google_token(
+    client, monkeypatch, method, path, json
+):
+    monkeypatch.setenv("ENABLE_CONSOLE_LOCAL", "false")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "client.apps.googleusercontent.com")
+    assert client.request(method, path, json=json).status_code == 401
 
 
 def test_console_trips_lists_trips_for_admin(client, session_factory):

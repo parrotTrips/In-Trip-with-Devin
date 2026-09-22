@@ -10,15 +10,19 @@ from starlette.responses import JSONResponse
 from app.core.config import JWT_ALGORITHM, JWT_SECRET
 from app.core.logger import log
 
-_PUBLIC_PATHS = {"/health", "/healthz"}
-_PUBLIC_PREFIXES = ("/auth", "/admin")
+_PUBLIC_PATHS = {"/health", "/healthz", "/docs", "/redoc", "/openapi.json"}
+# These prefixes bypass only the app's internal JWT. /console is protected by
+# its router-wide Google Workspace dependency.
+_INTERNAL_JWT_BYPASS_PREFIXES = ("/auth", "/admin", "/console")
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+        if path in _PUBLIC_PATHS or any(
+            path.startswith(prefix) for prefix in _INTERNAL_JWT_BYPASS_PREFIXES
+        ):
             return await call_next(request)
 
         if request.method == "OPTIONS":

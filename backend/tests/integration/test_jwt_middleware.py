@@ -134,3 +134,12 @@ def test_protected_route_with_signed_non_auth_payload_returns_401(seeded_client)
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "Unauthorized"
+
+
+def test_profile_still_rejects_google_like_token(seeded_client):
+    response = seeded_client.get(
+        "/profile/user-id",
+        params={"trip_id": "test-trip"},
+        headers={"Authorization": "Bearer google-id-token"},
+    )
+    assert response.status_code == 401
