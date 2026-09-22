@@ -51,3 +51,21 @@ class SectionReplace(BaseModel):
     """Rows of an editable section. Keys are filtered against the section registry."""
 
     items: list[dict] = Field(default_factory=list)
+
+
+class ActivityIn(BaseModel):
+    """Fields of an activity. Unknown keys are ignored by the service."""
+
+    name: str | None = None
+    activity_type: str | None = None
+    starts_at: datetime | None = None
+    duration_minutes: int | None = None
+    short_description: str | None = None
+    practical_info: str | None = None
+    address: str | None = None
+    max_checkins: int | None = None
+    amount_brl: float | None = None
+
+
+class ActivityOrder(BaseModel):
+    activity_ids: list[str] = Field(default_factory=list)

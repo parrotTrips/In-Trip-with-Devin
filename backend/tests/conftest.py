@@ -32,6 +32,7 @@ MODULES_TO_CLEAR = [
     "app.routers.console",
     "app.services.console_service",
     "app.services.console_sections",
+    "app.services.console_roteiro",
     "app.middleware.auth",
 ]
 

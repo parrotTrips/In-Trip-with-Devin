@@ -5,12 +5,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
 from app.schemas.console import (
+    ActivityIn,
+    ActivityOrder,
     ChecklistReplace,
     SectionReplace,
     LinkReplace,
     PhaseCreate,
     PhaseOrder,
     PhaseUpdate,
+)
+from app.services.console_roteiro import (
+    create_activity,
+    delete_activity,
+    get_days,
+    reorder_activities,
+    update_activity,
 )
 from app.services.console_sections import (
     get_section_rows,
@@ -181,3 +190,75 @@ async def replace_section_handler(
     """Replace the rows of an editable section with the list sent, in order."""
     await require_admin(request, session)
     return await replace_section(session, trip_uuid, section_key, body.items)
+
+
+@router.get("/trips/{trip_uuid}/days")
+async def get_days_handler(
+    trip_uuid: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return in-trip days with their activities."""
+    await require_admin(request, session)
+    return await get_days(session, trip_uuid)
+
+
+@router.post("/trips/{trip_uuid}/days")
+async def create_day_handler(
+    trip_uuid: str,
+    body: PhaseCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Create an in-trip day. A day is a phase, so it reuses the phase creation."""
+    await require_admin(request, session)
+    return await create_phase(session, trip_uuid, body.model_dump(), phase_type="in-trip")
+
+
+@router.post("/days/{day_id}/activities")
+async def create_activity_handler(
+    day_id: str,
+    body: ActivityIn,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Append an activity to a day."""
+    await require_admin(request, session)
+    return await create_activity(session, day_id, body.model_dump(exclude_unset=True, mode="json"))
+
+
+@router.patch("/activities/{activity_id}")
+async def update_activity_handler(
+    activity_id: str,
+    body: ActivityIn,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Update an activity in place, preserving its check-ins."""
+    await require_admin(request, session)
+    return await update_activity(
+        session, activity_id, body.model_dump(exclude_unset=True, mode="json")
+    )
+
+
+@router.delete("/activities/{activity_id}")
+async def delete_activity_handler(
+    activity_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Delete an activity, refusing when attendance records depend on it."""
+    await require_admin(request, session)
+    return await delete_activity(session, activity_id)
+
+
+@router.put("/days/{day_id}/activities/order")
+async def reorder_activities_handler(
+    day_id: str,
+    body: ActivityOrder,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Reorder the activities of a day."""
+    await require_admin(request, session)
+    return await reorder_activities(session, day_id, body.activity_ids)

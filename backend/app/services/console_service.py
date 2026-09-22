@@ -50,18 +50,20 @@ async def list_trips(session: AsyncSession) -> dict:
     }
 
 
-async def get_phases(session: AsyncSession, trip_uuid: str) -> dict:
-    """Return pre-trip phases of a trip with their checklist items and links."""
+async def get_phases(
+    session: AsyncSession, trip_uuid: str, phase_type: str = "pre-trip"
+) -> dict:
+    """Return phases of one type with their checklist items and links."""
     phase_rows = await session.execute(
         text("""
             SELECT id, title, subtitle, icon, short_description,
                    detailed_description, sort_order, is_visible,
                    starts_at, ends_at
             FROM trip_phases
-            WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = 'pre-trip'
+            WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = :phase_type
             ORDER BY sort_order ASC
         """),
-        {"trip_uuid": trip_uuid},
+        {"trip_uuid": trip_uuid, "phase_type": phase_type},
     )
     phases = [dict(r._mapping) for r in phase_rows]
     if not phases:
@@ -74,20 +76,20 @@ async def get_phases(session: AsyncSession, trip_uuid: str) -> dict:
             SELECT i.id, i.trip_phase_id, i.label, i.is_required, i.sort_order
             FROM trip_phase_checklist_items i
             JOIN trip_phases p ON p.id = i.trip_phase_id
-            WHERE p.wetravel_trip_uuid = :trip_uuid AND p.phase_type = 'pre-trip'
+            WHERE p.wetravel_trip_uuid = :trip_uuid AND p.phase_type = :phase_type
             ORDER BY i.sort_order ASC
         """),
-        {"trip_uuid": trip_uuid},
+        {"trip_uuid": trip_uuid, "phase_type": phase_type},
     )
     link_rows = await session.execute(
         text("""
             SELECT l.id, l.trip_phase_id, l.label, l.url, l.sort_order
             FROM trip_phase_links l
             JOIN trip_phases p ON p.id = l.trip_phase_id
-            WHERE p.wetravel_trip_uuid = :trip_uuid AND p.phase_type = 'pre-trip'
+            WHERE p.wetravel_trip_uuid = :trip_uuid AND p.phase_type = :phase_type
             ORDER BY l.sort_order ASC
         """),
-        {"trip_uuid": trip_uuid},
+        {"trip_uuid": trip_uuid, "phase_type": phase_type},
     )
 
     by_phase_checklist: dict = {}
@@ -115,14 +117,16 @@ async def get_phases(session: AsyncSession, trip_uuid: str) -> dict:
     }
 
 
-async def create_phase(session: AsyncSession, trip_uuid: str, data: dict) -> dict:
-    """Create a pre-trip phase in draft state, appended at the end."""
+async def create_phase(
+    session: AsyncSession, trip_uuid: str, data: dict, phase_type: str = "pre-trip"
+) -> dict:
+    """Create a phase in draft state, appended at the end."""
     next_order = await session.scalar(
         text("""
             SELECT COALESCE(MAX(sort_order) + 1, 0) FROM trip_phases
-            WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = 'pre-trip'
+            WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = :phase_type
         """),
-        {"trip_uuid": trip_uuid},
+        {"trip_uuid": trip_uuid, "phase_type": phase_type},
     )
     phase_id = await session.scalar(
         text("""
@@ -130,12 +134,13 @@ async def create_phase(session: AsyncSession, trip_uuid: str, data: dict) -> dic
                 (id, wetravel_trip_uuid, phase_type, title, subtitle, icon,
                  short_description, detailed_description, sort_order,
                  is_locked_by_default, is_visible, created_at, updated_at)
-            VALUES (gen_random_uuid(), :trip_uuid, 'pre-trip', :title, :subtitle, :icon,
+            VALUES (gen_random_uuid(), :trip_uuid, :phase_type, :title, :subtitle, :icon,
                     :short_description, :detailed_description, :sort_order,
                     false, false, now(), now())
             RETURNING id
         """),
-        {"trip_uuid": trip_uuid, "sort_order": next_order, **data},
+        {"trip_uuid": trip_uuid, "phase_type": phase_type,
+         "sort_order": next_order, **data},
     )
     await session.commit()
     return {"id": str(phase_id), "is_visible": False}
