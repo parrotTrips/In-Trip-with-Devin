@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PhaseCreate(BaseModel):
@@ -45,3 +45,9 @@ class LinkReplace(BaseModel):
 
 class PhaseOrder(BaseModel):
     phase_ids: list[str] = []
+
+
+class SectionReplace(BaseModel):
+    """Rows of an editable section. Keys are filtered against the section registry."""
+
+    items: list[dict] = Field(default_factory=list)

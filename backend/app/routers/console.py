@@ -6,12 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db_session
 from app.schemas.console import (
     ChecklistReplace,
+    SectionReplace,
     LinkReplace,
     PhaseCreate,
     PhaseOrder,
     PhaseUpdate,
 )
-from app.services.console_sections import get_section_rows, list_sections
+from app.services.console_sections import (
+    get_section_rows,
+    list_sections,
+    replace_section,
+)
 from app.services.console_service import (
     create_phase,
     delete_phase,
@@ -163,3 +168,16 @@ async def get_section_handler(
     """Return the rows of one read-only section."""
     await require_admin(request, session)
     return await get_section_rows(session, trip_uuid, section_key)
+
+
+@router.put("/trips/{trip_uuid}/sections/{section_key}")
+async def replace_section_handler(
+    trip_uuid: str,
+    section_key: str,
+    body: SectionReplace,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Replace the rows of an editable section with the list sent, in order."""
+    await require_admin(request, session)
+    return await replace_section(session, trip_uuid, section_key, body.items)

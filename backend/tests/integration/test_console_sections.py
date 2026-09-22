@@ -196,3 +196,111 @@ def test_sections_require_admin(client, session_factory):
     assert client.get(
         f"/console/trips/{TRIP}/sections", headers=traveler
     ).status_code == 403
+
+
+def test_put_section_replaces_list_and_sets_order(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/faq",
+        headers=headers,
+        json={"items": [
+            {"question": "Segunda?", "answer": "Sim."},
+            {"question": "Primeira?", "answer": "Também."},
+        ]},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["count"] == 2
+
+    rows = client.get(f"/console/trips/{TRIP}/sections/faq", headers=headers).json()["rows"]
+    assert [r["question"] for r in rows] == ["Segunda?", "Primeira?"]
+
+
+def test_put_section_accepts_optional_columns_left_empty(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/contatos_emergencia",
+        headers=headers,
+        json={"items": [{"name": "Hospital", "role": "", "phone": None}]},
+    )
+
+    assert res.status_code == 200
+    rows = client.get(
+        f"/console/trips/{TRIP}/sections/contatos_emergencia", headers=headers
+    ).json()["rows"]
+    assert rows[0]["name"] == "Hospital"
+    assert rows[0]["phone"] is None
+
+
+def test_put_section_rejects_empty_required_field(client, session_factory):
+    asyncio.run(_seed(session_factory))
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/faq",
+        headers=_admin(client),
+        json={"items": [{"question": "   ", "answer": "Resposta"}]},
+    )
+
+    assert res.status_code == 422
+    assert "question" in res.json()["detail"]
+
+
+def test_put_section_does_not_touch_other_trips(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    async def _faq_in_other_trip():
+        async with session_factory() as session:
+            await session.execute(
+                text("INSERT INTO trip_faqs (id, wetravel_trip_uuid, question, answer,"
+                     " sort_order, created_at, updated_at)"
+                     " VALUES (gen_random_uuid(), :u, 'Outra?', 'Outra.', 0, now(), now())"),
+                {"u": OTHER_TRIP},
+            )
+            await session.commit()
+
+    asyncio.run(_faq_in_other_trip())
+
+    client.put(
+        f"/console/trips/{TRIP}/sections/faq",
+        headers=headers,
+        json={"items": [{"question": "Nova?", "answer": "Nova."}]},
+    )
+
+    async def _other_still_there():
+        async with session_factory() as session:
+            return await session.scalar(
+                text("SELECT count(*) FROM trip_faqs WHERE wetravel_trip_uuid = :u"),
+                {"u": OTHER_TRIP},
+            )
+
+    assert asyncio.run(_other_still_there()) == 1
+
+
+def test_put_on_a_section_without_editing_returns_405(client, session_factory):
+    asyncio.run(_seed(session_factory))
+
+    res = client.put(
+        f"/console/trips/{TRIP}/sections/viajantes",
+        headers=_admin(client),
+        json={"items": []},
+    )
+
+    assert res.status_code == 405
+
+
+def test_sections_listing_marks_which_ones_are_editable(client, session_factory):
+    asyncio.run(_seed(session_factory))
+
+    sections = {s["key"]: s for s in client.get(
+        f"/console/trips/{TRIP}/sections", headers=_admin(client)
+    ).json()["sections"]}
+
+    assert sections["faq"]["editable"] is True
+    assert sections["contatos_operacionais"]["editable"] is True
+    assert sections["viajantes"]["editable"] is False
+    assert sections["roteiro"]["editable"] is False

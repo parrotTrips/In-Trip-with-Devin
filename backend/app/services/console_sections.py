@@ -30,6 +30,19 @@ GROUP_LABELS = {
 
 
 @dataclass(frozen=True)
+class Editable:
+    """How a section is written.
+
+    Column names come from here, never from the request body: the payload is
+    filtered against `columns` before any SQL is built.
+    """
+
+    table: str
+    columns: tuple[str, ...]
+    required: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Section:
     key: str
     label: str
@@ -40,6 +53,7 @@ class Section:
     # served generically; the reason explains the 404 when someone asks for them.
     own_route: str | None = None
     readonly_note: str | None = None
+    editable: Editable | None = None
 
 
 _PHASE_COUNT = (
@@ -95,6 +109,7 @@ SECTIONS: dict[str, Section] = {
             WHERE wetravel_trip_uuid = :trip_uuid
             ORDER BY sort_order
         """,
+        editable=Editable("trip_faqs", ("question", "answer"), ("question", "answer")),
     ),
     "politica_cancelamento": Section(
         key="politica_cancelamento",
@@ -110,6 +125,9 @@ SECTIONS: dict[str, Section] = {
             WHERE wetravel_trip_uuid = :trip_uuid
             ORDER BY sort_order
         """,
+        editable=Editable(
+            "trip_cancellation_policies", ("title", "body"), ("title", "body")
+        ),
     ),
     "contatos_emergencia": Section(
         key="contatos_emergencia",
@@ -125,6 +143,7 @@ SECTIONS: dict[str, Section] = {
             WHERE wetravel_trip_uuid = :trip_uuid
             ORDER BY sort_order, name
         """,
+        editable=Editable("trip_emergency_contacts", ("name", "role", "phone"), ("name",)),
     ),
     "viajantes": Section(
         key="viajantes",
@@ -173,6 +192,9 @@ SECTIONS: dict[str, Section] = {
             WHERE wetravel_trip_uuid = :trip_uuid
             ORDER BY category, sort_order, name
         """,
+        editable=Editable(
+            "trip_contacts", ("category", "name", "role", "phone"), ("category", "name")
+        ),
     ),
     "avisos": Section(
         key="avisos",
@@ -237,7 +259,7 @@ async def list_sections(session: AsyncSession, trip_uuid: str) -> dict:
             "group": section.group,
             "group_label": GROUP_LABELS[section.group],
             "count": count or 0,
-            "editable": section.own_route is not None,
+            "editable": section.own_route is not None or section.editable is not None,
             "readonly_note": section.readonly_note,
         })
     return {"sections": sections}
@@ -262,3 +284,63 @@ async def get_section_rows(session: AsyncSession, trip_uuid: str, key: str) -> d
         "readonly_note": section.readonly_note,
         "rows": rows,
     }
+
+
+def _clean(value: object) -> str | None:
+    """Trim strings; empty becomes NULL so optional columns stay empty, not blank."""
+    if value is None:
+        return None
+    text_value = str(value).strip()
+    return text_value or None
+
+
+async def replace_section(
+    session: AsyncSession, trip_uuid: str, key: str, items: list[dict]
+) -> dict:
+    """Replace every row of an editable section; list position becomes sort_order.
+
+    Runs in a single transaction: a rejected item leaves the section untouched.
+    """
+    section = SECTIONS.get(key)
+    if section is None:
+        raise HTTPException(status_code=404, detail=f"Unknown section '{key}'")
+    if section.editable is None:
+        raise HTTPException(
+            status_code=405,
+            detail=f"Section '{section.label}' cannot be edited yet",
+        )
+
+    spec = section.editable
+
+    # Validate everything before writing anything.
+    cleaned: list[dict] = []
+    for index, item in enumerate(items):
+        row = {column: _clean(item.get(column)) for column in spec.columns}
+        for column in spec.required:
+            if row[column] is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Item {index + 1}: '{column}' is required",
+                )
+        cleaned.append(row)
+
+    columns = ", ".join(spec.columns)
+    placeholders = ", ".join(f":{column}" for column in spec.columns)
+
+    await session.execute(
+        text(f"DELETE FROM {spec.table} WHERE wetravel_trip_uuid = :trip_uuid"),
+        {"trip_uuid": trip_uuid},
+    )
+    for index, row in enumerate(cleaned):
+        await session.execute(
+            text(
+                f"INSERT INTO {spec.table}"
+                f" (id, wetravel_trip_uuid, {columns}, sort_order, created_at, updated_at)"
+                f" VALUES (gen_random_uuid(), :trip_uuid, {placeholders}, :sort_order,"
+                f"         now(), now())"
+            ),
+            {"trip_uuid": trip_uuid, "sort_order": index, **row},
+        )
+
+    await session.commit()
+    return {"key": key, "count": len(cleaned)}
