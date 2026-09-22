@@ -443,7 +443,7 @@ async def admin_import_trip(trip_uuid: str) -> dict:
     pre_trip_phases = parse_fases_tab(fases_rows)
 
     checklist_rows = filter_rows_by_trip(read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Checklist"), trip_uuid)
-    parse_checklist_tab(checklist_rows, pre_trip_phases)
+    checklist_skipped = parse_checklist_tab(checklist_rows, pre_trip_phases)
 
     links_rows = filter_rows_by_trip(read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Links"), trip_uuid)
     parse_links_tab(links_rows, pre_trip_phases)
@@ -465,6 +465,7 @@ async def admin_import_trip(trip_uuid: str) -> dict:
         "trip_uuid": trip_uuid,
         "phases": len(pre_trip_phases),
         "checklist_items": sum(len(p.checklist) for p in pre_trip_phases),
+        "checklist_skipped": checklist_skipped,
         "links": sum(len(p.links) for p in pre_trip_phases),
         "days": len(in_trip_days),
         "activities": sum(len(d.activities) for d in in_trip_days),
