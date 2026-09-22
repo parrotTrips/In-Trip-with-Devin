@@ -4,44 +4,71 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 
-class PhaseCreate(BaseModel):
-    title: str
+class _NonBlankModel(BaseModel):
+    @field_validator("*", mode="before")
+    @classmethod
+    def strip_required_strings(cls, value, info):
+        if info.field_name in {"title", "short_description", "label"} and isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class PhaseCreate(_NonBlankModel):
+    title: str = Field(min_length=1)
     subtitle: str | None = None
     icon: str | None = None
-    short_description: str = ""
+    short_description: str = Field(min_length=1)
     detailed_description: str | None = None
 
 
-class PhaseUpdate(BaseModel):
-    title: str | None = None
+class PhaseUpdate(_NonBlankModel):
+    title: str | None = Field(default=None, min_length=1)
     subtitle: str | None = None
     icon: str | None = None
-    short_description: str | None = None
+    short_description: str | None = Field(default=None, min_length=1)
     detailed_description: str | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
 
 
-class ChecklistItemIn(BaseModel):
-    label: str
+class ChecklistItemIn(_NonBlankModel):
+    label: str = Field(min_length=1)
     is_required: bool = False
 
 
 class ChecklistReplace(BaseModel):
-    items: list[ChecklistItemIn] = []
+    items: list[ChecklistItemIn] = Field(default_factory=list)
 
 
-class LinkIn(BaseModel):
-    label: str
-    url: str
+class LinkIn(_NonBlankModel):
+    label: str = Field(min_length=1)
+    url: HttpUrl
 
 
 class LinkReplace(BaseModel):
-    links: list[LinkIn] = []
+    links: list[LinkIn] = Field(default_factory=list)
 
 
 class PhaseOrder(BaseModel):
-    phase_ids: list[str] = []
+    phase_ids: list[str] = Field(default_factory=list)
+
+
+class PhaseContentUpdate(_NonBlankModel):
+    title: str = Field(min_length=1)
+    subtitle: str | None = None
+    icon: str | None = None
+    short_description: str = Field(min_length=1)
+    detailed_description: str | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    checklist: list[ChecklistItemIn] = Field(default_factory=list)
+    links: list[LinkIn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def dates_are_ordered(self):
+        if self.starts_at and self.ends_at and self.ends_at < self.starts_at:
+            raise ValueError("ends_at must not be earlier than starts_at")
+        return self

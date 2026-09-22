@@ -135,12 +135,28 @@ _PHASE_NULLABLE = ("subtitle", "icon", "detailed_description", "starts_at", "end
 _PHASE_TIMESTAMPS = ("starts_at", "ends_at")
 
 
+async def require_draft_phase(session: AsyncSession, phase_id: str) -> None:
+    """Reject mutations of missing or currently published phases."""
+    result = await session.execute(
+        text("SELECT is_visible FROM trip_phases WHERE id = CAST(:p AS uuid)"),
+        {"p": phase_id},
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Phase not found")
+    if row.is_visible:
+        raise HTTPException(
+            status_code=409, detail="Unpublish the phase before changing it"
+        )
+
+
 async def update_phase(session: AsyncSession, phase_id: str, data: dict) -> dict:
     """Update only the fields explicitly provided.
 
     `data` comes from model_dump(exclude_unset=True), so a key being present means
     the caller sent it — including when the value is null.
     """
+    await require_draft_phase(session, phase_id)
     fields = {
         k: v for k, v in data.items()
         if (k in _PHASE_REQUIRED and v is not None) or k in _PHASE_NULLABLE
@@ -178,11 +194,7 @@ async def set_phase_visibility(session: AsyncSession, phase_id: str, is_visible:
 
 async def delete_phase(session: AsyncSession, phase_id: str) -> dict:
     """Delete a phase and its children. Refuse if activities hang off it."""
-    exists = await session.scalar(
-        text("SELECT count(*) FROM trip_phases WHERE id = CAST(:p AS uuid)"), {"p": phase_id}
-    )
-    if not exists:
-        raise HTTPException(status_code=404, detail="Phase not found")
+    await require_draft_phase(session, phase_id)
 
     # Pre-trip phases carry no activities today, but nothing in the schema forbids
     # it. Refusing beats hitting the foreign key violation that motivated this work.
@@ -219,6 +231,7 @@ async def delete_phase(session: AsyncSession, phase_id: str) -> dict:
 
 async def replace_checklist(session: AsyncSession, phase_id: str, items: list[dict]) -> dict:
     """Replace every checklist item of the phase; list position becomes sort_order."""
+    await require_draft_phase(session, phase_id)
     await session.execute(
         text("""
             DELETE FROM traveler_checklist_progress
@@ -249,6 +262,7 @@ async def replace_checklist(session: AsyncSession, phase_id: str, items: list[di
 
 async def replace_links(session: AsyncSession, phase_id: str, links: list[dict]) -> dict:
     """Replace every link of the phase; list position becomes sort_order."""
+    await require_draft_phase(session, phase_id)
     await session.execute(
         text("DELETE FROM trip_phase_links WHERE trip_phase_id = CAST(:p AS uuid)"),
         {"p": phase_id},
@@ -269,6 +283,8 @@ async def replace_links(session: AsyncSession, phase_id: str, links: list[dict])
 
 async def reorder_phases(session: AsyncSession, trip_uuid: str, phase_ids: list[str]) -> dict:
     """Set sort_order from the position of each id in the list."""
+    for phase_id in phase_ids:
+        await require_draft_phase(session, phase_id)
     for index, phase_id in enumerate(phase_ids):
         await session.execute(
             text("""
@@ -279,3 +295,94 @@ async def reorder_phases(session: AsyncSession, trip_uuid: str, phase_ids: list[
         )
     await session.commit()
     return {"count": len(phase_ids)}
+
+
+async def _replace_phase_children(
+    session: AsyncSession,
+    phase_id: str,
+    checklist: list[dict],
+    links: list[dict],
+) -> None:
+    """Replace checklist and links without committing the surrounding transaction."""
+    await session.execute(
+        text("""
+            DELETE FROM traveler_checklist_progress
+            WHERE trip_phase_checklist_item_id IN (
+                SELECT id FROM trip_phase_checklist_items
+                WHERE trip_phase_id = CAST(:p AS uuid)
+            )
+        """),
+        {"p": phase_id},
+    )
+    await session.execute(
+        text("DELETE FROM trip_phase_checklist_items WHERE trip_phase_id = CAST(:p AS uuid)"),
+        {"p": phase_id},
+    )
+    await session.execute(
+        text("DELETE FROM trip_phase_links WHERE trip_phase_id = CAST(:p AS uuid)"),
+        {"p": phase_id},
+    )
+    for index, item in enumerate(checklist):
+        await session.execute(
+            text("""
+                INSERT INTO trip_phase_checklist_items
+                    (id, trip_phase_id, label, sort_order, is_required, created_at, updated_at)
+                VALUES (gen_random_uuid(), CAST(:p AS uuid), :label, :sort_order,
+                        :is_required, now(), now())
+            """),
+            {
+                "p": phase_id,
+                "label": item["label"],
+                "sort_order": index,
+                "is_required": item["is_required"],
+            },
+        )
+    for index, link in enumerate(links):
+        await session.execute(
+            text("""
+                INSERT INTO trip_phase_links
+                    (id, trip_phase_id, label, url, sort_order, created_at, updated_at)
+                VALUES (gen_random_uuid(), CAST(:p AS uuid), :label, :url, :sort_order,
+                        now(), now())
+            """),
+            {
+                "p": phase_id,
+                "label": link["label"],
+                "url": str(link["url"]),
+                "sort_order": index,
+            },
+        )
+
+
+async def save_phase_content(session: AsyncSession, phase_id: str, data: dict) -> dict:
+    """Save phase fields and children in one transaction."""
+    try:
+        await require_draft_phase(session, phase_id)
+        await session.execute(
+            text("""
+                UPDATE trip_phases
+                SET title = :title,
+                    subtitle = :subtitle,
+                    icon = :icon,
+                    short_description = :short_description,
+                    detailed_description = :detailed_description,
+                    starts_at = CAST(:starts_at AS timestamptz),
+                    ends_at = CAST(:ends_at AS timestamptz),
+                    updated_at = now()
+                WHERE id = CAST(:phase_id AS uuid)
+            """),
+            {"phase_id": phase_id, **{
+                key: data.get(key) for key in (
+                    "title", "subtitle", "icon", "short_description",
+                    "detailed_description", "starts_at", "ends_at",
+                )
+            }},
+        )
+        await _replace_phase_children(
+            session, phase_id, data["checklist"], data["links"]
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    return {"id": phase_id, "updated": True}

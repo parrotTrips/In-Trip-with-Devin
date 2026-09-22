@@ -8,6 +8,7 @@ from app.db.session import get_db_session
 from app.schemas.console import (
     ChecklistReplace,
     LinkReplace,
+    PhaseContentUpdate,
     PhaseCreate,
     PhaseOrder,
     PhaseUpdate,
@@ -20,6 +21,7 @@ from app.services.console_service import (
     reorder_phases,
     replace_checklist,
     replace_links,
+    save_phase_content,
     set_phase_visibility,
     update_phase,
 )
@@ -68,6 +70,16 @@ async def update_phase_handler(
     return await update_phase(session, phase_id, body.model_dump(exclude_unset=True))
 
 
+@router.put("/phases/{phase_id}/content")
+async def save_phase_content_handler(
+    phase_id: str,
+    body: PhaseContentUpdate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Atomically replace all editable content of one draft phase."""
+    return await save_phase_content(session, phase_id, body.model_dump())
+
+
 @router.post("/phases/{phase_id}/publish")
 async def publish_phase_handler(
     phase_id: str,
@@ -112,7 +124,9 @@ async def replace_links_handler(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Replace the phase links with the list sent, in order."""
-    return await replace_links(session, phase_id, [link.model_dump() for link in body.links])
+    return await replace_links(
+        session, phase_id, [link.model_dump(mode="json") for link in body.links]
+    )
 
 
 @router.put("/trips/{trip_uuid}/phases/order")

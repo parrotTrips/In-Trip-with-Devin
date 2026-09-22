@@ -87,7 +87,7 @@ def test_console_trips_lists_trips_for_admin(client, session_factory):
     assert "console-test" in [t["trip_uuid"] for t in res.json()["trips"]]
 
 
-async def _seed_phase_with_children(session_factory):
+async def _seed_phase_with_children(session_factory, *, is_visible=True):
     async with session_factory() as session:
         await session.execute(
             text("""
@@ -96,8 +96,9 @@ async def _seed_phase_with_children(session_factory):
                      short_description, detailed_description, sort_order,
                      is_locked_by_default, is_visible, created_at, updated_at)
                 VALUES (gen_random_uuid(), 'console-test', 'pre-trip', 'Documentos', 'sub',
-                        'passport', 'curta', 'longa', 0, false, true, now(), now())
-            """)
+                        'passport', 'curta', 'longa', 0, false, :is_visible, now(), now())
+            """),
+            {"is_visible": is_visible},
         )
         phase_id = await session.scalar(
             text("SELECT id FROM trip_phases WHERE wetravel_trip_uuid='console-test' LIMIT 1")
@@ -206,7 +207,7 @@ def test_publish_and_unpublish_toggle_visibility(client, session_factory):
 
 def test_delete_phase_removes_checklist_and_links(client, session_factory):
     asyncio.run(_seed_admin_and_trip(session_factory))
-    asyncio.run(_seed_phase_with_children(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory, is_visible=False))
     headers = _auth(client, "+5511777000001")
     phase_id = client.get(
         "/console/trips/console-test/phases", headers=headers
@@ -238,7 +239,7 @@ def test_delete_phase_removes_checklist_and_links(client, session_factory):
 
 def test_delete_phase_refuses_when_activities_exist(client, session_factory):
     asyncio.run(_seed_admin_and_trip(session_factory))
-    asyncio.run(_seed_phase_with_children(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory, is_visible=False))
     headers = _auth(client, "+5511777000001")
     phase_id = client.get(
         "/console/trips/console-test/phases", headers=headers
@@ -276,7 +277,7 @@ def test_delete_phase_refuses_when_activities_exist(client, session_factory):
 
 def test_put_checklist_replaces_list_and_sets_order(client, session_factory):
     asyncio.run(_seed_admin_and_trip(session_factory))
-    asyncio.run(_seed_phase_with_children(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory, is_visible=False))
     headers = _auth(client, "+5511777000001")
     phase_id = client.get(
         "/console/trips/console-test/phases", headers=headers
@@ -303,7 +304,7 @@ def test_put_checklist_replaces_list_and_sets_order(client, session_factory):
 
 def test_put_links_replaces_list(client, session_factory):
     asyncio.run(_seed_admin_and_trip(session_factory))
-    asyncio.run(_seed_phase_with_children(session_factory))
+    asyncio.run(_seed_phase_with_children(session_factory, is_visible=False))
     headers = _auth(client, "+5511777000001")
     phase_id = client.get(
         "/console/trips/console-test/phases", headers=headers
@@ -326,9 +327,9 @@ def test_reorder_phases_sets_sort_order_by_position(client, session_factory):
     asyncio.run(_seed_admin_and_trip(session_factory))
     headers = _auth(client, "+5511777000001")
     first = client.post("/console/trips/console-test/phases", headers=headers,
-                        json={"title": "A", "short_description": ""}).json()["id"]
+                        json={"title": "A", "short_description": "Descrição A"}).json()["id"]
     second = client.post("/console/trips/console-test/phases", headers=headers,
-                         json={"title": "B", "short_description": ""}).json()["id"]
+                         json={"title": "B", "short_description": "Descrição B"}).json()["id"]
 
     res = client.put(
         "/console/trips/console-test/phases/order",
@@ -347,7 +348,7 @@ def test_phase_dates_can_be_set_and_cleared(client, session_factory):
     phase_id = client.post(
         "/console/trips/console-test/phases",
         headers=headers,
-        json={"title": "Fase com data", "short_description": ""},
+        json={"title": "Fase com data", "short_description": "Descrição"},
     ).json()["id"]
 
     res = client.patch(
@@ -372,3 +373,128 @@ def test_phase_dates_can_be_set_and_cleared(client, session_factory):
     ).json()["phases"][0]
     assert phase["starts_at"] is None
     assert phase["ends_at"] is None
+
+
+def _create_phase(client, *, title="Rascunho") -> str:
+    response = client.post(
+        "/console/trips/console-test/phases",
+        json={"title": title, "short_description": "Descrição curta"},
+    )
+    assert response.status_code == 200
+    return response.json()["id"]
+
+
+@pytest.mark.parametrize(
+    ("method", "suffix", "body"),
+    [
+        ("PATCH", "", {"title": "Alterado"}),
+        ("PUT", "/checklist", {"items": [{"label": "Item", "is_required": True}]}),
+        ("PUT", "/links", {"links": [{"label": "Site", "url": "https://example.com"}]}),
+        ("DELETE", "", None),
+    ],
+)
+def test_published_phase_cannot_be_changed(client, session_factory, method, suffix, body):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    phase_id = _create_phase(client)
+    assert client.post(f"/console/phases/{phase_id}/publish").status_code == 200
+
+    response = client.request(method, f"/console/phases/{phase_id}{suffix}", json=body)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Unpublish the phase before changing it"
+
+
+def test_reordering_published_phases_is_rejected(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    first = _create_phase(client, title="A")
+    second = _create_phase(client, title="B")
+    client.post(f"/console/phases/{first}/publish")
+
+    response = client.put(
+        "/console/trips/console-test/phases/order", json={"phase_ids": [second, first]}
+    )
+
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"title": "", "short_description": "Descrição"},
+        {"title": "Fase", "short_description": "   "},
+    ],
+)
+def test_empty_required_phase_fields_are_rejected(client, session_factory, payload):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    response = client.post("/console/trips/console-test/phases", json=payload)
+    assert response.status_code == 422
+
+
+def test_atomic_save_rejects_invalid_url_and_inverted_dates(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    phase_id = _create_phase(client)
+    payload = {
+        "title": "Rascunho",
+        "short_description": "Descrição",
+        "checklist": [],
+        "links": [{"label": "Arquivo", "url": "ftp://example.com/file"}],
+        "starts_at": "2027-07-02T10:00:00Z",
+        "ends_at": "2027-07-01T10:00:00Z",
+    }
+
+    assert client.put(f"/console/phases/{phase_id}/content", json=payload).status_code == 422
+    payload["links"] = [{"label": "Arquivo", "url": "https://example.com/file"}]
+    assert client.put(f"/console/phases/{phase_id}/content", json=payload).status_code == 422
+
+
+def test_atomic_save_updates_phase_and_children(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    phase_id = _create_phase(client)
+
+    response = client.put(
+        f"/console/phases/{phase_id}/content",
+        json={
+            "title": "Documentos",
+            "subtitle": "Antes de viajar",
+            "icon": "passport",
+            "short_description": "Prepare os documentos",
+            "detailed_description": "Confira tudo.",
+            "starts_at": "2027-07-01T09:00:00-03:00",
+            "ends_at": "2027-07-02T18:00:00-03:00",
+            "checklist": [{"label": "Passaporte", "is_required": True}],
+            "links": [{"label": "Portal", "url": "https://example.com"}],
+        },
+    )
+
+    assert response.status_code == 200
+    phase = client.get("/console/trips/console-test/phases").json()["phases"][0]
+    assert phase["title"] == "Documentos"
+    assert [item["label"] for item in phase["checklist"]] == ["Passaporte"]
+    assert [link["url"] for link in phase["links"]] == ["https://example.com/"]
+
+
+def test_atomic_save_rolls_back_phase_when_children_fail(
+    client, session_factory, monkeypatch
+):
+    from app.services import console_service
+
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    phase_id = _create_phase(client, title="Original")
+
+    async def fail_children(*_args, **_kwargs):
+        raise RuntimeError("controlled child failure")
+
+    monkeypatch.setattr(console_service, "_replace_phase_children", fail_children, raising=False)
+    with pytest.raises(RuntimeError, match="controlled child failure"):
+        client.put(
+            f"/console/phases/{phase_id}/content",
+            json={
+                "title": "Não pode persistir",
+                "short_description": "Descrição",
+                "checklist": [],
+                "links": [],
+            },
+        )
+
+    phase = client.get("/console/trips/console-test/phases").json()["phases"][0]
+    assert phase["title"] == "Original"
