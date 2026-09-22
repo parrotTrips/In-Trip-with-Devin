@@ -23,6 +23,7 @@ google-auth-oauthlib = ">=1.0"
 google-api-python-client = ">=2.0"
 google-cloud-storage = ">=2.0"
 qrcode = {version = ">=8.0", extras = ["pil"]}
+cachecontrol = "^0.14.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.2"

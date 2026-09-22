@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 MODULES_TO_CLEAR = [
     "app.main",
     "app.core.config",
+    "app.core.console_auth",
     "app.db.session",
     "app.services.auth_service",
     "app.services.user_service",
@@ -141,6 +142,9 @@ def client(monkeypatch, database_url):
     monkeypatch.setenv("JWT_SECRET", "test-secret-key-for-testing-only")
     monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "")
     monkeypatch.setenv("WHATSAPP_ACCESS_TOKEN", "")
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("ENABLE_CONSOLE_LOCAL", "true")
+    monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "parrottrips.com")
 
     for module_name in MODULES_TO_CLEAR:
         sys.modules.pop(module_name, None)
