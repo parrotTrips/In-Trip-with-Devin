@@ -113,10 +113,18 @@ export interface TripSection {
   readonly_note: string | null;
 }
 
+export interface SectionColumn {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
 export interface SectionRows {
   key: string;
   label: string;
   readonly_note: string | null;
+  editable: boolean;
+  columns: SectionColumn[];
   rows: Record<string, unknown>[];
 }
 
@@ -126,4 +134,13 @@ export function listSections(tripUuid: string) {
 
 export function getSection(tripUuid: string, sectionKey: string) {
   return request<SectionRows>(`/console/trips/${tripUuid}/sections/${sectionKey}`);
+}
+
+export function replaceSection(
+  tripUuid: string, sectionKey: string, items: Record<string, unknown>[]
+) {
+  return request<{ key: string; count: number }>(
+    `/console/trips/${tripUuid}/sections/${sectionKey}`,
+    { method: 'PUT', body: JSON.stringify({ items }) }
+  );
 }

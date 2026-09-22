@@ -30,6 +30,13 @@ GROUP_LABELS = {
 
 
 @dataclass(frozen=True)
+class Column:
+    key: str
+    label: str
+    required: bool = False
+
+
+@dataclass(frozen=True)
 class Editable:
     """How a section is written.
 
@@ -49,6 +56,7 @@ class Section:
     group: str
     count_sql: str
     rows_sql: str | None = None
+    columns: tuple[Column, ...] = ()
     # Sections with their own routes are listed for the sidebar count but are not
     # served generically; the reason explains the 404 when someone asks for them.
     own_route: str | None = None
@@ -71,6 +79,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "roteiro": Section(
         key="roteiro",
+        columns=(Column("dia", "Dia"), Column("data", "Data"), Column("title", "Título"), Column("atividades", "Atividades"),),
         label="Roteiro",
         group=GROUP_CONTENT,
         count_sql=_PHASE_COUNT.replace(":phase_type", "'in-trip'"),
@@ -88,6 +97,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "recomendacoes": Section(
         key="recomendacoes",
+        columns=(Column("name", "Nome"), Column("category", "Categoria"), Column("neighborhood", "Bairro"), Column("address", "Endereço"),),
         label="Recomendações",
         group=GROUP_CONTENT,
         count_sql="SELECT count(*) FROM trip_recommendations WHERE wetravel_trip_uuid = :trip_uuid",
@@ -100,6 +110,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "faq": Section(
         key="faq",
+        columns=(Column("question", "Pergunta", True), Column("answer", "Resposta", True),),
         label="FAQ",
         group=GROUP_CONTENT,
         count_sql="SELECT count(*) FROM trip_faqs WHERE wetravel_trip_uuid = :trip_uuid",
@@ -113,6 +124,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "politica_cancelamento": Section(
         key="politica_cancelamento",
+        columns=(Column("title", "Título", True), Column("body", "Texto", True),),
         label="Política de cancelamento",
         group=GROUP_CONTENT,
         count_sql=(
@@ -131,6 +143,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "contatos_emergencia": Section(
         key="contatos_emergencia",
+        columns=(Column("name", "Nome", True), Column("role", "Função"), Column("phone", "Telefone"),),
         label="Contatos de emergência",
         group=GROUP_CONTENT,
         count_sql=(
@@ -147,6 +160,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "viajantes": Section(
         key="viajantes",
+        columns=(Column("full_name", "Nome"), Column("phone", "Telefone"), Column("email", "E-mail"), Column("profile_completed", "Perfil preenchido"),),
         label="Viajantes",
         group=GROUP_PEOPLE,
         count_sql="SELECT count(*) FROM trip_travelers WHERE wetravel_trip_uuid = :trip_uuid",
@@ -170,6 +184,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "staff": Section(
         key="staff",
+        columns=(Column("full_name", "Nome"), Column("function", "Função"), Column("phone", "Telefone"),),
         label="Staff",
         group=GROUP_PEOPLE,
         count_sql="SELECT count(*) FROM trip_staff WHERE wetravel_trip_uuid = :trip_uuid",
@@ -183,6 +198,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "contatos_operacionais": Section(
         key="contatos_operacionais",
+        columns=(Column("category", "Categoria", True), Column("name", "Nome", True), Column("role", "Função"), Column("phone", "Telefone"),),
         label="Contatos operacionais",
         group=GROUP_PEOPLE,
         count_sql="SELECT count(*) FROM trip_contacts WHERE wetravel_trip_uuid = :trip_uuid",
@@ -198,6 +214,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "avisos": Section(
         key="avisos",
+        columns=(Column("title", "Título"), Column("body", "Texto"), Column("created_at", "Enviado em"),),
         label="Avisos",
         group=GROUP_DURING,
         count_sql="SELECT count(*) FROM trip_announcements WHERE wetravel_trip_uuid = :trip_uuid",
@@ -210,6 +227,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "tarefas_staff": Section(
         key="tarefas_staff",
+        columns=(Column("title", "Tarefa"), Column("fase", "Fase"), Column("responsavel", "Responsável"),),
         label="Tarefas de staff",
         group=GROUP_DURING,
         count_sql="""
@@ -228,6 +246,7 @@ SECTIONS: dict[str, Section] = {
     ),
     "feedbacks": Section(
         key="feedbacks",
+        columns=(Column("viajante", "Viajante"), Column("feedback", "Feedback"), Column("created_at", "Enviado em"),),
         label="Feedbacks",
         group=GROUP_RETURN,
         count_sql="""
@@ -282,6 +301,15 @@ async def get_section_rows(session: AsyncSession, trip_uuid: str, key: str) -> d
         "key": section.key,
         "label": section.label,
         "readonly_note": section.readonly_note,
+        "editable": section.editable is not None,
+        "columns": [
+            {
+                "key": c.key,
+                "label": c.label,
+                "required": c.key in (section.editable.required if section.editable else ()),
+            }
+            for c in section.columns
+        ],
         "rows": rows,
     }
 
