@@ -1,8 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, expect, test } from 'vitest';
 
 import type { ConsoleConfig } from '../config';
-import { GOOGLE_CREDENTIAL_KEY } from './google-session';
+import { GOOGLE_CREDENTIAL_KEY, clearCredentialIfCurrent } from './google-session';
 import { AuthProvider } from './AuthProvider';
 import { useAuth } from './auth-context';
 
@@ -46,4 +46,14 @@ test('local bypass logs in only when config already approved both guards', () =>
   render(<AuthProvider config={{ ...config, localBypass: true }}><Probe /></AuthProvider>);
   expect(screen.getByText('entrou:local@parrottrips.com')).toBeInTheDocument();
   expect(sessionStorage.length).toBe(0);
+});
+
+test('reacts when the HTTP client clears an expired session', () => {
+  const credential = fakeJwt();
+  sessionStorage.setItem(GOOGLE_CREDENTIAL_KEY, credential);
+  render(<AuthProvider config={config}><Probe /></AuthProvider>);
+
+  act(() => { clearCredentialIfCurrent(credential); });
+
+  expect(screen.getByText('deslogado')).toBeInTheDocument();
 });

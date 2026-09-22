@@ -1,29 +1,42 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { clearCredentialIfCurrent, currentCredential } from '../auth/google-session';
+import { readConfig } from '../config';
 
-export const STORAGE_KEY = 'parrot_console_user';
-
-function getToken(): string | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return null;
-    return (JSON.parse(stored) as { token?: string }).token ?? null;
-  } catch {
-    return null;
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
   }
 }
 
+function errorMessage(status: number, detail?: string): string {
+  if (status === 401) return 'Sua sessão expirou. Entre novamente.';
+  if (status === 403) return 'Conta Google sem acesso ao console.';
+  if (status === 503) return 'Autenticação do console não configurada.';
+  return detail || 'A API não conseguiu concluir a operação.';
+}
+
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
+  const config = readConfig();
+  if (!config.ok) throw new ApiError(config.error, 0);
+
+  const credential = currentCredential();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string>),
   };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (credential) headers.Authorization = `Bearer ${credential}`;
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || 'Request failed');
+  let response: Response;
+  try {
+    response = await fetch(`${config.value.apiUrl}${path}`, { ...options, headers });
+  } catch {
+    throw new ApiError('Não foi possível conectar à API.', 0);
   }
-  return response.json();
+
+  if (!response.ok) {
+    if (response.status === 401 && credential) clearCredentialIfCurrent(credential);
+    const body = await response.json().catch(() => ({})) as { detail?: string };
+    throw new ApiError(errorMessage(response.status, body.detail), response.status);
+  }
+  return response.json() as Promise<T>;
 }

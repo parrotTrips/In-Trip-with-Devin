@@ -102,3 +102,22 @@ export function reorderPhases(tripUuid: string, phaseIds: string[]) {
     { method: 'PUT', body: JSON.stringify({ phase_ids: phaseIds }) }
   );
 }
+
+export type PhaseContentInput = {
+  title: string;
+  subtitle: string | null;
+  icon: string | null;
+  short_description: string;
+  detailed_description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  checklist: { label: string; is_required: boolean }[];
+  links: { label: string; url: string }[];
+};
+
+export function savePhaseContent(phaseId: string, body: PhaseContentInput) {
+  return request<{ id: string; updated: boolean }>(
+    `/console/phases/${phaseId}/content`,
+    { method: 'PUT', body: JSON.stringify(body) },
+  );
+}
