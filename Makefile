@@ -145,8 +145,28 @@ help:
 	@echo "    IMAGE_TAG=<tag>          — sobrescreve a tag da imagem (padrão: git commit hash)"
 	@echo "    Ex: make deploy-backend IMAGE_TAG=v1.2.3"
 
+.PHONY: console-check-env
+console-check-env:
+	@echo "Validating console production environment..."
+	@if [ ! -f console/.env.production ]; then \
+		echo "ERROR: console/.env.production not found."; \
+		echo "Copy console/.env.example and fill in production values."; \
+		exit 1; \
+	fi
+	@for key in VITE_API_URL VITE_GOOGLE_CLIENT_ID VITE_ALLOWED_EMAIL_DOMAIN VITE_ENABLE_CONSOLE_LOCAL; do \
+		grep -Eq "^$$key=.+" console/.env.production || { \
+			echo "ERROR: $$key is missing or empty in console/.env.production."; \
+			exit 1; \
+		}; \
+	done
+	@grep -Eq '^VITE_ENABLE_CONSOLE_LOCAL=false$$' console/.env.production || { \
+		echo "ERROR: VITE_ENABLE_CONSOLE_LOCAL must be false for production builds."; \
+		exit 1; \
+	}
+
 .PHONY: console-build
 console-build:
+	@$(MAKE) console-check-env
 	@echo "Building console..."
 	cd console && npm run build
 
@@ -154,3 +174,11 @@ console-build:
 console-deploy: console-build
 	@echo "Deploying console to Netlify..."
 	cd console && netlify deploy --prod --dir=dist --site=$(CONSOLE_NETLIFY_SITE)
+
+.PHONY: console-deploy-help
+console-deploy-help:
+	@echo "Console production order:"
+	@echo "  1. Configure Google Auth Platform and backend/console variables."
+	@echo "  2. make deploy-backend"
+	@echo "  3. Run non-mutating smoke tests (/health, unauthenticated 401, corporate login)."
+	@echo "  4. make console-deploy CONSOLE_NETLIFY_SITE=<site-id>"

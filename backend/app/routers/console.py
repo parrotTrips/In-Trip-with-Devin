@@ -1,4 +1,4 @@
-"""Console HTTP routes — requires JWT with role=admin."""
+"""Console HTTP routes protected by Google Workspace authentication."""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession

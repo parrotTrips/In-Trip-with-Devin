@@ -1,9 +1,9 @@
-"""Console service: admin-authenticated trip content editing.
+"""Console service: Google Workspace-authenticated trip content editing.
 
 Separate from admin_service on purpose: the /admin prefix is public (see
 _PUBLIC_PREFIXES in app/middleware/auth.py) because the Apps Script menu calls
-it without a token. Everything here sits behind the JWT middleware and also
-requires role=admin.
+it without a token. The /console router applies its own Google ID token
+dependency to every route.
 """
 
 from __future__ import annotations

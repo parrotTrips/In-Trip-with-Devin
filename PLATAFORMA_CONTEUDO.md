@@ -31,7 +31,7 @@ A plataforma resolve os quatro: campo obrigatório no formulário, referência e
 | Primeira fatia | Fases + Checklist + Links (o "jogo da vida" pré-trip) |
 | Onde vive | App novo e separado, com deploy próprio. O app do viajante não muda |
 | Publicação | Rascunho + publicar, tendo a **fase** como unidade |
-| Acesso | Papel `admin`, login por WhatsApp OTP (o mesmo de sempre) |
+| Acesso | Google Workspace; qualquer conta válida `@parrottrips.com` tem acesso completo |
 | Link de pré-embarque | Botão de copiar — o link já funciona hoje |
 | Criar viagens | Fora de escopo: viagens continuam vindo do WeTravel |
 
@@ -73,7 +73,7 @@ em nenhum menu — precisa ser migrada ou pode ser descartada?
 
 | # | Entrega | Como validar | Status |
 |---|---|---|---|
-| 1 | API autenticada e lista de viagens | Sem login não entra; quem não é admin recebe "acesso negado" | ✅ |
+| 1 | API autenticada e lista de viagens | Sem ID token válido não entra; domínio externo é recusado | ✅ |
 | 2 | Ler fases com checklist e links | A tela consegue carregar o conteúdo de uma viagem | ✅ |
 | 3 | Criar fase (nasce em rascunho) | Fase nova **não** aparece no app do viajante | ✅ |
 | 4 | Editar, publicar e despublicar | Publicou, apareceu; despublicou, sumiu | ✅ |
@@ -86,7 +86,7 @@ em nenhum menu — precisa ser migrada ou pode ser descartada?
 | # | Entrega | Como validar | Status |
 |---|---|---|---|
 | 1 | Projeto `console/` | `npm run build` e `npm run test` rodam | ✅ |
-| 2 | Login por WhatsApp | Quem não é admin é recusado e nada fica salvo | ✅ |
+| 2 | Login Google Workspace | Qualquer conta válida `@parrottrips.com` entra; domínio externo é recusado | ✅ |
 | 3 | Tela de viagens | Lista as viagens; botão copia o link de pré-embarque | ✅ |
 | 4 | Tela de fases | Mostra Rascunho/Publicada; criar, publicar, excluir | ✅ |
 | 5 | Editor de fase | Campos, checklist e links; salva na ordem da tela | ✅ |
@@ -95,15 +95,18 @@ em nenhum menu — precisa ser migrada ou pode ser descartada?
 
 **Fatia A concluída de ponta a ponta.**
 
-Backend: 12 testes novos, **196 passam**. Console: **9 testes**, build limpo. A única falha
+O console agora usa ID token Google stateless e não consulta `users.role` nem mantém banco de
+usuários próprio. Backend: a suíte de endurecimento passa. Console: **38 testes**, build limpo.
+A única falha histórica
 (`test_activity_checkins_table_metadata`) é anterior a este trabalho — a migration `0016`
 mudou a chave única de `activity_checkins` e o teste não foi atualizado junto.
 
 ### Para colocar no ar
 
-1. `make deploy-backend` — a API `/console` e o fix dos scan events ainda não estão publicados
-2. Criar o site Netlify do console e definir `CONSOLE_NETLIFY_SITE`, depois `make console-deploy`
-3. Promover o primeiro admin, uma vez: `UPDATE users SET role = 'admin' WHERE phone = '<telefone>';`
+1. Configurar o OAuth Web Client do Google e as variáveis descritas no `README.md`
+2. `make deploy-backend` — a API `/console` e o fix dos scan events ainda não estão publicados
+3. Fazer smoke tests sem mutação: `/health`, 401 sem token e login corporativo
+4. Criar o site Netlify do console e rodar `make console-deploy CONSOLE_NETLIFY_SITE=<site-id>`
 
 Próximo: fatias B, C, D e E, até a paridade total.
 
@@ -120,7 +123,8 @@ Cada fase tem um estado:
 
 Fase nova nasce em rascunho — dá para montar a viagem inteira sem ninguém ver nada pela metade. Publicar libera.
 
-**Limitação aceita:** editar uma fase **já publicada** vale na hora para o viajante. Para mexer escondido, despublique antes, edite e publique de novo.
+Fases publicadas são somente leitura no backend e na interface. Para editar, despublique antes,
+faça a alteração e publique novamente.
 
 ---
 
@@ -140,9 +144,10 @@ Quem abrir esse link cai direto na seção **Pre Departure Information**, já ab
 
 ## Pontos de atenção
 
-1. **Não clique em "Export Trip Content to App" depois de editar na plataforma.** O import apaga as fases da viagem e recria — leva junto o que foi feito na plataforma. Isso decorre da decisão de não mexer nas planilhas. A tela vai mostrar a data da última importação para deixar o risco visível.
-2. **O primeiro admin é promovido direto no banco**, uma vez. Não haverá tela de gestão de usuários nesta fatia.
-3. **Use contas separadas** para administrar e para testar o app do viajante. Um usuário `admin` que abrir o app do viajante cai no fluxo de viajante e vê tela sem dados, porque o app só conhece os papéis `traveler` e `staff`.
+1. **Não clique em "Export Trip Content to App" depois de editar na plataforma.** O import apaga as fases da viagem e recria — leva junto o que foi feito na plataforma. Isso decorre da decisão de não mexer nas planilhas. A interface mostra um aviso persistente sobre esse risco.
+2. O console não usa allowlist ou papel `admin`: toda conta Google Workspace válida
+   `@parrottrips.com` recebe acesso completo.
+3. O login Google do console é independente do login por WhatsApp usado no app do viajante.
 
 ---
 

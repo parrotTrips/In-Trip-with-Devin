@@ -34,7 +34,7 @@ WeTravel (externo)          Google Sheets               GCP
 | Frontend | React 18 + TypeScript + Vite + Tailwind CSS |
 | Backend | Python 3.13 + FastAPI + SQLAlchemy async |
 | Banco | Supabase (PostgreSQL) |
-| Auth | WhatsApp OTP + JWT |
+| Auth | App: WhatsApp OTP + JWT; console: Google Workspace ID token |
 | Deploy | GCP Cloud Run (backend) + Netlify (frontend) |
 | Conteúdo | Google Sheets → scripts Python → Supabase |
 
@@ -83,6 +83,10 @@ WeTravel (externo)          Google Sheets               GCP
 │   ├── netlify.toml                # Configuração Netlify (SPA redirect)
 │   ├── .env.production             # VITE_API_URL (não commitado)
 │   └── firebase.json               # (não utilizado — legado)
+├── console/                        # Back office de conteúdo com Google SSO
+│   ├── src/                        # React, autenticação e telas operacionais
+│   ├── netlify.toml                # Deploy separado no Netlify
+│   └── .env.example                # Variáveis públicas exigidas no build
 ├── google-apps-script/
 │   ├── Code.gs                     # Menu admin para Google Sheets
 │   └── README.md                   # Instruções de instalação
@@ -122,6 +126,20 @@ echo "VITE_API_URL=http://localhost:8000" > .env
 npm run dev
 ```
 
+### Console de conteúdo
+
+```bash
+cd console
+npm install
+cp .env.example .env
+# Para bypass estritamente local, use VITE_ENABLE_CONSOLE_LOCAL=true.
+npm run dev
+```
+
+O backend local só aceita esse bypass quando as duas condições estiverem ativas:
+`APP_ENV=development` e `ENABLE_CONSOLE_LOCAL=true`. O frontend também exige o modo DEV e
+`VITE_ENABLE_CONSOLE_LOCAL=true`; nenhuma dessas flags deve ser habilitada em produção.
+
 ---
 
 ## Deploy
@@ -145,6 +163,39 @@ make backend-url       # Imprime a URL do backend
 - `netlify-cli` instalado: `npm install -g netlify-cli`
 - Autenticado: `netlify login`
 - Site `parrot-trips` já criado no Netlify (feito uma vez)
+
+### Google SSO do console
+
+No Google Auth Platform, crie um OAuth Client do tipo **Web application**. Use audience
+**Internal** quando essa opção estiver disponível no Workspace e cadastre a origem JavaScript
+exata do site do console. Este fluxo usa Google Identity Services para obter um ID token no
+navegador: não cadastre redirect URI, não crie client secret e não use authorization-code flow.
+
+O mesmo Client ID deve ser configurado no frontend e no backend:
+
+```env
+# console/.env.production (ou variáveis do build no Netlify)
+VITE_API_URL=https://your-cloud-run-service.run.app
+VITE_GOOGLE_CLIENT_ID=000000000000-example.apps.googleusercontent.com
+VITE_ALLOWED_EMAIL_DOMAIN=parrottrips.com
+VITE_ENABLE_CONSOLE_LOCAL=false
+
+# backend/.env.production
+APP_ENV=production
+ENABLE_CONSOLE_LOCAL=false
+GOOGLE_OAUTH_CLIENT_ID=000000000000-example.apps.googleusercontent.com
+ALLOWED_EMAIL_DOMAIN=parrottrips.com
+CORS_ALLOWED_ORIGINS=https://parrot-trips.netlify.app,https://console.example.com
+```
+
+`CORS_ALLOWED_ORIGINS` deve incluir tanto a origem do app do viajante quanto a origem exata do
+console; substituir a lista apenas pelo console quebra o app existente. Qualquer conta Google
+Workspace válida `@parrottrips.com` recebe acesso completo ao console, sem allowlist, papel no
+banco ou sessão criada pelo backend.
+
+Ordem operacional, sem deploy automático: configurar Google e variáveis, executar
+`make deploy-backend`, fazer smoke tests sem mutação e só então executar
+`make console-deploy CONSOLE_NETLIFY_SITE=<site-id>`.
 
 Se o deploy falhar com 403 ou "Reauthentication required":
 ```bash
@@ -182,7 +233,7 @@ gcloud auth configure-docker southamerica-east1-docker.pkg.dev --account=angelo@
 
 ---
 
-## Autenticação
+## Autenticação do app do viajante
 
 Fluxo completo:
 
@@ -193,6 +244,11 @@ Fluxo completo:
 5. Frontend salva o JWT no `localStorage` e o inclui em todas as requests via `Authorization: Bearer`
 
 Rotas públicas (sem JWT): `/auth/*`, `/admin/*`, `/healthz`
+
+O console usa autenticação separada e stateless. O frontend guarda o Google ID token somente em
+`sessionStorage` e o envia como `Authorization: Bearer`. O backend valida assinatura, emissor,
+expiração, audiência, `email_verified`, `sub`, domínio do e-mail e claim `hd`. O parâmetro
+`hosted_domain` do botão é apenas uma dica visual; a autorização confiável ocorre no backend.
 
 ---
 
