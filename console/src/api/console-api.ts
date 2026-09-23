@@ -146,3 +146,58 @@ export function replaceSection(
     { method: 'PUT', body: JSON.stringify({ items }) }
   );
 }
+
+export const ACTIVITY_TYPES = ['included', 'optional', 'suggested', 'logistics'] as const;
+
+export interface Activity {
+  id: string;
+  name: string;
+  activity_type: string;
+  starts_at: string | null;
+  duration_minutes: number | null;
+  short_description: string;
+  practical_info: string;
+  address: string | null;
+  max_checkins: number;
+  amount_brl: number | null;
+  sort_order: number;
+  checkin_count: number;
+  scan_count: number;
+}
+
+export interface Day {
+  id: string;
+  title: string;
+  sort_order: number;
+  is_visible: boolean;
+  activities: Activity[];
+}
+
+export function getDays(tripUuid: string) {
+  return request<{ days: Day[] }>(`/console/trips/${tripUuid}/days`);
+}
+
+export function createDay(tripUuid: string, title: string) {
+  return request<{ id: string }>(`/console/trips/${tripUuid}/days`, {
+    method: 'POST',
+    body: JSON.stringify({ title, short_description: '' }),
+  });
+}
+
+export function createActivity(dayId: string, body: Partial<Activity>) {
+  return request<{ id: string }>(`/console/days/${dayId}/activities`, {
+    method: 'POST', body: JSON.stringify(body),
+  });
+}
+
+export function updateActivity(activityId: string, body: Partial<Activity>) {
+  return request<{ id: string; updated: boolean }>(`/console/activities/${activityId}`, {
+    method: 'PATCH', body: JSON.stringify(body),
+  });
+}
+
+export function deleteActivity(activityId: string) {
+  return request<{ id: string; deleted: boolean }>(`/console/activities/${activityId}`, {
+    method: 'DELETE',
+  });
+}

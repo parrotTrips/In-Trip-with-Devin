@@ -4,6 +4,7 @@ import { AuthProvider } from './auth/AuthProvider';
 import { useAuth } from './auth/auth-context';
 import LoginScreen from './auth/LoginScreen';
 import PhaseEditor from './pages/PhaseEditor';
+import RoteiroScreen from './pages/RoteiroScreen';
 import SectionScreen from './pages/SectionScreen';
 import TripLayout from './pages/TripLayout';
 import PhasesScreen from './pages/PhasesScreen';
@@ -20,6 +21,7 @@ function Routed() {
       <Route path="/trips/:tripUuid" element={<TripLayout />}>
         <Route index element={<Navigate to="fases" replace />} />
         <Route path="fases" element={<PhasesScreen />} />
+        <Route path="roteiro" element={<RoteiroScreen />} />
         <Route path=":sectionKey" element={<SectionScreen />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
