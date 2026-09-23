@@ -38,12 +38,16 @@ test('shows a draft phase as draft', async () => {
 });
 
 test('publishing calls the API and shows the phase as published', async () => {
-  const fetchMock = vi.fn()
-    .mockResolvedValueOnce({ ok: true, json: async () => ({ phases: [phase()] }) })
-    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'p1', is_visible: true }) })
-    .mockResolvedValueOnce({
-      ok: true, json: async () => ({ phases: [phase({ is_visible: true })] }),
+  let published = false;
+  const fetchMock = vi.fn().mockImplementation((_url: string, options?: RequestInit) => {
+    if (options?.method) {
+      published = true;
+      return Promise.resolve({ ok: true, json: async () => ({ id: 'p1', is_visible: true }) });
+    }
+    return Promise.resolve({
+      ok: true, json: async () => ({ phases: [phase({ is_visible: published })] }),
     });
+  });
   vi.stubGlobal('fetch', fetchMock);
 
   renderAt('T1');
@@ -56,9 +60,13 @@ test('publishing calls the API and shows the phase as published', async () => {
 
 test('moving a phase up sends the new order', async () => {
   const two = [phase(), phase({ id: 'p2', title: 'Bagagem', sort_order: 1 })];
-  const fetchMock = vi.fn()
-    .mockResolvedValueOnce({ ok: true, json: async () => ({ phases: two }) })
-    .mockResolvedValue({ ok: true, json: async () => ({ count: 2 }) });
+  // GET sempre devolve a lista; só a mutação devolve o resultado dela — como no servidor.
+  const fetchMock = vi.fn().mockImplementation((_url: string, options?: RequestInit) =>
+    Promise.resolve({
+      ok: true,
+      json: async () => (options?.method ? { count: 2 } : { phases: two }),
+    })
+  );
   vi.stubGlobal('fetch', fetchMock);
 
   renderAt('T1');

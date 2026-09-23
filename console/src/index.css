@@ -1,3 +1,43 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* Verde da marca, retirado do parrot_icon.svg. Toda cor do console sai daqui:
+       trocar a marca é trocar estas linhas, não as telas. */
+    --parrot-green: 145 91% 26%;        /* #067f38, o verde do parrot_icon.svg */
+    --parrot-green-dark: 145 91% 20%;
+
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --primary: var(--parrot-green);
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 145 40% 95%;
+    --accent-foreground: var(--parrot-green-dark);
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --warning: 38 92% 38%;
+    --warning-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: var(--parrot-green);
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

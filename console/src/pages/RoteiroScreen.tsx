@@ -5,6 +5,14 @@ import {
   ACTIVITY_TYPES, createActivity, createDay, deleteActivity, getDays,
   updateActivity, type Activity, type Day,
 } from '../api/console-api';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 const FIELDS: { key: keyof Activity; label: string; kind?: string }[] = [
   { key: 'name', label: 'Nome' },
@@ -74,13 +82,13 @@ export default function RoteiroScreen() {
 
   return (
     <div>
-      <h1 className="mb-1 text-xl font-bold">Roteiro</h1>
-      <p className="mb-4 text-sm text-blue-700">
+      <h1 className="mb-2 text-xl font-bold tracking-tight">Roteiro</h1>
+      <Alert variant="info" className="mb-4">
         Alterações aqui aparecem no app dos viajantes assim que você salvar.
-      </p>
+      </Alert>
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-      {status && <p className="mb-3 text-sm text-green-700">{status}</p>}
+      {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
+      {status && <Alert variant="success" className="mb-4">{status}</Alert>}
 
       <div className="flex gap-6">
         <aside className="w-56 shrink-0">
@@ -89,9 +97,12 @@ export default function RoteiroScreen() {
               <li key={d.id}>
                 <button
                   onClick={() => setSelected(d.id)}
-                  className={`w-full rounded px-2 py-1 text-left text-sm ${
-                    d.id === day?.id ? 'bg-black text-white' : 'hover:bg-gray-100'
-                  }`}
+                  className={cn(
+                    'w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                    d.id === day?.id
+                      ? 'bg-primary font-medium text-primary-foreground'
+                      : 'hover:bg-accent hover:text-accent-foreground'
+                  )}
                 >
                   {d.title}
                   <span className="ml-1 opacity-60">({d.activities.length})</span>
@@ -99,23 +110,23 @@ export default function RoteiroScreen() {
               </li>
             ))}
           </ul>
-          <button
-            className="mt-3 w-full rounded border px-2 py-1 text-sm"
+          <Button
+            variant="outline" size="sm" className="mt-3 w-full"
             onClick={() => act(
               () => createDay(tripUuid, `Dia ${days.length + 1}`), 'Dia criado'
             )}
           >
             Novo dia
-          </button>
+          </Button>
         </aside>
 
         <section className="flex-1">
           {!day ? (
-            <p className="rounded border border-dashed p-6 text-center text-gray-500">
+            <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
               Nenhum dia cadastrado. Comece criando um dia.
             </p>
           ) : day.activities.length === 0 ? (
-            <p className="rounded border border-dashed p-6 text-center text-gray-500">
+            <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
               Nenhuma atividade neste dia.
             </p>
           ) : (
@@ -123,35 +134,30 @@ export default function RoteiroScreen() {
               {day.activities.map(activity => {
                 const locked = activity.checkin_count > 0 || activity.scan_count > 0;
                 return (
-                  <li key={activity.id} className="rounded border p-3">
+                  <li key={activity.id}><Card><CardContent>
                     <div className="grid grid-cols-3 gap-2">
                       {FIELDS.map(field => (
                         <div key={field.key}>
-                          <label
-                            htmlFor={`${field.key}-${activity.id}`}
-                            className="block text-xs text-gray-600"
-                          >
+                          <Label htmlFor={`${field.key}-${activity.id}`} className="mb-1 block">
                             {field.label}
-                          </label>
+                          </Label>
                           {field.kind === 'select' ? (
-                            <select
+                            <Select
                               id={`${field.key}-${activity.id}`}
                               value={valueOf(activity, field.key)}
                               onChange={e => setField(activity, field.key, e.target.value)}
-                              className="w-full rounded border px-2 py-1 text-sm"
                             >
                               {ACTIVITY_TYPES.map(type => (
                                 <option key={type} value={type}>{type}</option>
                               ))}
-                            </select>
+                            </Select>
                           ) : (
-                            <input
+                            <Input
                               id={`${field.key}-${activity.id}`}
                               type={field.kind === 'number' ? 'number'
                                 : field.kind === 'datetime-local' ? 'datetime-local' : 'text'}
                               value={valueOf(activity, field.key)}
                               onChange={e => setField(activity, field.key, e.target.value)}
-                              className="w-full rounded border px-2 py-1 text-sm"
                             />
                           )}
                         </div>
@@ -159,44 +165,42 @@ export default function RoteiroScreen() {
                     </div>
 
                     <div className="mt-2 flex items-center gap-2">
-                      <button
-                        className="rounded bg-black px-3 py-1 text-xs text-white"
-                        onClick={() => act(
-                          () => updateActivity(activity.id, drafts[activity.id] ?? {})
-                        )}
-                      >
+                      <Button size="sm" onClick={() => act(
+                        () => updateActivity(activity.id, drafts[activity.id] ?? {})
+                      )}>
                         Salvar
-                      </button>
-                      <button
-                        className="rounded border px-3 py-1 text-xs text-red-700 disabled:opacity-40"
+                      </Button>
+                      <Button
+                        variant="outline" size="sm"
+                        className="text-destructive hover:text-destructive"
                         disabled={locked}
                         onClick={() => act(() => deleteActivity(activity.id), 'Excluída')}
                       >
                         Excluir
-                      </button>
+                      </Button>
                       {locked && (
-                        <span className="text-xs text-amber-700">
+                        <Badge variant="warning">
                           {activity.checkin_count} check-in(s) e {activity.scan_count} scan(s):
                           excluir apagaria o registro de quem participou.
-                        </span>
+                        </Badge>
                       )}
                     </div>
-                  </li>
+                  </CardContent></Card></li>
                 );
               })}
             </ul>
           )}
 
           {day && (
-            <button
-              className="mt-3 rounded border px-3 py-1 text-sm"
+            <Button
+              variant="outline" className="mt-3"
               onClick={() => act(
                 () => createActivity(day.id, { name: 'Nova atividade', activity_type: 'included' }),
                 'Atividade criada'
               )}
             >
               Nova atividade
-            </button>
+            </Button>
           )}
         </section>
       </div>

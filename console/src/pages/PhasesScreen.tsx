@@ -5,6 +5,10 @@ import {
   createPhase, deletePhase, getPhases, publishPhase, reorderPhases, unpublishPhase, type Phase,
 } from '../api/console-api';
 import { moveUp } from '../lib/move-up';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function PhasesScreen() {
   const { tripUuid = '' } = useParams();
@@ -32,61 +36,72 @@ export default function PhasesScreen() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <Link to="/" className="text-sm underline">← Viagens</Link>
-      <h1 className="text-xl font-bold my-4">Fases</h1>
-      {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+    <div>
+      <h1 className="mb-4 text-xl font-bold tracking-tight">Fases pré-trip</h1>
+      {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
-      <ul className="space-y-2 mb-6">
+      <ul className="mb-6 space-y-2">
         {phases.map((phase, index) => (
-          <li key={phase.id} className="border rounded p-3 flex items-center gap-3">
-            <div className="flex-1">
-              <Link to={`/trips/${tripUuid}/fases/${phase.id}`} className="font-medium underline">
-                {phase.title}
-              </Link>
-              <p className="text-sm text-gray-600">
-                {phase.checklist.length} itens · {phase.links.length} links
-              </p>
-            </div>
-            <span className={phase.is_visible ? 'text-green-700 text-sm' : 'text-amber-700 text-sm'}>
-              {phase.is_visible ? 'Publicada' : 'Rascunho'}
-            </span>
-            <button
-              className="border rounded px-2 py-1 text-sm"
-              onClick={() => {
-                const reordered = moveUp(phases, index);
-                setPhases(reordered);
-                void act(() => reorderPhases(tripUuid, reordered.map(p => p.id)));
-              }}
-            >
-              Subir
-            </button>
-            <button
-              className="border rounded px-2 py-1 text-sm"
-              onClick={() => act(() =>
-                phase.is_visible ? unpublishPhase(phase.id) : publishPhase(phase.id)
-              )}
-            >
-              {phase.is_visible ? 'Despublicar' : 'Publicar'}
-            </button>
-            <button
-              className="border rounded px-2 py-1 text-sm text-red-700"
-              onClick={() => act(() => deletePhase(phase.id))}
-            >
-              Excluir
-            </button>
+          <li key={phase.id}>
+            <Card>
+              <CardContent className="flex items-center gap-3">
+                <div className="flex-1">
+                  <Link
+                    to={`/trips/${tripUuid}/fases/${phase.id}`}
+                    className="font-medium text-foreground hover:text-primary"
+                  >
+                    {phase.title}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    {phase.checklist.length} itens · {phase.links.length} links
+                  </p>
+                </div>
+
+                <Badge variant={phase.is_visible ? 'default' : 'warning'}>
+                  {phase.is_visible ? 'Publicada' : 'Rascunho'}
+                </Badge>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const reordered = moveUp(phases, index);
+                    setPhases(reordered);
+                    void act(() => reorderPhases(tripUuid, reordered.map(p => p.id)));
+                  }}
+                >
+                  Subir
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => act(() =>
+                    phase.is_visible ? unpublishPhase(phase.id) : publishPhase(phase.id)
+                  )}
+                >
+                  {phase.is_visible ? 'Despublicar' : 'Publicar'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => act(() => deletePhase(phase.id))}
+                >
+                  Excluir
+                </Button>
+              </CardContent>
+            </Card>
           </li>
         ))}
       </ul>
 
-      <button
-        className="border rounded px-3 py-2"
+      <Button
         onClick={() => act(() =>
           createPhase(tripUuid, { title: 'Nova fase', short_description: '' })
         )}
       >
         Nova fase
-      </button>
+      </Button>
     </div>
   );
 }

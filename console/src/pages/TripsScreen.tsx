@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { listTrips, PRE_DEPARTURE_LINK, type Trip } from '../api/console-api';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function TripsScreen() {
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -20,25 +23,38 @@ export default function TripsScreen() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-xl font-bold mb-4">Viagens</h1>
-      {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
-      <ul className="space-y-2 mb-6">
+    <div className="mx-auto max-w-3xl p-8">
+      <div className="mb-6 flex items-center gap-3">
+        <img src="/parrot_icon.svg" alt="" className="h-8 w-8" />
+        <h1 className="text-2xl font-bold tracking-tight">Viagens</h1>
+      </div>
+
+      {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
+
+      <ul className="mb-6 space-y-2">
         {trips.map(trip => (
-          <li key={trip.trip_uuid} className="border rounded p-3">
-            <Link to={`/trips/${trip.trip_uuid}/fases`} className="font-medium underline">
-              {trip.title}
-            </Link>
-            <p className="text-sm text-gray-600">
-              {trip.start_date} — {trip.end_date}
-            </p>
+          <li key={trip.trip_uuid}>
+            <Card className="transition-colors hover:border-primary/40">
+              <CardContent>
+                <Link
+                  to={`/trips/${trip.trip_uuid}/fases`}
+                  className="font-medium text-foreground hover:text-primary"
+                >
+                  {trip.title}
+                </Link>
+                <p className="text-sm text-muted-foreground">
+                  {trip.start_date} — {trip.end_date}
+                </p>
+              </CardContent>
+            </Card>
           </li>
         ))}
       </ul>
-      <button onClick={copyLink} className="border rounded px-3 py-2">
-        Copiar link de pré-embarque
-      </button>
-      {copied && <span className="ml-2 text-sm text-green-700">Copiado</span>}
+
+      <div className="flex items-center gap-3">
+        <Button variant="outline" onClick={copyLink}>Copiar link de pré-embarque</Button>
+        {copied && <span className="text-sm text-primary">Copiado</span>}
+      </div>
     </div>
   );
 }

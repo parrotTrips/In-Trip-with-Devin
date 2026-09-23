@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useParams } from 'react-router-dom';
 
 import { listSections, type TripSection } from '../api/console-api';
+import { Alert } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 const GROUP_ORDER = ['conteudo', 'pessoas', 'durante', 'retorno'];
 
@@ -26,14 +28,20 @@ export default function TripLayout() {
 
   return (
     <div className="flex min-h-screen">
-      <nav className="w-64 shrink-0 border-r bg-gray-50 p-4">
-        <Link to="/" className="text-sm underline">← Viagens</Link>
+      <nav className="w-64 shrink-0 border-r bg-muted/30 p-4">
+        <Link
+          to="/"
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <img src="/parrot_icon.svg" alt="" className="h-5 w-5" />
+          Viagens
+        </Link>
 
-        {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+        {error && <Alert variant="destructive" className="mt-4">{error}</Alert>}
 
         {groups.map(({ group, label, items }) => (
           <div key={group} className="mt-5">
-            <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <h2 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               {label}
             </h2>
             <ul>
@@ -42,13 +50,16 @@ export default function TripLayout() {
                   <NavLink
                     to={`/trips/${tripUuid}/${section.key}`}
                     className={({ isActive }) =>
-                      `flex items-center justify-between rounded px-2 py-1 text-sm ${
-                        isActive ? 'bg-black text-white' : 'hover:bg-gray-200'
-                      }`
+                      cn(
+                        'flex items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors',
+                        isActive
+                          ? 'bg-primary font-medium text-primary-foreground'
+                          : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                      )
                     }
                   >
                     <span>{section.label}</span>
-                    <span className={section.count === 0 ? 'opacity-40' : 'opacity-70'}>
+                    <span className={cn('tabular-nums', section.count === 0 ? 'opacity-40' : 'opacity-75')}>
                       {section.count}
                     </span>
                   </NavLink>
@@ -59,7 +70,7 @@ export default function TripLayout() {
         ))}
       </nav>
 
-      <main className="flex-1 p-6">
+      <main className="flex-1 p-8">
         <Outlet />
       </main>
     </div>

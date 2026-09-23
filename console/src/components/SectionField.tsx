@@ -1,4 +1,8 @@
 import type { SectionColumn } from '../api/console-api';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Props {
   column: SectionColumn;
@@ -12,19 +16,15 @@ export default function SectionField({ column, index, value, onChange }: Props) 
   const id = `${column.key}-${index}`;
   const label = `${column.label} ${index + 1}`;
   const current = String(value ?? '');
-  const className = 'w-full rounded border px-2 py-1 text-sm';
 
   return (
     <div className="flex-1">
-      <label htmlFor={id} className="block text-xs text-gray-600">
-        {column.label}{column.required && ' *'}
-      </label>
+      <Label htmlFor={id} className="mb-1 block">
+        {column.label}{column.required && <span className="text-destructive"> *</span>}
+      </Label>
 
       {column.kind === 'select' ? (
-        <select
-          id={id} aria-label={label} value={current} className={className}
-          onChange={e => onChange(e.target.value)}
-        >
+        <Select id={id} aria-label={label} value={current} onChange={e => onChange(e.target.value)}>
           <option value="">—</option>
           {/* Valor legado fora da lista aparece para não ser perdido ao salvar. */}
           {current && !column.choices.includes(current) && (
@@ -33,20 +33,19 @@ export default function SectionField({ column, index, value, onChange }: Props) 
           {column.choices.map(choice => (
             <option key={choice} value={choice}>{choice}</option>
           ))}
-        </select>
+        </Select>
       ) : column.kind === 'textarea' ? (
-        <textarea
-          id={id} aria-label={label} value={current} rows={3} className={className}
+        <Textarea
+          id={id} aria-label={label} value={current} rows={3}
           onChange={e => onChange(e.target.value)}
         />
       ) : (
-        <input
+        <Input
           id={id}
           aria-label={label}
           value={current}
           type={column.kind === 'number' ? 'number' : 'text'}
           inputMode={column.kind === 'number' ? 'decimal' : undefined}
-          className={className}
           onChange={e => onChange(e.target.value)}
         />
       )}
