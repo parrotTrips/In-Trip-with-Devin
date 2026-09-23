@@ -438,3 +438,32 @@ def test_legacy_category_outside_the_list_is_still_shown(client, session_factory
     ).json()["rows"]
     legado = [r for r in rows if r["name"] == "Legado"]
     assert legado and legado[0]["category"] == "Restaurants"
+
+
+def test_trip_listing_carries_destination_travellers_and_mode(client, session_factory):
+    asyncio.run(_seed(session_factory))
+    headers = _admin(client)
+
+    async def _set_mode():
+        async with session_factory() as session:
+            await session.execute(
+                text("INSERT INTO trip_settings (id, trip_uuid, mode, created_at, updated_at)"
+                     " VALUES (gen_random_uuid(), :u, 'in-trip', now(), now())"),
+                {"u": TRIP},
+            )
+            await session.commit()
+
+    asyncio.run(_set_mode())
+
+    trips = {t["trip_uuid"]: t for t in client.get(
+        "/console/trips", headers=headers
+    ).json()["trips"]}
+
+    trip = trips[TRIP]
+    assert trip["destination"] == "Brazil"
+    assert trip["traveler_count"] == 1
+    assert trip["mode"] == "in-trip"
+
+    # Viagem sem trip_settings não quebra: modo vem nulo
+    assert trips[OTHER_TRIP]["mode"] is None
+    assert trips[OTHER_TRIP]["traveler_count"] == 0

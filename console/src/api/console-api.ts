@@ -6,8 +6,11 @@ export const PRE_DEPARTURE_LINK =
 export interface Trip {
   trip_uuid: string;
   title: string;
+  destination: string | null;
   start_date: string | null;
   end_date: string | null;
+  traveler_count: number;
+  mode: string | null;
 }
 
 export function listTrips() {

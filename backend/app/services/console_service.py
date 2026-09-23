@@ -31,10 +31,14 @@ async def list_trips(session: AsyncSession) -> dict:
     """Return active trips (end_date today or later, or null)."""
     rows = await session.execute(
         text("""
-            SELECT trip_uuid, title, start_date, end_date
-            FROM wetravel_trips
-            WHERE end_date IS NULL OR end_date::date >= CURRENT_DATE
-            ORDER BY start_date ASC
+            SELECT w.trip_uuid, w.title, w.destination, w.start_date, w.end_date,
+                   (SELECT count(*) FROM trip_travelers t
+                     WHERE t.wetravel_trip_uuid = w.trip_uuid) AS traveler_count,
+                   (SELECT s.mode FROM trip_settings s
+                     WHERE s.trip_uuid = w.trip_uuid) AS mode
+            FROM wetravel_trips w
+            WHERE w.end_date IS NULL OR w.end_date::date >= CURRENT_DATE
+            ORDER BY w.start_date ASC
         """)
     )
     return {
@@ -42,8 +46,11 @@ async def list_trips(session: AsyncSession) -> dict:
             {
                 "trip_uuid": r.trip_uuid,
                 "title": r.title,
+                "destination": r.destination,
                 "start_date": str(r.start_date) if r.start_date else None,
                 "end_date": str(r.end_date) if r.end_date else None,
+                "traveler_count": r.traveler_count or 0,
+                "mode": r.mode,
             }
             for r in rows
         ]
