@@ -57,7 +57,7 @@ function flagForRegion(region: string) {
 }
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { completeTripSelection } = useAuth();
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
@@ -88,7 +88,29 @@ export default function LoginScreen() {
     setError('');
     try {
       const result = await verifyOTP(fullPhone, codeStr);
-      login(result.user_id, result.phone, result.name, result.access_token, result.role ?? 'traveler');
+      switch (result.status) {
+        case 'trip_selected':
+          completeTripSelection(
+            result.user_id,
+            result.phone,
+            result.name,
+            result.access_token,
+            result.role,
+            result.active_trip
+          );
+          break;
+        case 'admin_authenticated':
+          // Admin sessions are only valid on the separate /console app.
+          setError('This account is not available in the traveler app.');
+          setLoading(false);
+          break;
+        case 'no_trips':
+        case 'selection_required':
+          // TODO(Task 6): render the no-trip state and trip selector instead.
+          setError(result.message);
+          setLoading(false);
+          break;
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid code');
       setLoading(false);

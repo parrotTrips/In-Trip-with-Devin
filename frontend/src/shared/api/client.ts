@@ -12,15 +12,21 @@ function getToken(): string | null {
 }
 
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getToken();
-
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string>),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // Auth selection calls (listTrips/selectTrip) pass their own Authorization
+  // header with the selection or session token they were handed explicitly.
+  // Only fall back to the current scoped session token from localStorage
+  // for ordinary app requests that didn't already supply one — otherwise a
+  // stale localStorage token would silently override the caller's token.
+  if (!headers['Authorization']) {
+    const token = getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
   }
 
   const response = await fetch(`${API_URL}${path}`, {

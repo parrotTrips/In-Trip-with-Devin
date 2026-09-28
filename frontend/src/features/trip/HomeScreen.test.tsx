@@ -112,6 +112,8 @@ describe('HomeScreen', () => {
         name: 'Alice Traveler',
         token: 'tok',
         role: 'traveler',
+        tripId: TRIP_UUID,
+        activeTrip: null,
       })
     );
     setupHandlers();

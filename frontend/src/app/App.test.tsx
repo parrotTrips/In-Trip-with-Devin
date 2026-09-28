@@ -71,7 +71,7 @@ describe('App composition', () => {
   test('renders main routes when the user is authenticated', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-1', phone: '+15551111111', name: 'Alice', token: 'tok', role: 'traveler' })
+      JSON.stringify({ userId: 'uid-1', phone: '+15551111111', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: null })
     );
     window.history.pushState({}, '', '/');
 
@@ -110,7 +110,7 @@ describe('App composition', () => {
   test('shows a minimal floating return button when a staff user opens traveler preview', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-2', phone: '+15552222222', name: 'Bob Staff', token: 'tok', role: 'staff' })
+      JSON.stringify({ userId: 'uid-2', phone: '+15552222222', name: 'Bob Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null })
     );
     window.history.pushState({}, '', '/');
 
@@ -131,7 +131,7 @@ describe('App composition', () => {
   test('opens traveler profile deep links directly for staff when requested', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-3', phone: '+15553333333', name: 'Carol Staff', token: 'tok', role: 'staff' })
+      JSON.stringify({ userId: 'uid-3', phone: '+15553333333', name: 'Carol Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null })
     );
     window.history.pushState({}, '', '/profile?section=pre-departure&view=traveler');
 

@@ -14,7 +14,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
     );
 
     server.use(
@@ -92,7 +92,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
     );
 
     server.use(
@@ -221,7 +221,7 @@ describe('ProfileScreen', () => {
   test('opens pre departure information from a section deep link', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
     );
 
     server.use(
@@ -267,7 +267,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'traveler-1', phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 'traveler-1', phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
     );
 
     server.use(

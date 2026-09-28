@@ -16,6 +16,8 @@ describe('QrCodeScreen', () => {
         phone: '+15550000001',
         name: 'Alice Traveler',
         token: 'tok',
+        tripId: 'test-trip-001',
+        activeTrip: null,
         role: 'traveler',
       })
     );
