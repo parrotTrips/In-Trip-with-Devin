@@ -488,6 +488,49 @@ describe('StaffScreen', () => {
     expect(screen.queryByText('Hi, Marcelo 👋')).not.toBeInTheDocument();
   });
 
+  test('recovers a revoked staff role by reselecting the same trip as traveler', async () => {
+    setUpStaffSwitcherSession();
+    window.history.pushState({}, '', '/');
+    setUpStaffSwitcherAppHandlers();
+    const sameTripAsTraveler: TripChoice = { ...STAFF_TRIP_ONE, role: 'traveler' };
+    server.use(
+      http.get('http://localhost:8000/me/staff/trip', () =>
+        HttpResponse.json({ detail: 'Staff access required for this trip' }, { status: 403 })
+      ),
+      http.get('http://localhost:8000/me/staff/trip/contacts', () =>
+        HttpResponse.json({ detail: 'Staff access required for this trip' }, { status: 403 })
+      ),
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [sameTripAsTraveler] })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({
+          status: 'trip_selected',
+          user_id: 'staff-1',
+          phone: '+5511888000001',
+          name: 'Marcelo Staff',
+          role: 'traveler',
+          message: 'Login successful',
+          access_token: 'tok-traveler-same-trip',
+          active_trip: sameTripAsTraveler,
+        })
+      )
+    );
+
+    render(<App />);
+
+    await screen.findByText('Escolha sua viagem');
+    await userEvent.click(screen.getByText('Staff Trip One').closest('button')!);
+
+    await waitFor(() => expect(screen.getByText('Trip Progress')).toBeInTheDocument());
+    expect(screen.queryByText('Hi, Marcelo 👋')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('parrot_user')!)).toMatchObject({
+      role: 'traveler',
+      tripId: 'trip-staff-1',
+      token: 'tok-traveler-same-trip',
+    });
+  });
+
   test('selecting a staff-role trip keeps the staff UI', async () => {
     setUpStaffSwitcherSession();
     window.history.pushState({}, '', '/');

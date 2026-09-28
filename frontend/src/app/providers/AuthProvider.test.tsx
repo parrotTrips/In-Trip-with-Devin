@@ -325,6 +325,9 @@ describe('AuthProvider trip-scoped session state', () => {
       http.get('http://localhost:8000/me/trip', () =>
         HttpResponse.json({ detail: 'Validation failed' }, { status: 403 })
       ),
+      http.get('http://localhost:8000/profile/user-1', () =>
+        HttpResponse.json({ detail: 'Staff access required for this trip' }, { status: 403 })
+      ),
       http.get('http://localhost:8000/auth/select-trip', () =>
         HttpResponse.json({ detail: 'Trip not available' }, { status: 403 })
       )
@@ -333,6 +336,7 @@ describe('AuthProvider trip-scoped session state', () => {
     renderProbe();
     await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
     await user.click(screen.getByRole('button', { name: 'protected-request' }));
+    await user.click(screen.getByRole('button', { name: 'profile-request' }));
     await user.click(screen.getByRole('button', { name: 'select-request' }));
 
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');

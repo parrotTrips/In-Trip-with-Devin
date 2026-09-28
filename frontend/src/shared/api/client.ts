@@ -64,12 +64,15 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
       || path.startsWith('/phases/')
       || path === '/auth/trips'
       || path === '/auth/select-trip';
+    const isStaffAccessRevoked = (path === '/me/staff' || path.startsWith('/me/staff/'))
+      && detail === 'Staff access required for this trip';
     const kind = response.status === 401 && hasSession && isProtectedAppPath
       ? 'unauthorized'
       : response.status === 403
-        && isProtectedAppPath
-        && !path.startsWith('/auth/')
-        && detail === 'Trip membership required'
+        && (
+          (isProtectedAppPath && !path.startsWith('/auth/') && detail === 'Trip membership required')
+          || isStaffAccessRevoked
+        )
           ? 'membership_revoked'
           : null;
 
