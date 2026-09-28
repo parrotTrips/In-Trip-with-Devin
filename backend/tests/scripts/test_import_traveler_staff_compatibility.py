@@ -15,7 +15,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from scripts.import_casamento_contacts_from_csv import TRIP_UUID as TRAVELER_TRIP_UUID
-from scripts.import_casamento_contacts_from_csv import import_contacts
+from scripts.import_casamento_contacts_from_csv import (
+    fetch_traveler_audit_rows,
+    import_contacts,
+)
 from scripts.import_staff_content import (
     StaffTaskImportError,
     write_activity_participants,
@@ -176,6 +179,101 @@ async def test_reimporting_traveler_csv_contact_is_idempotent(database_url):
             TRAVELER_TRIP_UUID,
         )
         assert trip_traveler_count == 1
+    finally:
+        await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_traveler_import_normalizes_at_write_boundary_and_reuses_staff_user(database_url):
+    """Direct callers can bypass read_contacts, so import_contacts itself must
+    canonicalize phones before lookup/upsert and remain idempotent.
+    """
+    conn = await asyncpg.connect(_pg_url(database_url))
+    try:
+        canonical_phone = "+5511991234567"
+        await write_staff(
+            conn,
+            STAFF_TRIP_UUID,
+            [{
+                "phone": canonical_phone,
+                "nome": "Daniel Duplo",
+                "funcao": "Suporte",
+                "trip_uuid": STAFF_TRIP_UUID,
+                "photo_url": None,
+                "bio": None,
+            }],
+        )
+
+        formatted_contact = {
+            "name": "Daniel Duplo",
+            "phone": "+55 (11) 99123-4567",
+            "marker": "",
+        }
+        first = await import_contacts(conn, [formatted_contact])
+        second = await import_contacts(conn, [formatted_contact])
+
+        assert len(first["inserted"]) == 1
+        assert len(second["inserted"]) == 0
+        assert len(second["skipped"]) == 1
+        assert await conn.fetchval("SELECT count(*) FROM users WHERE phone = $1", canonical_phone) == 1
+        assert await conn.fetchval("SELECT count(*) FROM users WHERE full_name = $1", "Daniel Duplo") == 1
+        assert {
+            row["wetravel_trip_uuid"]
+            for row in await conn.fetch(
+                "SELECT tt.wetravel_trip_uuid FROM trip_travelers tt "
+                "JOIN users u ON u.id = tt.user_id WHERE u.phone = $1",
+                canonical_phone,
+            )
+        } == {STAFF_TRIP_UUID, TRAVELER_TRIP_UUID}
+    finally:
+        await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_traveler_audit_derives_role_from_membership_in_the_audited_trip(database_url):
+    """Staff elsewhere remain travelers here, while staff on this trip belong
+    only in the separate Staff audit tab.
+    """
+    conn = await asyncpg.connect(_pg_url(database_url))
+    try:
+        mixed_phone = "+5511992345678"
+        same_trip_staff_phone = "+5511993456789"
+        await import_contacts(
+            conn,
+            [
+                {"name": "Traveler Here Staff Elsewhere", "phone": mixed_phone, "marker": ""},
+                {"name": "Staff Here", "phone": same_trip_staff_phone, "marker": ""},
+            ],
+        )
+        await write_staff(
+            conn,
+            STAFF_TRIP_UUID,
+            [{
+                "phone": mixed_phone,
+                "nome": "Traveler Here Staff Elsewhere",
+                "funcao": "Suporte",
+                "trip_uuid": STAFF_TRIP_UUID,
+                "photo_url": None,
+                "bio": None,
+            }],
+        )
+        await write_staff(
+            conn,
+            TRAVELER_TRIP_UUID,
+            [{
+                "phone": same_trip_staff_phone,
+                "nome": "Staff Here",
+                "funcao": "Coordenacao",
+                "trip_uuid": TRAVELER_TRIP_UUID,
+                "photo_url": None,
+                "bio": None,
+            }],
+        )
+
+        audited_phones = {row[3] for row in await fetch_traveler_audit_rows(conn)}
+
+        assert mixed_phone in audited_phones
+        assert same_trip_staff_phone not in audited_phones
     finally:
         await conn.close()
 

@@ -92,6 +92,7 @@ def read_contacts(path: Path) -> list[dict[str, str]]:
 
 
 async def table_exists(conn: asyncpg.Connection, table_name: str) -> bool:
+    """Support both legacy databases and the current post-0003 schema."""
     return bool(
         await conn.fetchval(
             """
@@ -125,7 +126,10 @@ async def import_contacts(conn: asyncpg.Connection, contacts: list[dict[str, str
     has_products = await table_exists(conn, "traveler_products")
 
     async with conn.transaction():
-        for contact in contacts:
+        for raw_contact in contacts:
+            # import_contacts is also called directly by tests/admin scripts, so
+            # do not rely on the CSV reader having normalized this boundary.
+            contact = {**raw_contact, "phone": normalize_phone(raw_contact.get("phone"))}
             existing = await conn.fetchrow(
                 """
                 select u.full_name, u.role, tt.id as trip_traveler_id
@@ -226,8 +230,17 @@ async def import_contacts(conn: asyncpg.Connection, contacts: list[dict[str, str
 
 
 async def fetch_traveler_audit_rows(conn: asyncpg.Connection) -> list[list[Any]]:
+    # traveler_products was removed in migration 20260521_0003, but this script
+    # still supports older databases where it supplies the audit room type.
+    has_products = await table_exists(conn, "traveler_products")
+    room_type_select = "tprod.room_type" if has_products else "null::text as room_type"
+    products_join = (
+        "left join traveler_products tprod on tprod.trip_traveler_id = tt.id"
+        if has_products
+        else ""
+    )
     rows = await conn.fetch(
-        """
+        f"""
         select
             u.full_name,
             tp.preferred_name,
@@ -235,13 +248,18 @@ async def fetch_traveler_audit_rows(conn: asyncpg.Connection) -> list[list[Any]]
             u.email,
             u.id as user_id,
             tt.id as trip_traveler_id,
-            tprod.room_type
+            {room_type_select}
         from trip_travelers tt
         join users u on u.id = tt.user_id
         left join traveler_profiles tp on tp.trip_traveler_id = tt.id
-        left join traveler_products tprod on tprod.trip_traveler_id = tt.id
+        {products_join}
         where tt.wetravel_trip_uuid = $1
-          and u.role = 'traveler'
+          and not exists (
+              select 1
+              from trip_staff ts
+              where ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                and ts.user_id = tt.user_id
+          )
         order by u.full_name, u.phone
         """,
         TRIP_UUID,
