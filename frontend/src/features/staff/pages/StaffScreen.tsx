@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye, Bell, Send, Loader2, CheckCircle, MapPin, Pencil, Trash2, X, Check } from 'lucide-react';
+import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye, Bell, Send, Loader2, CheckCircle, MapPin, Pencil, Trash2, X, Check, ArrowRightLeft } from 'lucide-react';
 import { useAuth } from '../../../app/providers/auth-context';
 import {
   getActivityTravelers,
@@ -782,7 +782,7 @@ interface Props {
 }
 
 export default function StaffScreen({ onSwitchToTravelerView }: Props) {
-  const { user, logout } = useAuth();
+  const { user, logout, openTripSwitcher } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('itinerary');
   const [trip, setTrip] = useState<StaffTrip | null>(null);
   const [contactGroups, setContactGroups] = useState<StaffContactGroup[]>([]);
@@ -819,6 +819,13 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
             >
               <Eye size={14} />
               Traveler view
+            </button>
+            <button
+              onClick={openTripSwitcher}
+              className="flex items-center gap-1.5 text-emerald-200 text-xs hover:text-white transition-colors"
+            >
+              <ArrowRightLeft size={14} />
+              Trocar de viagem
             </button>
             <button onClick={logout} className="flex items-center gap-1 text-emerald-300 text-xs hover:text-white">
               <LogOut size={13} />

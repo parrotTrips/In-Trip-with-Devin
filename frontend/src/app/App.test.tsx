@@ -168,6 +168,74 @@ describe('App composition', () => {
     expect(screen.queryByText('Viewing as traveler')).not.toBeInTheDocument();
   });
 
+  test('resets a staff traveler preview when switching to a different staff-role trip', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 'uid-4', phone: '+15554444444', name: 'Dave Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null })
+    );
+    window.history.pushState({}, '', '/');
+
+    server.use(
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({
+          trips: [
+            { ...OTP_TRIP_CURRENT, role: 'staff' },
+            { trip_id: 'test-staff-2', title: 'Lisbon Staff Trip', destination: 'Lisbon', start_date: '2026-06-01', end_date: '2026-06-10', role: 'staff', is_current: false },
+          ],
+        })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({
+          status: 'trip_selected',
+          user_id: 'uid-4',
+          phone: '+15554444444',
+          name: 'Dave Staff',
+          role: 'staff',
+          message: 'Login successful',
+          access_token: 'tok-switched',
+          active_trip: { trip_id: 'test-staff-2', title: 'Lisbon Staff Trip', destination: 'Lisbon', start_date: '2026-06-01', end_date: '2026-06-10', role: 'staff', is_current: false },
+        })
+      ),
+      http.get('http://localhost:8000/profile/uid-4', () =>
+        HttpResponse.json({
+          user_id: 'uid-4',
+          phone: '+15554444444',
+          name: 'Dave Staff',
+          profile: null,
+          roommate: null,
+        })
+      )
+    );
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    expect(screen.getByText('Staff shell')).toBeInTheDocument();
+
+    // Preview the traveler view on the current staff trip first.
+    await user.click(screen.getByRole('button', { name: 'Traveler view' }));
+    await waitFor(() => {
+      expect(screen.getByText('Trip Progress')).toBeInTheDocument();
+    });
+
+    // The trip switcher lives on the real traveler profile screen — navigate
+    // there (the mocked StaffScreen isn't rendered while previewing).
+    await user.click(screen.getByText('My Profile', { selector: 'span' }).closest('button')!);
+    await screen.findByRole('heading', { name: 'My Profile' });
+
+    // Switch to a different staff-role trip while still previewing traveler view.
+    await user.click(screen.getByRole('button', { name: /trocar de viagem/i }));
+    await screen.findByText('Escolha sua viagem');
+    await user.click(screen.getByText('Lisbon Staff Trip').closest('button')!);
+
+    // Landing on the new (staff-role) trip must show the staff UI, not a
+    // carried-over traveler preview from the previous trip.
+    await waitFor(() => {
+      expect(screen.getByText('Staff shell')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Trip Progress')).not.toBeInTheDocument();
+  });
+
   test('opens traveler profile deep links directly for staff when requested', async () => {
     localStorage.setItem(
       'parrot_user',

@@ -1,4 +1,4 @@
-import { User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut, QrCode, Camera, Info } from 'lucide-react';
+import { User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut, QrCode, Camera, Info, ArrowRightLeft } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AppHeader from '../../../shared/components/AppHeader';
@@ -548,7 +548,7 @@ function RoommateAutocompleteField({ label, value, onChange, options, required =
 
 export default function ProfileScreen() {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, openTripSwitcher } = useAuth();
   const { setAvatarUrl } = useAvatar();
   const { tripInfo, travelers } = useTripContext();
   const [loading, setLoading] = useState(true);
@@ -1198,9 +1198,16 @@ export default function ProfileScreen() {
         </CollapsibleSection>
       </div>
 
-      {/* Sign Out button */}
+      {/* Trip switch + Sign Out buttons */}
       <div className="px-4 pt-4">
         <div className="space-y-2">
+          <button
+            onClick={openTripSwitcher}
+            className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+          >
+            <ArrowRightLeft size={18} />
+            Trocar de viagem
+          </button>
           <button
             onClick={logout}
             className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-red-500 bg-red-50 hover:bg-red-100 transition-colors"
