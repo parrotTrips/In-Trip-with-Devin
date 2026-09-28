@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
 import { requestOTP, verifyOTP } from '../services/auth-api';
 import { useAuth } from '../../../app/providers/auth-context';
@@ -65,6 +65,18 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countryCode, setCountryCode] = useState('+1');
+  const mountedRef = useRef(true);
+  const verifyRequestIdRef = useRef(0);
+  const verifyBusyRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      verifyRequestIdRef.current += 1;
+      verifyBusyRef.current = false;
+    };
+  }, []);
 
   const resetToPhoneEntry = () => {
     setStep('phone');
@@ -92,10 +104,14 @@ export default function LoginScreen() {
   };
 
   const handleVerifyCode = async (codeStr: string) => {
+    if (verifyBusyRef.current) return;
+    verifyBusyRef.current = true;
+    const requestId = ++verifyRequestIdRef.current;
     setLoading(true);
     setError('');
     try {
       const result = await verifyOTP(fullPhone, codeStr);
+      if (!mountedRef.current || verifyRequestIdRef.current !== requestId) return;
       switch (result.status) {
         case 'trip_selected':
           completeTripSelection(
@@ -109,7 +125,6 @@ export default function LoginScreen() {
         case 'admin_authenticated':
           // Admin sessions are only valid on the separate /console app.
           setError('This account is not available in the traveler app.');
-          setLoading(false);
           break;
         case 'selection_required':
           // Hands off to the trip selector (rendered by AppContent once
@@ -122,22 +137,26 @@ export default function LoginScreen() {
             selectionToken: result.selection_token,
             trips: result.trips,
           });
-          setLoading(false);
           break;
         case 'no_trips':
           // Local, non-persisted state only: nothing to store, no token was
           // issued for this outcome.
           setStep('no_trips');
-          setLoading(false);
           break;
       }
     } catch (err) {
+      if (!mountedRef.current || verifyRequestIdRef.current !== requestId) return;
       setError(err instanceof Error ? err.message : 'Invalid code');
-      setLoading(false);
+    } finally {
+      if (mountedRef.current && verifyRequestIdRef.current === requestId) {
+        verifyBusyRef.current = false;
+        setLoading(false);
+      }
     }
   };
 
   const handleCodeChange = (index: number, value: string) => {
+    if (verifyBusyRef.current) return;
     if (value.length > 1) return;
     const newCode = [...code];
     newCode[index] = value;
@@ -153,6 +172,7 @@ export default function LoginScreen() {
   };
 
   const handleCodeKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (verifyBusyRef.current) return;
     if (e.key === 'Backspace' && !code[index] && index > 0) {
       const prev = document.getElementById(`code-${index - 1}`);
       prev?.focus();
@@ -164,6 +184,7 @@ export default function LoginScreen() {
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
+    if (verifyBusyRef.current) return;
     const digits = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (!digits) return;
     const newCode = [...code];
@@ -289,6 +310,7 @@ export default function LoginScreen() {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={1}
+                    disabled={loading}
                     value={digit}
                     onChange={e => handleCodeChange(i, e.target.value)}
                     onKeyDown={e => handleCodeKeyDown(i, e)}
@@ -309,6 +331,7 @@ export default function LoginScreen() {
               )}
 
               <button
+                disabled={loading}
                 onClick={() => {
                   setStep('phone');
                   setCode(['', '', '', '', '', '']);
@@ -320,6 +343,7 @@ export default function LoginScreen() {
               </button>
 
               <button
+                disabled={loading}
                 className="w-full mt-3 text-sm text-emerald-600 font-medium hover:text-emerald-700 transition-colors text-center"
                 onClick={async () => {
                   setLoading(true);

@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 
@@ -271,6 +272,86 @@ describe('LoginScreen', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
       expect(screen.getByText('Welcome, Traveler!')).toBeInTheDocument();
+    });
+
+    test('submits a completed OTP only once and disables code entry while verification is pending', async () => {
+      let verifyRequests = 0;
+      let resolveVerification: ((response: Response) => void) | undefined;
+      server.use(
+        http.post('http://localhost:8000/auth/verify-otp', () => {
+          verifyRequests += 1;
+          return new Promise<Response>(resolve => {
+            resolveVerification = resolve;
+          });
+        })
+      );
+
+      renderLoginScreen();
+      await fillPhoneAndSendCode();
+      const firstInput = document.getElementById('code-0');
+      if (!firstInput) throw new Error('Missing first code input');
+      const clipboardData = { getData: () => '111111' };
+      fireEvent.paste(firstInput, { clipboardData });
+      fireEvent.paste(firstInput, { clipboardData });
+
+      await waitFor(() => expect(verifyRequests).toBe(1));
+      const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('[id^="code-"]'));
+      expect(inputs).toHaveLength(6);
+      inputs.forEach(input => expect(input).toBeDisabled());
+
+      expect(verifyRequests).toBe(1);
+
+      resolveVerification?.(HttpResponse.json({
+        status: 'no_trips',
+        user_id: 'user-1',
+        phone: '+15551234567',
+        name: 'Alice',
+        message: 'No current or future trips available',
+      }));
+      await screen.findByText('Você não tem viagens atuais ou futuras');
+    });
+
+    test('ignores a verification response after LoginScreen unmounts', async () => {
+      let resolveVerification: ((response: Response) => void) | undefined;
+      server.use(
+        http.post('http://localhost:8000/auth/verify-otp', () =>
+          new Promise<Response>(resolve => {
+            resolveVerification = resolve;
+          })
+        )
+      );
+
+      function UnmountHarness() {
+        const [showLogin, setShowLogin] = useState(true);
+        return (
+          <AuthProvider>
+            <AuthProbe />
+            {showLogin && <LoginScreen />}
+            <button onClick={() => setShowLogin(false)}>Unmount login</button>
+          </AuthProvider>
+        );
+      }
+
+      render(<UnmountHarness />);
+      await fillPhoneAndSendCode();
+      document.getElementById('code-0')?.focus();
+      await userEvent.paste('111111');
+      await userEvent.click(screen.getByRole('button', { name: 'Unmount login' }));
+
+      resolveVerification?.(HttpResponse.json({
+        status: 'trip_selected',
+        user_id: 'user-1',
+        phone: '+15551234567',
+        name: 'Alice',
+        role: 'traveler',
+        message: 'Login successful',
+        access_token: 'late-token',
+        active_trip: TRIP_CURRENT,
+      }));
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(screen.getByTestId('probe-logged-in')).toHaveTextContent('false');
+      expect(localStorage.getItem('parrot_user')).toBeNull();
     });
   });
 });

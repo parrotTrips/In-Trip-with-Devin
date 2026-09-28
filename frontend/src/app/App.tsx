@@ -71,6 +71,9 @@ function TripSwitcherOverlay({
   onCancel: () => void;
 }) {
   const [state, setState] = useState<TripSwitcherState>({ status: 'loading' });
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   // Guards against an in-flight `listTrips` call (e.g. from a stale retry,
   // or one already superseded by a newer one) resolving after a newer
   // request or an unmount — without this, a slow first response landing
@@ -98,8 +101,52 @@ function TripSwitcherOverlay({
     };
   }, [load]);
 
+  useEffect(() => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    titleRef.current?.focus();
+
+    return () => {
+      const returnTarget = returnFocusRef.current;
+      window.setTimeout(() => {
+        if (returnTarget?.isConnected) returnTarget.focus();
+      }, 0);
+    };
+  }, []);
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ) ?? []).filter(element => !element.hasAttribute('hidden'));
+    if (focusable.length === 0) {
+      event.preventDefault();
+      titleRef.current?.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === titleRef.current)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  let content: React.ReactNode;
+
   if (state.status === 'loading') {
-    return (
+    content = (
       <div className={`${OVERLAY_CLASS} flex flex-col items-center justify-center gap-4 bg-emerald-700`}>
         <Loader2
           size={32}
@@ -116,10 +163,8 @@ function TripSwitcherOverlay({
         </button>
       </div>
     );
-  }
-
-  if (state.status === 'error') {
-    return (
+  } else if (state.status === 'error') {
+    content = (
       <div className={`${OVERLAY_CLASS} flex flex-col items-center justify-center gap-4 bg-emerald-700 px-6 text-center`}>
         <p className="text-sm text-white">Não foi possível carregar suas viagens.</p>
         <div className="flex gap-3">
@@ -140,11 +185,26 @@ function TripSwitcherOverlay({
         </div>
       </div>
     );
+  } else {
+    content = (
+      <div className={OVERLAY_CLASS}>
+        <TripSelectorScreen trips={state.trips} token={token} activeTripId={activeTripId} onCancel={onCancel} />
+      </div>
+    );
   }
 
   return (
-    <div className={OVERLAY_CLASS}>
-      <TripSelectorScreen trips={state.trips} token={token} activeTripId={activeTripId} onCancel={onCancel} />
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="trip-switcher-title"
+      onKeyDown={handleDialogKeyDown}
+    >
+      <h2 id="trip-switcher-title" ref={titleRef} tabIndex={-1} className="sr-only">
+        Trocar de viagem
+      </h2>
+      {content}
     </div>
   );
 }
@@ -263,6 +323,7 @@ function AppContent() {
         <Fragment key={user?.tripId ?? 'no-trip'}>
           <TripApp user={user} avatarUrl={avatarUrl} onSetAvatarUrl={handleSetAvatarUrl} />
         </Fragment>
+        <DevUserSwitcher />
       </div>
     </>
   );
@@ -272,7 +333,6 @@ export default function App() {
   return (
     <AuthProvider>
       <AppContent />
-      <DevUserSwitcher />
     </AuthProvider>
   );
 }

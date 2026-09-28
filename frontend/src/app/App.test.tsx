@@ -323,6 +323,49 @@ describe('App composition', () => {
     expect(hiddenTree?.inert).toBe(true);
   });
 
+  test('keeps focus inside an accessible trip-switch dialog and closes it with Escape', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: null })
+    );
+    window.history.pushState({}, '', '/profile');
+    server.use(
+      http.get('http://localhost:8000/profile/uid-6', () =>
+        HttpResponse.json({ user_id: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', profile: null, roommate: null })
+      ),
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [OTP_TRIP_CURRENT, OTP_TRIP_FUTURE] })
+      )
+    );
+
+    render(<App />);
+    const user = userEvent.setup();
+    const trigger = await screen.findByRole('button', { name: /trocar de viagem/i });
+    await user.click(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: /trocar de viagem/i });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: /trocar de viagem/i }))
+    );
+    await screen.findByText('Escolha sua viagem');
+
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')
+    );
+    expect(focusable.length).toBeGreaterThan(1);
+    focusable[focusable.length - 1].focus();
+    await user.tab();
+    expect(document.activeElement).toBe(focusable[0]);
+    focusable[0].focus();
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(focusable[focusable.length - 1]);
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
   test('opens traveler profile deep links directly for staff when requested', async () => {
     localStorage.setItem(
       'parrot_user',
