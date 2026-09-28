@@ -67,8 +67,9 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
     const kind = response.status === 401 && hasSession && isProtectedAppPath
       ? 'unauthorized'
       : response.status === 403
-        && path.startsWith('/me/')
-        && /^(Trip membership required|Staff access required for this trip)$/.test(detail)
+        && isProtectedAppPath
+        && !path.startsWith('/auth/')
+        && detail === 'Trip membership required'
           ? 'membership_revoked'
           : null;
 
