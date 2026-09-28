@@ -236,6 +236,93 @@ describe('App composition', () => {
     expect(screen.queryByText('Trip Progress')).not.toBeInTheDocument();
   });
 
+  test('consumes the ?view=traveler deep link once, so a later trip switch remount does not reapply it', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 'uid-5', phone: '+15555555555', name: 'Eve Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null })
+    );
+    window.history.pushState({}, '', '/profile?view=traveler');
+
+    server.use(
+      http.get('http://localhost:8000/profile/uid-5', () =>
+        HttpResponse.json({ user_id: 'uid-5', phone: '+15555555555', name: 'Eve Staff', profile: null, roommate: null })
+      ),
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({
+          trips: [
+            { ...OTP_TRIP_CURRENT, role: 'staff' },
+            { trip_id: 'test-staff-3', title: 'Porto Staff Trip', destination: 'Porto', start_date: '2026-07-01', end_date: '2026-07-10', role: 'staff', is_current: false },
+          ],
+        })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({
+          status: 'trip_selected',
+          user_id: 'uid-5',
+          phone: '+15555555555',
+          name: 'Eve Staff',
+          role: 'staff',
+          message: 'Login successful',
+          access_token: 'tok-switched-2',
+          active_trip: { trip_id: 'test-staff-3', title: 'Porto Staff Trip', destination: 'Porto', start_date: '2026-07-01', end_date: '2026-07-10', role: 'staff', is_current: false },
+        })
+      )
+    );
+
+    render(<App />);
+
+    // The deep link puts the staff user directly into the traveler-preview
+    // UI on the first mount.
+    await screen.findByRole('heading', { name: 'My Profile' });
+    expect(screen.queryByText('Staff shell')).not.toBeInTheDocument();
+    expect(window.location.search).toBe('');
+
+    // Switch to a different staff-role trip from the profile screen.
+    await userEvent.click(await screen.findByRole('button', { name: /trocar de viagem/i }));
+    await screen.findByText('Escolha sua viagem');
+    await userEvent.click(screen.getByText('Porto Staff Trip').closest('button')!);
+
+    // Landing on the new trip must show the staff UI — the deep link was
+    // consumed on the first mount and must not reapply on this remount.
+    await waitFor(() => {
+      expect(screen.getByText('Staff shell')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('heading', { name: 'My Profile' })).not.toBeInTheDocument();
+  });
+
+  test('makes the app underneath non-interactive while the trip switcher overlay is open', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: null })
+    );
+    window.history.pushState({}, '', '/profile');
+
+    server.use(
+      http.get('http://localhost:8000/profile/uid-6', () =>
+        HttpResponse.json({ user_id: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', profile: null, roommate: null })
+      ),
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [OTP_TRIP_CURRENT, OTP_TRIP_FUTURE] })
+      )
+    );
+
+    render(<App />);
+
+    const switchButton = await screen.findByRole('button', { name: /trocar de viagem/i });
+    expect(switchButton.closest('[aria-hidden]')).toBeNull();
+
+    await userEvent.click(switchButton);
+    await screen.findByText('Escolha sua viagem');
+
+    // Walk up from the (still-mounted) button we clicked rather than
+    // querying the whole document — the overlay itself contains decorative
+    // `aria-hidden="true"` icons (e.g. the Parrot logo) that aren't the app
+    // wrapper we're asserting on.
+    const hiddenTree = switchButton.closest('[aria-hidden="true"]') as HTMLElement | null;
+    expect(hiddenTree).not.toBeNull();
+    expect(hiddenTree?.inert).toBe(true);
+  });
+
   test('opens traveler profile deep links directly for staff when requested', async () => {
     localStorage.setItem(
       'parrot_user',

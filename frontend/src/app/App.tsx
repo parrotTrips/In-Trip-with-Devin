@@ -1,5 +1,5 @@
 import '../App.css';
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import LoginScreen from '../features/auth/pages/LoginScreen';
@@ -20,6 +20,26 @@ function initialTravelerViewRequested() {
   return new URLSearchParams(window.location.search).get('view') === 'traveler';
 }
 
+/**
+ * Removes `?view=traveler` from the URL once it's been read into state.
+ * Without this, the deep link would re-apply every time `TripApp` remounts —
+ * including on a later in-app trip switch (Task 7 review fix round 1) —
+ * incorrectly forcing a staff member back into traveler view on a brand new
+ * trip. Left as a plain read in `initialTravelerViewRequested` (called from
+ * `useState`'s lazy initializer, which must stay a pure read to behave the
+ * same under React StrictMode's dev-only double-invoke) and done here
+ * instead, from an effect that runs once after mount.
+ */
+function consumeTravelerViewDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('view')) return;
+
+  params.delete('view');
+  const newSearch = params.toString();
+  const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash}`;
+  window.history.replaceState(window.history.state, '', newUrl);
+}
+
 type TripSwitcherState =
   | { status: 'loading' }
   | { status: 'error' }
@@ -36,6 +56,11 @@ type TripSwitcherState =
  * shows a retryable error, and cancelling from either state leaves the
  * current session alone.
  */
+// z-[100]: above every fixed app-chrome element (AppHeader/TopBar are
+// z-[60], BottomNav/the staff bottom nav are z-50) so the overlay actually
+// paints on top of them instead of underneath (Task 7 review fix round 1).
+const OVERLAY_CLASS = 'fixed inset-0 z-[100] overflow-y-auto';
+
 function TripSwitcherOverlay({
   token,
   activeTripId,
@@ -46,34 +71,56 @@ function TripSwitcherOverlay({
   onCancel: () => void;
 }) {
   const [state, setState] = useState<TripSwitcherState>({ status: 'loading' });
+  // Guards against an in-flight `listTrips` call (e.g. from a stale retry,
+  // or one already superseded by a newer one) resolving after a newer
+  // request or an unmount — without this, a slow first response landing
+  // after a fast retry's response could silently overwrite fresher state.
+  const requestIdRef = useRef(0);
 
   const load = useCallback(() => {
+    const requestId = ++requestIdRef.current;
     setState({ status: 'loading' });
     listTrips(token)
-      .then(res => setState({ status: 'ready', trips: res.trips }))
-      .catch(() => setState({ status: 'error' }));
+      .then(res => {
+        if (requestIdRef.current !== requestId) return;
+        setState({ status: 'ready', trips: res.trips });
+      })
+      .catch(() => {
+        if (requestIdRef.current !== requestId) return;
+        setState({ status: 'error' });
+      });
   }, [token]);
 
   useEffect(() => {
     load();
+    return () => {
+      requestIdRef.current += 1;
+    };
   }, [load]);
 
   if (state.status === 'loading') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-emerald-700">
+      <div className={`${OVERLAY_CLASS} flex flex-col items-center justify-center gap-4 bg-emerald-700`}>
         <Loader2
           size={32}
           role="status"
           aria-label="Carregando viagens"
           className="animate-spin text-white"
         />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-xl border border-white/40 px-4 py-2 text-sm font-semibold text-white"
+        >
+          Cancelar
+        </button>
       </div>
     );
   }
 
   if (state.status === 'error') {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-emerald-700 px-6 text-center">
+      <div className={`${OVERLAY_CLASS} flex flex-col items-center justify-center gap-4 bg-emerald-700 px-6 text-center`}>
         <p className="text-sm text-white">Não foi possível carregar suas viagens.</p>
         <div className="flex gap-3">
           <button
@@ -96,7 +143,7 @@ function TripSwitcherOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className={OVERLAY_CLASS}>
       <TripSelectorScreen trips={state.trips} token={token} activeTripId={activeTripId} onCancel={onCancel} />
     </div>
   );
@@ -122,6 +169,10 @@ function TripApp({
 }) {
   const [viewingAsTraveler, setViewingAsTraveler] = useState(() => initialTravelerViewRequested());
 
+  useEffect(() => {
+    consumeTravelerViewDeepLink();
+  }, []);
+
   if (user?.role === 'staff' && !viewingAsTraveler) {
     return <StaffScreen onSwitchToTravelerView={() => setViewingAsTraveler(true)} />;
   }
@@ -144,6 +195,18 @@ function TripApp({
 function AppContent() {
   const { isLoggedIn, user, pendingSelection, isTripSwitcherOpen, cancelTripSwitcher } = useAuth();
   const userId = user?.userId ?? '';
+  // `inert` isn't in this project's @types/react (only its `experimental`
+  // typings), so it's set imperatively via the DOM property — which IS
+  // typed on `HTMLElement` by TypeScript's own DOM lib — rather than as a
+  // JSX prop.
+  const appTreeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (appTreeRef.current) {
+      appTreeRef.current.inert = isTripSwitcherOpen;
+    }
+  }, [isTripSwitcherOpen]);
+
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
     userId ? loadStoredAvatar(userId) : null
   );
@@ -188,10 +251,19 @@ function AppContent() {
           cached trip-scoped state — instead of leaving stale data from the
           previous trip mounted. The switcher overlay above is a sibling, not
           a child, of this Fragment: opening/closing it never touches the
-          key, so cancelling it never remounts the app underneath. */}
-      <Fragment key={user?.tripId ?? 'no-trip'}>
-        <TripApp user={user} avatarUrl={avatarUrl} onSetAvatarUrl={handleSetAvatarUrl} />
-      </Fragment>
+          key, so cancelling it never remounts the app underneath.
+
+          The wrapping div's `inert`/`aria-hidden` (while the overlay is
+          open) makes the app underneath non-interactive and unfocusable
+          regardless of the fixed-position app chrome (headers, bottom
+          navs) that would otherwise still sit on top by z-index and stay
+          clickable/tabbable through the overlay (Task 7 review fix round
+          1). */}
+      <div ref={appTreeRef} aria-hidden={isTripSwitcherOpen || undefined}>
+        <Fragment key={user?.tripId ?? 'no-trip'}>
+          <TripApp user={user} avatarUrl={avatarUrl} onSetAvatarUrl={handleSetAvatarUrl} />
+        </Fragment>
+      </div>
     </>
   );
 }

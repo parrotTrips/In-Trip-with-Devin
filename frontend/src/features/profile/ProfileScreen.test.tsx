@@ -460,13 +460,14 @@ describe('ProfileScreen', () => {
 
   test('offers Trocar de viagem, refreshes memberships fresh, and opens the selector without OTP', async () => {
     let tripsRequests = 0;
+    let lastAuthHeader: string | null = null;
     setUpSwitcherSession();
     window.history.pushState({}, '', '/profile');
     setUpSwitcherAppHandlers();
     server.use(
       http.get('http://localhost:8000/auth/trips', ({ request }) => {
         tripsRequests += 1;
-        expect(request.headers.get('authorization')).toBe('Bearer tok');
+        lastAuthHeader = request.headers.get('authorization');
         return HttpResponse.json({ trips: [SWITCH_TRIP_CURRENT, SWITCH_TRIP_OTHER] });
       })
     );
@@ -478,6 +479,7 @@ describe('ProfileScreen', () => {
 
     await screen.findByText('Escolha sua viagem');
     expect(tripsRequests).toBe(1);
+    expect(lastAuthHeader).toBe('Bearer tok');
     expect(screen.getByText('Trip Two')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cancelar/i })).toBeInTheDocument();
     // No OTP step is shown — the switcher opens directly from the profile.
@@ -538,5 +540,35 @@ describe('ProfileScreen', () => {
       token: 'tok',
       tripId: 'trip-001',
     });
+  });
+
+  test('offers a Cancelar option while the switcher is still loading trips', async () => {
+    setUpSwitcherSession();
+    window.history.pushState({}, '', '/profile');
+    setUpSwitcherAppHandlers();
+    let resolveTrips: (() => void) | undefined;
+    server.use(
+      http.get(
+        'http://localhost:8000/auth/trips',
+        () =>
+          new Promise<Response>(resolve => {
+            resolveTrips = () =>
+              resolve(HttpResponse.json({ trips: [SWITCH_TRIP_CURRENT, SWITCH_TRIP_OTHER] }));
+          })
+      )
+    );
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /trocar de viagem/i }));
+
+    expect(await screen.findByRole('status', { name: /carregando viagens/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    await screen.findByRole('heading', { name: 'My Profile' });
+    expect(screen.queryByRole('status', { name: /carregando viagens/i })).not.toBeInTheDocument();
+
+    // Let the in-flight request settle so it doesn't leak into another test.
+    resolveTrips?.();
   });
 });
