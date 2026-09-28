@@ -43,6 +43,7 @@ function Probe() {
         {auth.pendingSelection ? auth.pendingSelection.trips.length : 'none'}
       </div>
       <div data-testid="switcher-open">{String(auth.isTripSwitcherOpen)}</div>
+      <div data-testid="no-trips">{String(auth.hasNoTrips)}</div>
       <button
         onClick={() =>
           auth.beginTripSelection({
@@ -69,6 +70,8 @@ function Probe() {
       <button onClick={auth.openTripSwitcher}>open-switcher</button>
       <button onClick={auth.cancelTripSwitcher}>cancel-switcher</button>
       <button onClick={auth.logout}>logout</button>
+      <button onClick={() => void request('/me/trip').catch(() => {})}>protected-request</button>
+      <button onClick={() => void request('/auth/select-trip').catch(() => {})}>select-request</button>
     </div>
   );
 }
@@ -96,7 +99,7 @@ function ChildThatFetchesOnTokenChange() {
   useEffect(() => {
     if (!user) return;
     void request('/probe');
-  }, [user?.token]);
+  }, [user]);
 
   return null;
 }
@@ -247,5 +250,73 @@ describe('AuthProvider trip-scoped session state', () => {
     expect(screen.getByTestId('switcher-open')).toHaveTextContent('false');
     expect(screen.getByTestId('pending-trips')).toHaveTextContent('none');
     expect(localStorage.getItem('parrot_user')).toBeNull();
+  });
+
+  test('logs out when a protected app request returns 401', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/trip', () =>
+        HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 })
+      )
+    );
+    const user = userEvent.setup();
+    renderProbe();
+    await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
+    await user.click(screen.getByRole('button', { name: 'protected-request' }));
+
+    await waitFor(() => expect(screen.getByTestId('logged-in')).toHaveTextContent('false'));
+    expect(localStorage.getItem('parrot_user')).toBeNull();
+  });
+
+  test('refreshes memberships and opens the switcher when a /me membership is revoked', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/trip', () =>
+        HttpResponse.json({ detail: 'Trip membership required' }, { status: 403 })
+      ),
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [TRIP_B] })
+      )
+    );
+    const user = userEvent.setup();
+    renderProbe();
+    await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
+    await user.click(screen.getByRole('button', { name: 'protected-request' }));
+
+    await waitFor(() => expect(screen.getByTestId('switcher-open')).toHaveTextContent('true'));
+    expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
+  });
+
+  test('enters no-trips state when revoked membership refresh returns no eligible trips', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/trip', () =>
+        HttpResponse.json({ detail: 'Trip membership required' }, { status: 403 })
+      ),
+      http.get('http://localhost:8000/auth/trips', () => HttpResponse.json({ trips: [] }))
+    );
+    const user = userEvent.setup();
+    renderProbe();
+    await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
+    await user.click(screen.getByRole('button', { name: 'protected-request' }));
+
+    await waitFor(() => expect(screen.getByTestId('no-trips')).toHaveTextContent('true'));
+    expect(screen.getByTestId('logged-in')).toHaveTextContent('false');
+  });
+
+  test('does not recover the session for an unrelated 403 or /auth/select-trip failure', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/trip', () =>
+        HttpResponse.json({ detail: 'Validation failed' }, { status: 403 })
+      ),
+      http.get('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({ detail: 'Trip not available' }, { status: 403 })
+      )
+    );
+    const user = userEvent.setup();
+    renderProbe();
+    await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
+    await user.click(screen.getByRole('button', { name: 'protected-request' }));
+    await user.click(screen.getByRole('button', { name: 'select-request' }));
+
+    expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
+    expect(screen.getByTestId('switcher-open')).toHaveTextContent('false');
   });
 });

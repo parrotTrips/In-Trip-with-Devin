@@ -46,6 +46,8 @@ export interface AuthContextType {
   pendingSelection: PendingTripSelection | null;
   /** Whether the in-app "switch trip" UI (Task 7) is open. */
   isTripSwitcherOpen: boolean;
+  tripSwitcherTrips: TripChoice[] | null;
+  hasNoTrips: boolean;
 
   /**
    * Back-compat session setter used by callers that don't yet carry a trip
@@ -82,6 +84,8 @@ export interface AuthContextType {
   openTripSwitcher: () => void;
   /** Closes the in-app trip switcher, leaving the current session untouched. */
   cancelTripSwitcher: () => void;
+  enterNoTrips: () => void;
+  clearNoTrips: () => void;
 
   logout: () => void;
 }
@@ -91,11 +95,15 @@ export const AuthContext = createContext<AuthContextType>({
   isLoggedIn: false,
   pendingSelection: null,
   isTripSwitcherOpen: false,
+  tripSwitcherTrips: null,
+  hasNoTrips: false,
   login: () => {},
   beginTripSelection: () => {},
   completeTripSelection: () => {},
   openTripSwitcher: () => {},
   cancelTripSwitcher: () => {},
+  enterNoTrips: () => {},
+  clearNoTrips: () => {},
   logout: () => {},
 });
 

@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
 import posthog from 'posthog-js';
 
 import type { TripChoice } from '../../features/auth/services/auth-api';
+import { listTrips } from '../../features/auth/services/auth-api';
+import { API_AUTH_EVENT, type ApiAuthEventDetail } from '../../shared/api/client';
 import {
   AuthContext,
   type AuthUser,
@@ -77,6 +79,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(getInitialUser);
   const [pendingSelection, setPendingSelection] = useState<PendingTripSelection | null>(null);
   const [isTripSwitcherOpen, setIsTripSwitcherOpen] = useState(false);
+  const [tripSwitcherTrips, setTripSwitcherTrips] = useState<TripChoice[] | null>(null);
+  const [hasNoTrips, setHasNoTrips] = useState(false);
+  const recoveringMembershipTokenRef = useRef<string | null>(null);
+
+  const clearSession = useCallback(() => {
+    localStorage.removeItem('parrot_user');
+    setUser(null);
+    setPendingSelection(null);
+    setIsTripSwitcherOpen(false);
+    setTripSwitcherTrips(null);
+    posthog.reset();
+    Sentry.setUser(null);
+  }, []);
+
+  const logout = useCallback(() => {
+    clearSession();
+    setHasNoTrips(false);
+  }, [clearSession]);
+
+  const enterNoTrips = useCallback(() => {
+    clearSession();
+    setHasNoTrips(true);
+  }, [clearSession]);
+
+  const clearNoTrips = useCallback(() => setHasNoTrips(false), []);
 
   const establishSession = (newUser: AuthUser) => {
     // Persist synchronously, before setUser, and never from a useEffect:
@@ -94,6 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(newUser);
     setPendingSelection(null);
     setIsTripSwitcherOpen(false);
+    setTripSwitcherTrips(null);
+    setHasNoTrips(false);
     identify(newUser);
   };
 
@@ -117,17 +146,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     establishSession({ userId, phone, name, token, role: activeTrip.role, tripId: activeTrip.trip_id, activeTrip });
   };
 
-  const openTripSwitcher = () => setIsTripSwitcherOpen(true);
+  const openTripSwitcher = () => {
+    setTripSwitcherTrips(null);
+    setIsTripSwitcherOpen(true);
+  };
   const cancelTripSwitcher = () => setIsTripSwitcherOpen(false);
 
-  const logout = () => {
-    localStorage.removeItem('parrot_user');
-    setUser(null);
-    setPendingSelection(null);
-    setIsTripSwitcherOpen(false);
-    posthog.reset();
-    Sentry.setUser(null);
-  };
+  useEffect(() => {
+    if (!user) return;
+    let live = true;
+
+    const handleApiAuthError = async (event: Event) => {
+      const { kind } = (event as CustomEvent<ApiAuthEventDetail>).detail;
+      if (kind === 'unauthorized') {
+        logout();
+        return;
+      }
+      if (recoveringMembershipTokenRef.current === user.token) return;
+
+      recoveringMembershipTokenRef.current = user.token;
+      try {
+        const result = await listTrips(user.token);
+        if (!live) return;
+        if (result.trips.length === 0) {
+          enterNoTrips();
+          return;
+        }
+        setTripSwitcherTrips(result.trips);
+        setIsTripSwitcherOpen(true);
+      } catch {
+        // A 401 from the refresh emits its own unauthorized event. Other
+        // failures leave the current screen intact so the user can retry.
+      } finally {
+        if (recoveringMembershipTokenRef.current === user.token) {
+          recoveringMembershipTokenRef.current = null;
+        }
+      }
+    };
+
+    window.addEventListener(API_AUTH_EVENT, handleApiAuthError);
+    return () => {
+      live = false;
+      if (recoveringMembershipTokenRef.current === user.token) {
+        recoveringMembershipTokenRef.current = null;
+      }
+      window.removeEventListener(API_AUTH_EVENT, handleApiAuthError);
+    };
+  }, [enterNoTrips, logout, user]);
 
   return (
     <AuthContext.Provider
@@ -136,11 +201,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoggedIn: !!user,
         pendingSelection,
         isTripSwitcherOpen,
+        tripSwitcherTrips,
+        hasNoTrips,
         login,
         beginTripSelection,
         completeTripSelection,
         openTripSwitcher,
         cancelTripSwitcher,
+        enterNoTrips,
+        clearNoTrips,
         logout,
       }}
     >

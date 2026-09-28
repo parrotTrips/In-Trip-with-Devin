@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import posthog from 'posthog-js';
 import { getMyTrip, getMyTripPhases, getMyTripTravelers, type TripInfo, type TripPhase, type TripTraveler } from '../../features/trip/services/trip-api';
 import { TripContext } from './trip-context';
@@ -15,8 +15,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [idealPacePhaseId, setIdealPacePhaseId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   const fetchAll = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -25,6 +28,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
         getMyTripPhases(),
         getMyTripTravelers(),
       ]);
+      if (!mountedRef.current || requestIdRef.current !== requestId) return;
       setTripInfo(tripResult.trip);
       setPhases(phasesResult.phases);
       setIdealPacePhaseId(phasesResult.ideal_pace_phase_id ?? null);
@@ -34,17 +38,23 @@ export function TripProvider({ children }: { children: ReactNode }) {
         posthog.register({ viagem_id: tripResult.trip.wetravel_trip_uuid, modo_viagem: tripResult.trip.trip_mode });
       }
     } catch (e) {
+      if (!mountedRef.current || requestIdRef.current !== requestId) return;
       setTripInfo(null);
       clearTripAnalyticsContext();
       setError(e instanceof Error ? e.message : 'Erro ao carregar dados da viagem');
     } finally {
-      setLoading(false);
+      if (mountedRef.current && requestIdRef.current === requestId) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchAll();
-    return clearTripAnalyticsContext;
+    return () => {
+      mountedRef.current = false;
+      requestIdRef.current += 1;
+      clearTripAnalyticsContext();
+    };
   }, [fetchAll]);
 
   return (

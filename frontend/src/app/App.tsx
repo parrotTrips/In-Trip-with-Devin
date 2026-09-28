@@ -65,12 +65,18 @@ function TripSwitcherOverlay({
   token,
   activeTripId,
   onCancel,
+  initialTrips,
+  onNoTrips,
 }: {
   token: string;
   activeTripId: string | null;
   onCancel: () => void;
+  initialTrips: TripChoice[] | null;
+  onNoTrips: () => void;
 }) {
-  const [state, setState] = useState<TripSwitcherState>({ status: 'loading' });
+  const [state, setState] = useState<TripSwitcherState>(() =>
+    initialTrips ? { status: 'ready', trips: initialTrips } : { status: 'loading' }
+  );
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -86,20 +92,24 @@ function TripSwitcherOverlay({
     listTrips(token)
       .then(res => {
         if (requestIdRef.current !== requestId) return;
+        if (res.trips.length === 0) {
+          onNoTrips();
+          return;
+        }
         setState({ status: 'ready', trips: res.trips });
       })
       .catch(() => {
         if (requestIdRef.current !== requestId) return;
         setState({ status: 'error' });
       });
-  }, [token]);
+  }, [onNoTrips, token]);
 
   useEffect(() => {
-    load();
+    if (!initialTrips) load();
     return () => {
       requestIdRef.current += 1;
     };
-  }, [load]);
+  }, [initialTrips, load]);
 
   useEffect(() => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement
@@ -110,7 +120,11 @@ function TripSwitcherOverlay({
     return () => {
       const returnTarget = returnFocusRef.current;
       window.setTimeout(() => {
-        if (returnTarget?.isConnected) returnTarget.focus();
+        if (returnTarget?.isConnected) {
+          returnTarget.focus();
+        } else {
+          document.querySelector<HTMLElement>('[data-app-focus-root]')?.focus();
+        }
       }, 0);
     };
   }, []);
@@ -253,7 +267,10 @@ function TripApp({
 }
 
 function AppContent() {
-  const { isLoggedIn, user, pendingSelection, isTripSwitcherOpen, cancelTripSwitcher } = useAuth();
+  const {
+    isLoggedIn, user, pendingSelection, isTripSwitcherOpen, tripSwitcherTrips,
+    hasNoTrips, cancelTripSwitcher, enterNoTrips, clearNoTrips,
+  } = useAuth();
   const userId = user?.userId ?? '';
   // `inert` isn't in this project's @types/react (only its `experimental`
   // typings), so it's set imperatively via the DOM property — which IS
@@ -288,6 +305,20 @@ function AppContent() {
   // both handled locally inside LoginScreen) → trip selector (a pending
   // selection from `selection_required`, which never coexists with
   // isLoggedIn) → staff/traveler app.
+  if (hasNoTrips) {
+    return (
+      <div className="min-h-dvh bg-emerald-700 flex items-center justify-center px-4">
+        <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+          <h1 className="text-lg font-bold text-gray-800">Sem viagens disponíveis</h1>
+          <p className="mt-2 text-sm text-gray-500">Você não tem viagens atuais ou futuras</p>
+          <button type="button" onClick={clearNoTrips} className="mt-6 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white">
+            Sair
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (pendingSelection) {
     return (
       <TripSelectorScreen
@@ -304,7 +335,13 @@ function AppContent() {
   return (
     <>
       {isTripSwitcherOpen && user && (
-        <TripSwitcherOverlay token={user.token} activeTripId={user.tripId} onCancel={cancelTripSwitcher} />
+        <TripSwitcherOverlay
+          token={user.token}
+          activeTripId={user.tripId}
+          initialTrips={tripSwitcherTrips}
+          onCancel={cancelTripSwitcher}
+          onNoTrips={enterNoTrips}
+        />
       )}
       {/* Keyed by tripId so switching trips (Task 7) remounts this entire
           subtree — TripProvider's fetch, StaffScreen's own fetch, and any
@@ -319,7 +356,7 @@ function AppContent() {
           navs) that would otherwise still sit on top by z-index and stay
           clickable/tabbable through the overlay (Task 7 review fix round
           1). */}
-      <div ref={appTreeRef} aria-hidden={isTripSwitcherOpen || undefined}>
+      <div ref={appTreeRef} aria-hidden={isTripSwitcherOpen || undefined} data-app-focus-root tabIndex={-1}>
         <Fragment key={user?.tripId ?? 'no-trip'}>
           <TripApp user={user} avatarUrl={avatarUrl} onSetAvatarUrl={handleSetAvatarUrl} />
         </Fragment>

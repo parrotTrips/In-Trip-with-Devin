@@ -1,5 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+export const API_AUTH_EVENT = 'parrot:api-auth-error';
+
+export type ApiAuthEventDetail = {
+  kind: 'unauthorized' | 'membership_revoked';
+  path: string;
+};
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly path: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 function getToken(): string | null {
   try {
     const stored = localStorage.getItem('parrot_user');
@@ -35,8 +53,31 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || 'Request failed');
+    const error: unknown = await response.json().catch(() => ({ detail: response.statusText }));
+    const detail = error && typeof error === 'object' && 'detail' in error && typeof error.detail === 'string'
+      ? error.detail
+      : 'Request failed';
+    const hasSession = getToken() !== null;
+    const isProtectedAppPath = path.startsWith('/me/')
+      || path.startsWith('/profile/')
+      || path.startsWith('/checklist/')
+      || path.startsWith('/phases/')
+      || path === '/auth/trips'
+      || path === '/auth/select-trip';
+    const kind = response.status === 401 && hasSession && isProtectedAppPath
+      ? 'unauthorized'
+      : response.status === 403
+        && path.startsWith('/me/')
+        && /^(Trip membership required|Staff access required for this trip)$/.test(detail)
+          ? 'membership_revoked'
+          : null;
+
+    if (kind) {
+      window.dispatchEvent(new CustomEvent<ApiAuthEventDetail>(API_AUTH_EVENT, {
+        detail: { kind, path },
+      }));
+    }
+    throw new ApiError(detail, response.status, path);
   }
 
   return response.json();

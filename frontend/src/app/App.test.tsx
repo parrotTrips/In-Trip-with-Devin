@@ -366,6 +366,35 @@ describe('App composition', () => {
     await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
+  test('moves focus to the new app after a successful trip switch removes the old trigger', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: OTP_TRIP_CURRENT })
+    );
+    window.history.pushState({}, '', '/profile');
+    server.use(
+      http.get('http://localhost:8000/profile/uid-6', () =>
+        HttpResponse.json({ user_id: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', profile: null, roommate: null })
+      ),
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [OTP_TRIP_CURRENT, OTP_TRIP_FUTURE] })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({
+          status: 'trip_selected', user_id: 'uid-6', phone: '+15556666666', name: 'Fay Traveler',
+          role: 'traveler', message: 'Login successful', access_token: 'tok-new', active_trip: OTP_TRIP_FUTURE,
+        })
+      )
+    );
+
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: /trocar de viagem/i }));
+    await screen.findByText('Escolha sua viagem');
+    await userEvent.click(screen.getByText('Lisbon Kickoff').closest('button')!);
+
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('data-app-focus-root'));
+  });
+
   test('opens traveler profile deep links directly for staff when requested', async () => {
     localStorage.setItem(
       'parrot_user',
