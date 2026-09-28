@@ -35,14 +35,50 @@ def _encode_token(payload: dict, expires_at: datetime) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def _create_selection_token(user_id: str, phone: str) -> str:
+def _create_selection_token(
+    user_id: str, phone: str, *, auth_time: datetime | None = None
+) -> str:
+    """A short-lived (15 min) token permitting only listing/selecting trips.
+
+    ``auth_time`` marks when the person actually completed OTP verification —
+    the start of their 14-day identity lifetime. It defaults to now, since a
+    selection token is only ever minted fresh, right after OTP verification.
+    """
+    auth_time = auth_time or datetime.now(UTC)
     return _encode_token(
-        {"sub": user_id, "phone": phone, "token_type": "trip_selection"},
+        {
+            "sub": user_id,
+            "phone": phone,
+            "token_type": "trip_selection",
+            "auth_time": int(auth_time.timestamp()),
+        },
         datetime.now(UTC) + timedelta(minutes=JWT_SELECTION_EXPIRY_MINUTES),
     )
 
 
-def _create_session_token(user_id: str, phone: str, trip_id: str, role: str) -> str:
+def _create_session_token(
+    user_id: str,
+    phone: str,
+    trip_id: str,
+    role: str,
+    *,
+    auth_time: datetime | None = None,
+    expires_at: datetime | None = None,
+) -> str:
+    """A trip-scoped session token.
+
+    ``auth_time`` is the moment the person's identity was last established via
+    OTP — it is carried through every later trip selection/switch so a session
+    (or a stolen token) cannot renew forever by re-selecting a trip every few
+    days. It defaults to now: called directly (e.g. from tests, or the
+    single-eligible-trip auto-selection path in ``verify_otp``), a session
+    starts a fresh 14-day identity lifetime, same as before this change.
+
+    ``expires_at`` lets a caller pin an exact expiry (used for the legacy
+    fallback in ``select_trip`` — see ``app.routers.auth``) instead of deriving
+    it from ``auth_time``.
+    """
+    auth_time = auth_time or datetime.now(UTC)
     return _encode_token(
         {
             "sub": user_id,
@@ -50,8 +86,9 @@ def _create_session_token(user_id: str, phone: str, trip_id: str, role: str) -> 
             "token_type": "session",
             "trip_id": trip_id,
             "role": role,
+            "auth_time": int(auth_time.timestamp()),
         },
-        datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS),
+        expires_at or (auth_time + timedelta(days=JWT_EXPIRY_DAYS)),
     )
 
 
@@ -72,8 +109,16 @@ def create_trip_session_payload(
     phone: str,
     name: str | None,
     membership: dict,
+    *,
+    auth_time: datetime | None = None,
+    expires_at: datetime | None = None,
 ) -> dict:
-    """Build the response and scoped JWT for one selected membership."""
+    """Build the response and scoped JWT for one selected membership.
+
+    ``auth_time``/``expires_at``: see ``_create_session_token``. Omitted by
+    ``verify_otp`` (a fresh identity lifetime starts here); passed through by
+    ``POST /auth/select-trip`` so exchanging a token never resets the clock.
+    """
     return {
         "status": "trip_selected",
         "user_id": user_id,
@@ -82,7 +127,12 @@ def create_trip_session_payload(
         "role": membership["role"],
         "message": "Login successful",
         "access_token": _create_session_token(
-            user_id, phone, membership["trip_id"], membership["role"]
+            user_id,
+            phone,
+            membership["trip_id"],
+            membership["role"],
+            auth_time=auth_time,
+            expires_at=expires_at,
         ),
         "active_trip": membership,
     }
