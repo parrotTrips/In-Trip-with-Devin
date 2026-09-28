@@ -97,6 +97,20 @@ def read_contacts(path: Path) -> list[dict[str, str]]:
     return contacts
 
 
+async def table_exists(conn: asyncpg.Connection, table_name: str) -> bool:
+    return bool(
+        await conn.fetchval(
+            """
+            select exists (
+              select 1 from information_schema.tables
+              where table_schema='public' and table_name=$1
+            )
+            """,
+            table_name,
+        )
+    )
+
+
 async def existing_trip_links(conn: asyncpg.Connection) -> dict[str, dict[str, Any]]:
     rows = await conn.fetch(
         """
@@ -114,6 +128,7 @@ async def import_contacts(conn: asyncpg.Connection, contacts: list[dict[str, str
     now = datetime.now(UTC)
     inserted: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    has_products = await table_exists(conn, "traveler_products")
 
     async with conn.transaction():
         for contact in contacts:
@@ -189,18 +204,22 @@ async def import_contacts(conn: asyncpg.Connection, contacts: list[dict[str, str
                 "Casamento Gabriela e Raphael - contato importado do CSV de convidados.",
                 now,
             )
-            await conn.execute(
-                """
-                insert into traveler_products (id, trip_traveler_id, room_type, created_at, updated_at)
-                values ($1, $2, 'Wedding Guest', $3, $3)
-                on conflict (trip_traveler_id) do update
-                set room_type = coalesce(traveler_products.room_type, excluded.room_type),
-                    updated_at = excluded.updated_at
-                """,
-                uuid.uuid4(),
-                trip_traveler_id,
-                now,
-            )
+            if has_products:
+                # `traveler_products` was dropped from the schema (migration
+                # 20260521_0003); this guard keeps the script working against both
+                # older and current databases instead of crashing on a missing table.
+                await conn.execute(
+                    """
+                    insert into traveler_products (id, trip_traveler_id, room_type, created_at, updated_at)
+                    values ($1, $2, 'Wedding Guest', $3, $3)
+                    on conflict (trip_traveler_id) do update
+                    set room_type = coalesce(traveler_products.room_type, excluded.room_type),
+                        updated_at = excluded.updated_at
+                    """,
+                    uuid.uuid4(),
+                    trip_traveler_id,
+                    now,
+                )
             inserted.append(
                 {
                     **contact,

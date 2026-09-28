@@ -11,7 +11,64 @@ O app da Parrot Trips tem dois lados:
 - **Lado do viajante** — o que a pessoa que comprou a viagem vê e usa.
 - **Lado do staff** — o que a equipe operacional vê e usa durante a viagem.
 
-Cada pessoa entra com o próprio número de WhatsApp. O sistema identifica automaticamente se ela é viajante ou staff e mostra a tela certa.
+Cada pessoa entra com o próprio número de WhatsApp. O sistema identifica automaticamente as viagens em que ela participa e, quando ela é staff em alguma delas, mostra a tela certa para cada viagem — o papel (viajante ou staff) é decidido **por viagem**, não por pessoa.
+
+---
+
+## Login: telefone, código e seleção de viagem
+
+O login sempre começa pelo número de WhatsApp e um código de 6 dígitos (OTP) enviado por mensagem. Depois de validar o código, o app segue um de três caminhos, dependendo de quantas viagens atuais/futuras aquela pessoa tem:
+
+| Situação | O que acontece |
+|---|---|
+| Nenhuma viagem elegível | Tela informando que não há viagem disponível para aquele número (`no_trips`) |
+| Exatamente 1 viagem elegível | Entra direto nela, sem tela extra (`trip_selected`) |
+| 2 ou mais viagens elegíveis | Mostra o **seletor de viagens**, com cartões (nome, destino, datas, selo **Staff** quando aplicável); a pessoa escolhe uma para entrar (`selection_required`) |
+
+Uma viagem só é "elegível" se ainda não terminou (viagens já encerradas não aparecem). Entre as elegíveis, a viagem em andamento aparece primeiro, seguida das futuras em ordem de data.
+
+### Papel por viagem, não por pessoa
+
+O papel (**viajante** ou **staff**) é derivado **para cada viagem** a partir dos dados de participação, não de um campo fixo na pessoa:
+
+- Presença na lista de participantes da viagem = **viajante** naquela viagem.
+- Presença também na lista de staff daquela mesma viagem = **staff** naquela viagem (e o staff pode alternar para a visão do viajante na mesma viagem, com o botão **Traveler view**).
+
+Por isso a mesma pessoa pode ser staff em uma viagem e viajante comum em outra — o app mostra a tela certa em cada uma, e listas de viajantes de uma viagem nunca escondem nem vazam pessoas de outra viagem.
+
+### Trocar de viagem
+
+Uma vez logada, a pessoa pode trocar de viagem sem pedir um novo código: no menu **My Profile** (ou no cabeçalho do staff), o botão **Trocar de viagem** reabre o seletor, já atualizado com as viagens mais recentes daquele número (então uma viagem adicionada depois do login aparece sem precisar de logout). Se só existir uma viagem elegível, o seletor mostra a viagem atual e avisa que não há alternativa. Cancelar a troca mantém a sessão anterior intacta.
+
+### Sessões antigas
+
+Sessões salvas de antes dessa mudança (sem viagem associada) são identificadas e descartadas automaticamente na abertura do app — a pessoa simplesmente cai na tela de login e faz o processo de novo. Não é necessário nenhuma limpeza manual de cache ou localStorage pela equipe.
+
+### Auditoria de dados (uso interno / técnico)
+
+Existe um script de auditoria **somente leitura** para checar a consistência dos dados de participação (viajantes/staff) antes ou depois de uma importação:
+
+```bash
+cd backend
+poetry run python scripts/audit_multi_trip_memberships.py "<url-do-banco>"
+```
+
+Ele nunca grava nada no banco (roda tudo em uma transação somente leitura) e nunca lê a URL do banco de `.env` — é preciso informar explicitamente qual banco auditar. O relatório mostra:
+
+- telefones duplicados com formatação inconsistente (ex.: com e sem "+");
+- pessoas cadastradas como staff de uma viagem sem o vínculo de participante correspondente;
+- vínculos de viagem que apontam para uma viagem inexistente;
+- pessoas com mais de uma viagem elegível no momento, e o papel derivado em cada uma.
+
+Este script é só para diagnóstico — quem for rodá-lo deve apontar explicitamente para o banco desejado (nunca rodar automaticamente contra produção sem revisão humana do resultado).
+
+### Rollback
+
+Se for necessário reverter o login multi-viagem, o deploy anterior (sessão de uma única viagem por pessoa) continua funcionando com os mesmos dados: `trip_travelers` e `trip_staff` não mudam de formato, e sessões antigas de uma única viagem continuam sendo aceitas normalmente pelo backend anterior. Não há migração destrutiva a desfazer.
+
+### Limitação conhecida
+
+Se a participação de alguém em uma viagem for removida enquanto a pessoa está com o app aberto, a próxima ação dela nessa viagem hoje mostra um erro genérico (401/403) em vez de voltar automaticamente para o seletor de viagens. Peça para a pessoa sair e entrar de novo nesse caso. Correção desse comportamento está pendente.
 
 ---
 

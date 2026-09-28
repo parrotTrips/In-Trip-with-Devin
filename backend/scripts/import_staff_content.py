@@ -37,6 +37,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from scripts.import_casamento_contacts_from_csv import normalize_phone
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -173,7 +175,7 @@ def parse_staff_tasks_tab(rows: list[list[str]]) -> list[dict]:
             "trip_uuid": col(row, "trip_uuid"),
             "dia": day,
             "atividade_nome": col(row, "atividade_nome"),
-            "staff_phone": col(row, "staff_phone"),
+            "staff_phone": normalize_phone(col(row, "staff_phone")),
             "titulo": title,
             "descricao": col(row, "descricao") or None,
             "sort_order": sort_order,
@@ -212,7 +214,7 @@ def parse_activity_participants_tab(rows: list[list[str]]) -> list[dict]:
             "trip_uuid": col(row, "trip_uuid"),
             "dia": day,
             "atividade_nome": col(row, "atividade_nome"),
-            "traveler_phone": phone,
+            "traveler_phone": normalize_phone(phone),
             "status": (col(row, "status") or "allowed").lower(),
         })
     return participants
@@ -430,7 +432,7 @@ def parse_staff_tab(rows: list[list[str]]) -> list[dict]:
     for row in rows[1:]:
         if not row or not row[0].strip():
             continue
-        phone = col(row, "phone")
+        phone = normalize_phone(col(row, "phone"))
         if not phone:
             continue
         members.append({
@@ -450,7 +452,11 @@ async def write_staff(conn: asyncpg.Connection, trip_uuid: str, members: list[di
 
     async with conn.transaction():
         for m in members:
-            phone = m["phone"]
+            # Normalize here too (not only at parse time): `write_staff` is also
+            # called directly by other scripts/tests, and a raw sheet cell without
+            # a leading "+" must still resolve to the same `users` row as the
+            # traveler importer's normalized phone, never create a duplicate user.
+            phone = normalize_phone(m["phone"])
             name = m["nome"]
 
             # Upsert user — create with role=staff if not exists, update name/role if exists
