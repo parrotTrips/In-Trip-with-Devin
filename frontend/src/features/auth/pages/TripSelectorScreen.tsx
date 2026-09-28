@@ -3,7 +3,26 @@ import { Calendar, Loader2, LogOut, MapPin, X } from 'lucide-react';
 
 import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
 import { useAuth } from '../../../app/providers/auth-context';
+import { ApiError } from '../../../shared/api/client';
 import { selectTrip, type TripChoice } from '../services/auth-api';
+
+/**
+ * Known raw English messages the backend sends for `POST /auth/select-trip`,
+ * mapped to pt-BR — this screen is otherwise entirely in Portuguese. Any
+ * other/unrecognized detail is shown as-is rather than replaced with a vague
+ * generic message, so a real (if untranslated) backend error is never hidden.
+ */
+const PT_BR_ERROR_MESSAGES: Record<string, string> = {
+  Unauthorized: 'Sua sessão expirou. Faça login novamente.',
+  'Trip not available': 'Essa viagem não está mais disponível para você.',
+};
+
+function toDisplayMessage(err: unknown): string {
+  if (err instanceof Error && err.message) {
+    return PT_BR_ERROR_MESSAGES[err.message] ?? err.message;
+  }
+  return 'Não foi possível selecionar a viagem. Tente novamente.';
+}
 
 export interface TripSelectorScreenProps {
   /** The eligible trips to choose from, in the order the backend returned them. */
@@ -81,7 +100,17 @@ export default function TripSelectorScreen({ trips, token, activeTripId = null, 
       completeTripSelection(result.user_id, result.phone, result.name, result.access_token, result.active_trip);
     } catch (err) {
       if (!isLiveRef.current) return;
-      setError(err instanceof Error ? err.message : 'Failed to select trip');
+      const status = err instanceof ApiError ? err.status : null;
+      if (!onCancel && status === 401) {
+        // Initial post-OTP selection (no active session to recover, unlike
+        // the in-app switcher — see AuthProvider's own 401 handling there):
+        // the selection token itself has expired or is invalid. There is
+        // nothing to retry against, so go back to OTP login instead of
+        // leaving the person stuck re-submitting a dead token forever.
+        logout();
+        return;
+      }
+      setError(toDisplayMessage(err));
       setSelectingId(null);
     }
   };

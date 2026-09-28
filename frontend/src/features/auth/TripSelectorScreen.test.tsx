@@ -287,6 +287,42 @@ describe('TripSelectorScreen', () => {
     });
   });
 
+  test('shows a pt-BR message for the raw "Trip not available" backend error', async () => {
+    server.use(
+      http.post('http://localhost:8000/auth/select-trip', async () =>
+        HttpResponse.json({ detail: 'Trip not available' }, { status: 403 })
+      )
+    );
+    const user = userEvent.setup();
+    renderSelector();
+
+    await user.click(screen.getByText('Rio Adventure').closest('button')!);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent('Trip not available');
+    expect(alert.textContent).toMatch(/dispon[ií]vel/i);
+  });
+
+  test('returns to OTP login instead of showing an error when the selection token has expired (401, initial selection)', async () => {
+    server.use(
+      http.post('http://localhost:8000/auth/select-trip', async () =>
+        HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 })
+      )
+    );
+    const user = userEvent.setup();
+    renderSelector();
+
+    await user.click(screen.getByRole('button', { name: 'seed-pending' }));
+    expect(screen.getByTestId('probe-pending-trips')).toHaveTextContent('1');
+
+    await user.click(screen.getByText('Rio Adventure').closest('button')!);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('probe-pending-trips')).toHaveTextContent('none');
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   test('renders a Cancelar action that calls onCancel when provided (Task 7 in-app switcher usage)', async () => {
     const onCancel = vi.fn();
     const user = userEvent.setup();
