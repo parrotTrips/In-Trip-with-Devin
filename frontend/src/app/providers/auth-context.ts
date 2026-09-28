@@ -50,12 +50,24 @@ export interface AuthContextType {
   hasNoTrips: boolean;
 
   /**
-   * Back-compat session setter used by callers that don't yet carry a trip
-   * choice (dev auto-login, `DevUserSwitcher`). Stores `tripId`/`activeTrip`
-   * as `null`. Prefer `completeTripSelection` for any real `verify-otp` /
-   * `select-trip` result.
+   * Back-compat session setter used by callers that mint their own
+   * trip-scoped token outside the normal OTP flow (dev auto-login,
+   * `DevUserSwitcher`). `tripId` should match the `trip_id` claim actually
+   * baked into `token` (the backend authorizes requests from that claim, not
+   * from anything stored here) — pass it whenever the token is a real
+   * trip-scoped session token, which it always is for dev tooling since the
+   * middleware rejects tokens without one. `activeTrip` is always `null`
+   * here (no full `TripChoice` is available outside a real `verify-otp`/
+   * `select-trip` result); prefer `completeTripSelection` for those.
    */
-  login: (userId: string, phone: string, name: string | null, token: string, role: UserRole) => void;
+  login: (
+    userId: string,
+    phone: string,
+    name: string | null,
+    token: string,
+    role: UserRole,
+    tripId?: string | null
+  ) => void;
 
   /**
    * Records a `selection_required` result so a trip selector can render it.

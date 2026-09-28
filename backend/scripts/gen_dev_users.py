@@ -15,31 +15,31 @@ import asyncio
 import os
 import sys
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncpg
 from dotenv import load_dotenv
-from jose import jwt
 
 load_dotenv(Path(__file__).parent.parent / ".env")
+
+from app.core.config import JWT_SECRET
+from app.services.auth_service import _create_session_token
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/parrot_trips")
 PG_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://").replace("postgresql+psycopg2://", "postgresql://")
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRY_DAYS = 30
-
 FRONTEND_DEV_USERS_PATH = Path(__file__).parent.parent.parent / "frontend" / "src" / "config" / "devUsers.ts"
 
 
-def _create_jwt(user_id: str, phone: str, role: str = "traveler") -> str:
-    expire = datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS)
-    payload = {"sub": user_id, "phone": phone, "role": role, "exp": expire}
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+def _create_jwt(user_id: str, phone: str, trip_id: str, role: str = "traveler") -> str:
+    """A real trip-scoped session token (token_type="session", trip_id, role) —
+    the JWTAuthMiddleware rejects anything else. Reuses the app's own token
+    helper so dev tokens are always shaped exactly like a production session.
+    """
+    return _create_session_token(user_id, phone, trip_id, role)
 
 
 def _build_label(title: str, start_date, has_data: bool) -> str:
@@ -126,7 +126,7 @@ async def gen(output_path: Path) -> None:
                     str(uuid.uuid4()), trip_uuid, user_id,
                 )
 
-            token = _create_jwt(user_id, phone)
+            token = _create_jwt(user_id, phone, trip_uuid)
             label = _build_label(title, start_date, has_data)
 
             dev_users.append({
@@ -137,6 +137,7 @@ async def gen(output_path: Path) -> None:
                 "role": "traveler",
                 "label": label,
                 "hasData": has_data,
+                "tripId": trip_uuid,
             })
 
         # Escrever devUsers.ts
@@ -157,6 +158,7 @@ async def gen(output_path: Path) -> None:
                 f"    role: 'traveler' as const,",
                 f"    label: '{u['label']}',",
                 f"    hasData: {has_data_str},",
+                f"    tripId: '{u['tripId']}',",
                 "  },",
             ]
         lines.append("] as const;")

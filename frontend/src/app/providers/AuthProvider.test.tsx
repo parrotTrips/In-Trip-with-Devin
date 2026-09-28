@@ -67,6 +67,9 @@ function Probe() {
       >
         select-trip-b
       </button>
+      <button onClick={() => auth.login('user-1', '+15550000001', 'Alice', 'tok-dev', 'staff', 'trip-dev')}>
+        login-with-trip
+      </button>
       <button onClick={auth.openTripSwitcher}>open-switcher</button>
       <button onClick={auth.cancelTripSwitcher}>cancel-switcher</button>
       <button onClick={auth.logout}>logout</button>
@@ -199,6 +202,27 @@ describe('AuthProvider trip-scoped session state', () => {
     expect(screen.getByTestId('switcher-open')).toHaveTextContent('false');
     expect(screen.getByTestId('trip-id')).toHaveTextContent('trip-a');
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
+  });
+
+  test('login() accepts an optional tripId (dev auto-login / DevUserSwitcher) and it survives reload', async () => {
+    const user = userEvent.setup();
+    renderProbe();
+
+    await user.click(screen.getByRole('button', { name: 'login-with-trip' }));
+
+    expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
+    expect(screen.getByTestId('trip-id')).toHaveTextContent('trip-dev');
+    expect(screen.getByTestId('role')).toHaveTextContent('staff');
+
+    const stored = JSON.parse(localStorage.getItem('parrot_user') ?? '{}');
+    expect(stored.tripId).toBe('trip-dev');
+
+    // Reload: getStoredUser only discards entries with NO tripId key at all
+    // (real legacy data). An explicit tripId — even from the back-compat
+    // login() action — must survive, since the token itself is now a real
+    // trip-scoped session token.
+    renderProbe();
+    expect(screen.getAllByTestId('trip-id')[1]).toHaveTextContent('trip-dev');
   });
 
   test('clears a legacy parrot_user entry with no tripId instead of trusting it', () => {
