@@ -3,8 +3,68 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 
 import { AuthProvider } from '../../app/providers/AuthProvider';
+import { useAuth, type TripChoice } from '../../app/providers/auth-context';
 import { server } from '../../test/server';
 import LoginScreen from './pages/LoginScreen';
+
+const TRIP_CURRENT: TripChoice = {
+  trip_id: 'trip-current',
+  title: 'Rio Adventure',
+  destination: 'Rio de Janeiro',
+  start_date: '2026-01-10',
+  end_date: '2026-01-20',
+  role: 'traveler',
+  is_current: true,
+};
+
+const TRIP_FUTURE: TripChoice = {
+  trip_id: 'trip-future',
+  title: 'Lisbon Kickoff',
+  destination: 'Lisbon',
+  start_date: '2026-06-01',
+  end_date: '2026-06-10',
+  role: 'staff',
+  is_current: false,
+};
+
+function AuthProbe() {
+  const auth = useAuth();
+  return (
+    <div>
+      <div data-testid="probe-logged-in">{String(auth.isLoggedIn)}</div>
+      <div data-testid="probe-trip-id">{auth.user?.tripId ?? 'none'}</div>
+      <div data-testid="probe-role">{auth.user?.role ?? 'none'}</div>
+      <div data-testid="probe-pending-trips">
+        {auth.pendingSelection ? auth.pendingSelection.trips.length : 'none'}
+      </div>
+    </div>
+  );
+}
+
+function renderLoginScreen() {
+  localStorage.removeItem('parrot_user');
+  return render(
+    <AuthProvider>
+      <AuthProbe />
+      <LoginScreen />
+    </AuthProvider>
+  );
+}
+
+async function fillPhoneAndSendCode() {
+  await userEvent.type(screen.getByPlaceholderText('Phone number'), '5551234567');
+  await userEvent.click(screen.getByRole('button', { name: /send whatsapp code/i }));
+  await screen.findByText('Verification Code');
+}
+
+async function typeOtpCode(codeStr: string) {
+  const user = userEvent.setup();
+  for (let i = 0; i < codeStr.length; i++) {
+    const input = document.getElementById(`code-${i}`);
+    if (!input) throw new Error(`Missing code input code-${i}`);
+    await user.type(input, codeStr[i]);
+  }
+}
 
 describe('LoginScreen', () => {
   const supportedCountryCodes = [
@@ -123,6 +183,94 @@ describe('LoginScreen', () => {
 
     await waitFor(() => {
       expect(requestedPhone).toBe('+351935276544');
+    });
+  });
+
+  describe('post-OTP branching', () => {
+    beforeEach(() => {
+      server.use(
+        http.post('http://localhost:8000/auth/request-otp', () =>
+          HttpResponse.json({ message: 'OTP generated', debug_code: '111111' })
+        )
+      );
+    });
+
+    test('trip_selected completes the scoped session and logs the person in', async () => {
+      server.use(
+        http.post('http://localhost:8000/auth/verify-otp', () =>
+          HttpResponse.json({
+            status: 'trip_selected',
+            user_id: 'user-1',
+            phone: '+15551234567',
+            name: 'Alice',
+            role: 'traveler',
+            message: 'Login successful',
+            access_token: 'tok-scoped',
+            active_trip: TRIP_CURRENT,
+          })
+        )
+      );
+
+      renderLoginScreen();
+      await fillPhoneAndSendCode();
+      await typeOtpCode('111111');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('probe-logged-in')).toHaveTextContent('true');
+      });
+      expect(screen.getByTestId('probe-trip-id')).toHaveTextContent('trip-current');
+      expect(screen.getByTestId('probe-role')).toHaveTextContent('traveler');
+    });
+
+    test('selection_required holds a pending selection without logging the person in', async () => {
+      server.use(
+        http.post('http://localhost:8000/auth/verify-otp', () =>
+          HttpResponse.json({
+            status: 'selection_required',
+            user_id: 'user-1',
+            phone: '+15551234567',
+            name: 'Alice',
+            message: 'Trip selection required',
+            selection_token: 'selection-tok',
+            trips: [TRIP_CURRENT, TRIP_FUTURE],
+          })
+        )
+      );
+
+      renderLoginScreen();
+      await fillPhoneAndSendCode();
+      await typeOtpCode('111111');
+
+      await waitFor(() => {
+        expect(screen.getByTestId('probe-pending-trips')).toHaveTextContent('2');
+      });
+      expect(screen.getByTestId('probe-logged-in')).toHaveTextContent('false');
+      expect(localStorage.getItem('parrot_user')).toBeNull();
+    });
+
+    test('no_trips shows an explanatory state and lets the person go back, without storing a token', async () => {
+      server.use(
+        http.post('http://localhost:8000/auth/verify-otp', () =>
+          HttpResponse.json({
+            status: 'no_trips',
+            user_id: 'user-1',
+            phone: '+15551234567',
+            name: 'Alice',
+            message: 'No current or future trips available',
+          })
+        )
+      );
+
+      renderLoginScreen();
+      await fillPhoneAndSendCode();
+      await typeOtpCode('111111');
+
+      await screen.findByText('Você não tem viagens atuais ou futuras');
+      expect(screen.getByTestId('probe-logged-in')).toHaveTextContent('false');
+      expect(localStorage.getItem('parrot_user')).toBeNull();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
+      expect(screen.getByText('Welcome, Traveler!')).toBeInTheDocument();
     });
   });
 });

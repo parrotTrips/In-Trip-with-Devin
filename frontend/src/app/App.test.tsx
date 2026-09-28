@@ -17,6 +17,46 @@ vi.mock('../features/staff/pages/StaffScreen', () => ({
 }));
 
 import App from './App';
+import type { TripChoice } from '../features/auth/services/auth-api';
+
+const OTP_TRIP_CURRENT: TripChoice = {
+  trip_id: 'test-001',
+  title: 'Rio Adventure',
+  destination: 'Rio de Janeiro',
+  start_date: '2026-01-10',
+  end_date: '2026-01-20',
+  role: 'traveler',
+  is_current: true,
+};
+
+const OTP_TRIP_FUTURE: TripChoice = {
+  trip_id: 'test-future',
+  title: 'Lisbon Kickoff',
+  destination: 'Lisbon',
+  start_date: '2026-06-01',
+  end_date: '2026-06-10',
+  role: 'traveler',
+  is_current: false,
+};
+
+async function goThroughPhoneAndCode() {
+  server.use(
+    http.post('http://localhost:8000/auth/request-otp', () =>
+      HttpResponse.json({ message: 'OTP generated', debug_code: '111111' })
+    )
+  );
+
+  await userEvent.type(screen.getByPlaceholderText('Phone number'), '5551234567');
+  await userEvent.click(screen.getByRole('button', { name: /send whatsapp code/i }));
+  await screen.findByText('Verification Code');
+
+  const user = userEvent.setup();
+  for (let i = 0; i < 6; i++) {
+    const input = document.getElementById(`code-${i}`);
+    if (!input) throw new Error(`Missing code input code-${i}`);
+    await user.type(input, '1');
+  }
+}
 
 const MOCK_TRIP = {
   trip: { wetravel_trip_uuid: 'test-001', title: 'Test Trip', destination: 'Test', start_date: '2026-02-27', end_date: '2026-03-08', url: null },
@@ -156,5 +196,94 @@ describe('App composition', () => {
     await screen.findByText('My Profile');
     expect(screen.queryByText('Staff shell')).not.toBeInTheDocument();
     expect(screen.getByLabelText(/visa status/i)).toBeInTheDocument();
+  });
+
+  test('enters the traveler app straight after OTP when exactly one trip is eligible', async () => {
+    window.history.pushState({}, '', '/');
+    server.use(
+      http.post('http://localhost:8000/auth/verify-otp', () =>
+        HttpResponse.json({
+          status: 'trip_selected',
+          user_id: 'uid-otp-1',
+          phone: '+15551234567',
+          name: 'Alice',
+          role: 'traveler',
+          message: 'Login successful',
+          access_token: 'tok-otp',
+          active_trip: OTP_TRIP_CURRENT,
+        })
+      )
+    );
+
+    render(<App />);
+    await goThroughPhoneAndCode();
+
+    await waitFor(() => {
+      expect(screen.getByText('Trip Progress')).toBeInTheDocument();
+    });
+  });
+
+  test('shows the trip selector after OTP when multiple trips are eligible, then enters the app once one is picked', async () => {
+    window.history.pushState({}, '', '/');
+    server.use(
+      http.post('http://localhost:8000/auth/verify-otp', () =>
+        HttpResponse.json({
+          status: 'selection_required',
+          user_id: 'uid-otp-2',
+          phone: '+15551234567',
+          name: 'Alice',
+          message: 'Trip selection required',
+          selection_token: 'selection-tok',
+          trips: [OTP_TRIP_CURRENT, OTP_TRIP_FUTURE],
+        })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({
+          status: 'trip_selected',
+          user_id: 'uid-otp-2',
+          phone: '+15551234567',
+          name: 'Alice',
+          role: 'traveler',
+          message: 'Login successful',
+          access_token: 'tok-otp-2',
+          active_trip: OTP_TRIP_CURRENT,
+        })
+      )
+    );
+
+    render(<App />);
+    await goThroughPhoneAndCode();
+
+    await screen.findByText('Escolha sua viagem');
+    expect(screen.getByText('Lisbon Kickoff')).toBeInTheDocument();
+    // Not logged in yet: still the selector, not the app.
+    expect(screen.queryByText('Trip Progress')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Rio Adventure').closest('button')!);
+
+    await waitFor(() => {
+      expect(screen.getByText('Trip Progress')).toBeInTheDocument();
+    });
+  });
+
+  test('shows the no-trip explanatory screen after OTP when there are no eligible trips', async () => {
+    window.history.pushState({}, '', '/');
+    server.use(
+      http.post('http://localhost:8000/auth/verify-otp', () =>
+        HttpResponse.json({
+          status: 'no_trips',
+          user_id: 'uid-otp-3',
+          phone: '+15551234567',
+          name: 'Alice',
+          message: 'No current or future trips available',
+        })
+      )
+    );
+
+    render(<App />);
+    await goThroughPhoneAndCode();
+
+    await screen.findByText('Você não tem viagens atuais ou futuras');
+    expect(screen.queryByText('Trip Progress')).not.toBeInTheDocument();
   });
 });

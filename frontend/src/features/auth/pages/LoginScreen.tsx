@@ -57,14 +57,22 @@ function flagForRegion(region: string) {
 }
 
 export default function LoginScreen() {
-  const { completeTripSelection } = useAuth();
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const { completeTripSelection, beginTripSelection } = useAuth();
+  const [step, setStep] = useState<'phone' | 'code' | 'no_trips'>('phone');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [debugCode, setDebugCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [countryCode, setCountryCode] = useState('+1');
+
+  const resetToPhoneEntry = () => {
+    setStep('phone');
+    setPhone('');
+    setCode(['', '', '', '', '', '']);
+    setDebugCode(null);
+    setError('');
+  };
 
   const fullPhone = `${countryCode}${phone}`;
 
@@ -103,10 +111,23 @@ export default function LoginScreen() {
           setError('This account is not available in the traveler app.');
           setLoading(false);
           break;
-        case 'no_trips':
         case 'selection_required':
-          // TODO(Task 6): render the no-trip state and trip selector instead.
-          setError(result.message);
+          // Hands off to the trip selector (rendered by AppContent once
+          // pendingSelection is set) without ever logging the person in or
+          // storing a token.
+          beginTripSelection({
+            userId: result.user_id,
+            phone: result.phone,
+            name: result.name,
+            selectionToken: result.selection_token,
+            trips: result.trips,
+          });
+          setLoading(false);
+          break;
+        case 'no_trips':
+          // Local, non-persisted state only: nothing to store, no token was
+          // issued for this outcome.
+          setStep('no_trips');
           setLoading(false);
           break;
       }
@@ -175,7 +196,22 @@ export default function LoginScreen() {
 
         {/* Login Card */}
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5 relative overflow-hidden">
-          {step === 'phone' ? (
+          {step === 'no_trips' ? (
+            <>
+              <h2 className="text-lg font-bold text-gray-800 font-[Fredoka] text-center mb-1">
+                Sem viagens disponíveis
+              </h2>
+              <p className="text-sm text-gray-500 text-center mb-6">
+                Você não tem viagens atuais ou futuras
+              </p>
+              <button
+                onClick={resetToPhoneEntry}
+                className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-all"
+              >
+                Sair
+              </button>
+            </>
+          ) : step === 'phone' ? (
             <>
               <h2 className="text-lg font-bold text-gray-800 font-[Fredoka] text-center mb-1">
                 Welcome, Traveler!

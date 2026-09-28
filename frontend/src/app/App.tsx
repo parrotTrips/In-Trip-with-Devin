@@ -1,7 +1,8 @@
 import '../App.css';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 import LoginScreen from '../features/auth/pages/LoginScreen';
+import TripSelectorScreen from '../features/auth/pages/TripSelectorScreen';
 import StaffScreen from '../features/staff/pages/StaffScreen';
 import DevUserSwitcher from '../features/dev/DevUserSwitcher';
 
@@ -18,7 +19,7 @@ function initialTravelerViewRequested() {
 }
 
 function AppContent() {
-  const { isLoggedIn, user } = useAuth();
+  const { isLoggedIn, user, pendingSelection } = useAuth();
   const [viewingAsTraveler, setViewingAsTraveler] = useState(() => initialTravelerViewRequested());
   const userId = user?.userId ?? '';
   const [avatarUrl, setAvatarUrl] = useState<string | null>(() =>
@@ -38,26 +39,45 @@ function AppContent() {
     setAvatarUrl(url);
   };
 
+  // Gate order: OTP login (phone/code, plus the no-trip explanatory state,
+  // both handled locally inside LoginScreen) → trip selector (a pending
+  // selection from `selection_required`, which never coexists with
+  // isLoggedIn) → staff/traveler app.
+  if (pendingSelection) {
+    return (
+      <TripSelectorScreen
+        trips={pendingSelection.trips}
+        token={pendingSelection.selectionToken}
+      />
+    );
+  }
+
   if (!isLoggedIn) {
     return <LoginScreen />;
   }
 
-  if (user?.role === 'staff' && !viewingAsTraveler) {
-    return <StaffScreen onSwitchToTravelerView={() => setViewingAsTraveler(true)} />;
-  }
-
   return (
-    <TripProvider>
-      <StaffViewContext.Provider value={{
-        onSwitchToStaffView: user?.role === 'staff' ? () => setViewingAsTraveler(false) : null,
-      }}>
-        <AvatarContext.Provider value={{ avatarUrl, setAvatarUrl: handleSetAvatarUrl }}>
-          <NotificationProvider>
-            <AppRouter />
-          </NotificationProvider>
-        </AvatarContext.Provider>
-      </StaffViewContext.Provider>
-    </TripProvider>
+    // Keyed by tripId so switching trips (Task 7) remounts this entire
+    // subtree — TripProvider's fetch, StaffScreen's own fetch, and any
+    // cached trip-scoped state — instead of leaving stale data from the
+    // previous trip mounted.
+    <Fragment key={user?.tripId ?? 'no-trip'}>
+      {user?.role === 'staff' && !viewingAsTraveler ? (
+        <StaffScreen onSwitchToTravelerView={() => setViewingAsTraveler(true)} />
+      ) : (
+        <TripProvider>
+          <StaffViewContext.Provider value={{
+            onSwitchToStaffView: user?.role === 'staff' ? () => setViewingAsTraveler(false) : null,
+          }}>
+            <AvatarContext.Provider value={{ avatarUrl, setAvatarUrl: handleSetAvatarUrl }}>
+              <NotificationProvider>
+                <AppRouter />
+              </NotificationProvider>
+            </AvatarContext.Provider>
+          </StaffViewContext.Provider>
+        </TripProvider>
+      )}
+    </Fragment>
   );
 }
 
