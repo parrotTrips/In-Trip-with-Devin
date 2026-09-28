@@ -17,6 +17,7 @@ from app.db.models.staff import (
     StaffTask,
     TripAnnouncement,
     TripContact,
+    TripStaff,
 )
 from app.db.models.trip import TripActivity, TripPhase, TripTraveler
 from app.db.models.user import User
@@ -144,24 +145,11 @@ async def _resolve_activity_checkin_scan(
         await session.commit()
         raise HTTPException(status_code=403, detail="Traveler is outside staff active trip")
 
-    traveler_row = await session.execute(
-        select(User.full_name, User.role)
+    traveler_name = await session.scalar(
+        select(User.full_name)
         .join(TripTraveler, TripTraveler.user_id == User.id)
         .where(TripTraveler.id == trip_traveler_id)
     )
-    traveler_name, traveler_role = traveler_row.one()
-    if traveler_role != "traveler":
-        await _record_scan_event(
-            session,
-            trip_activity_id=activity_id,
-            trip_traveler_id=trip_traveler_id,
-            scanned_by_user_id=staff_user_id,
-            status="not_traveler",
-            raw_payload=qr_payload,
-            failure_reason="QR code does not belong to a traveler",
-        )
-        await session.commit()
-        raise HTTPException(status_code=403, detail="QR code does not belong to a traveler")
 
     participant_count = await session.scalar(
         select(func.count())
@@ -213,31 +201,37 @@ async def _resolve_activity_checkin_scan(
     }
 
 
-async def _get_staff_trip_uuid(user_id: str, session: AsyncSession) -> str:
-    """Return the active trip uuid for a staff member."""
-    role = await session.scalar(
-        text("SELECT role FROM users WHERE id = CAST(:user_id AS uuid)"),
-        {"user_id": user_id},
+async def _require_staff_membership(
+    user_id: str,
+    trip_id: str,
+    session: AsyncSession,
+) -> str:
+    """Revalidate staff access for the selected trip on every request."""
+    membership = await session.scalar(
+        select(TripStaff.id).where(
+            TripStaff.user_id == user_id,
+            TripStaff.wetravel_trip_uuid == trip_id,
+        )
     )
-    if role != "staff":
-        raise HTTPException(status_code=403, detail="Staff access required")
+    if membership is None:
+        raise HTTPException(status_code=403, detail="Staff access required for this trip")
+    return trip_id
 
-    result = await session.execute(
-        text("""
-            SELECT tt.wetravel_trip_uuid
-            FROM trip_travelers tt
-            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-            WHERE tt.user_id = CAST(:user_id AS uuid)
-              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-            ORDER BY wt.start_date ASC
-            LIMIT 1
-        """),
-        {"user_id": user_id},
+
+async def _require_activity_in_trip(
+    activity_id: uuid.UUID,
+    trip_id: str,
+    session: AsyncSession,
+) -> None:
+    activity_trip_id = await session.scalar(
+        select(TripPhase.wetravel_trip_uuid)
+        .join(TripActivity, TripActivity.trip_phase_id == TripPhase.id)
+        .where(TripActivity.id == activity_id)
     )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="No active trip found for this staff member")
-    return row["wetravel_trip_uuid"]
+    if activity_trip_id is None:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    if activity_trip_id != trip_id:
+        raise HTTPException(status_code=403, detail="Activity is outside staff active trip")
 
 
 @router.get("/trip")
@@ -247,7 +241,7 @@ async def get_staff_trip(
 ):
     """Return staff itinerary: in-trip days with activities for the active trip."""
     user_id = request.state.user_id
-    trip_uuid = await _get_staff_trip_uuid(user_id, session)
+    trip_uuid = await _require_staff_membership(user_id, request.state.trip_id, session)
 
     # Fetch trip info
     trip_row = (await session.execute(
@@ -340,7 +334,6 @@ async def get_staff_trip(
             FROM trip_travelers tt
             JOIN users u ON u.id = tt.user_id
             WHERE tt.wetravel_trip_uuid = :uuid
-              AND u.role = 'traveler'
         """),
         {"uuid": trip_uuid},
     )
@@ -365,7 +358,7 @@ async def get_staff_trip(
             SELECT tt.id as traveler_id, u.full_name
             FROM trip_travelers tt
             JOIN users u ON u.id = tt.user_id
-            WHERE tt.wetravel_trip_uuid = :uuid AND u.role = 'traveler'
+            WHERE tt.wetravel_trip_uuid = :uuid
             ORDER BY u.full_name
         """),
         {"uuid": trip_uuid},
@@ -452,7 +445,7 @@ async def get_staff_contacts(
 ):
     """Return contacts for the active trip, grouped by category."""
     user_id = request.state.user_id
-    trip_uuid = await _get_staff_trip_uuid(user_id, session)
+    trip_uuid = await _require_staff_membership(user_id, request.state.trip_id, session)
 
     contacts_result = await session.execute(
         select(TripContact)
@@ -488,7 +481,9 @@ async def create_announcement(
 ):
     """Send a trip announcement to all travelers. Staff only."""
     staff_user_id = uuid.UUID(str(request.state.user_id))
-    trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
+    trip_uuid = await _require_staff_membership(
+        str(staff_user_id), request.state.trip_id, session
+    )
 
     ann = TripAnnouncement(
         id=uuid.uuid4(),
@@ -516,7 +511,9 @@ async def list_announcements(
 ):
     """List all announcements for the staff's active trip, newest first."""
     staff_user_id = str(request.state.user_id)
-    trip_uuid = await _get_staff_trip_uuid(staff_user_id, session)
+    trip_uuid = await _require_staff_membership(
+        staff_user_id, request.state.trip_id, session
+    )
 
     rows = (await session.execute(
         select(TripAnnouncement, User.full_name)
@@ -555,9 +552,15 @@ async def update_announcement(
 ):
     """Edit an announcement. Only the original sender can edit."""
     staff_user_id = uuid.UUID(str(request.state.user_id))
+    trip_uuid = await _require_staff_membership(
+        str(staff_user_id), request.state.trip_id, session
+    )
 
     ann = await session.scalar(
-        select(TripAnnouncement).where(TripAnnouncement.id == announcement_id)
+        select(TripAnnouncement).where(
+            TripAnnouncement.id == announcement_id,
+            TripAnnouncement.wetravel_trip_uuid == trip_uuid,
+        )
     )
     if ann is None:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -579,9 +582,15 @@ async def delete_announcement(
 ):
     """Delete an announcement. Only the original sender can delete."""
     staff_user_id = uuid.UUID(str(request.state.user_id))
+    trip_uuid = await _require_staff_membership(
+        str(staff_user_id), request.state.trip_id, session
+    )
 
     ann = await session.scalar(
-        select(TripAnnouncement).where(TripAnnouncement.id == announcement_id)
+        select(TripAnnouncement).where(
+            TripAnnouncement.id == announcement_id,
+            TripAnnouncement.wetravel_trip_uuid == trip_uuid,
+        )
     )
     if ann is None:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -604,7 +613,10 @@ async def get_activity_travelers(
     from app.services.qr_service import create_traveler_qr_payload
 
     staff_user_id = str(request.state.user_id)
-    staff_trip_uuid = await _get_staff_trip_uuid(staff_user_id, session)
+    staff_trip_uuid = await _require_staff_membership(
+        staff_user_id, request.state.trip_id, session
+    )
+    await _require_activity_in_trip(activity_id, staff_trip_uuid, session)
 
     # Check if controlled activity
     participant_count = await session.scalar(
@@ -633,7 +645,7 @@ async def get_activity_travelers(
                 SELECT tt.id as traveler_id, u.full_name
                 FROM trip_travelers tt
                 JOIN users u ON u.id = tt.user_id
-                WHERE tt.wetravel_trip_uuid = :trip_uuid AND u.role = 'traveler'
+                WHERE tt.wetravel_trip_uuid = :trip_uuid
                 ORDER BY u.full_name
             """),
             {"trip_uuid": staff_trip_uuid},
@@ -662,7 +674,9 @@ async def preview_activity_checkin(
 ):
     """Validate a traveler's QR code for an activity without creating a check-in."""
     staff_user_id = uuid.UUID(str(request.state.user_id))
-    staff_trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
+    staff_trip_uuid = await _require_staff_membership(
+        str(staff_user_id), request.state.trip_id, session
+    )
     scan = await _resolve_activity_checkin_scan(
         session,
         activity_id=activity_id,
@@ -711,7 +725,9 @@ async def scan_activity_checkin(
 ):
     """Scan a traveler's QR code into a staff activity."""
     staff_user_id = uuid.UUID(str(request.state.user_id))
-    staff_trip_uuid = await _get_staff_trip_uuid(str(staff_user_id), session)
+    staff_trip_uuid = await _require_staff_membership(
+        str(staff_user_id), request.state.trip_id, session
+    )
     scan = await _resolve_activity_checkin_scan(
         session,
         activity_id=activity_id,

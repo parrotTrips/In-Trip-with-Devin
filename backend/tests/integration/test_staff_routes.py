@@ -1,9 +1,15 @@
 import asyncio
 from datetime import date
 
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 
-from app.db.models.staff import ActivityCheckin, ActivityCheckinScanEvent, ActivityParticipant, StaffTask
+from app.db.models.staff import (
+    ActivityCheckin,
+    ActivityCheckinScanEvent,
+    ActivityParticipant,
+    StaffTask,
+    TripStaff,
+)
 from app.db.models.trip import TripActivity, TripPhase, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import create_traveler_qr_payload
@@ -49,6 +55,12 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
         staff_trip_traveler = TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=staff.id)
         session.add(staff_trip_traveler)
         session.add(TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=other_staff.id))
+        session.add_all(
+            [
+                TripStaff(wetravel_trip_uuid="staff-route-test", user_id=staff.id),
+                TripStaff(wetravel_trip_uuid="staff-route-test", user_id=other_staff.id),
+            ]
+        )
         trip_traveler = TripTraveler(wetravel_trip_uuid="staff-route-test", user_id=traveler.id)
         session.add(trip_traveler)
         second_trip_traveler = TripTraveler(
@@ -185,6 +197,92 @@ def _auth(client, phone: str) -> dict:
     return {"Authorization": f"Bearer {verify_res.json()['access_token']}"}
 
 
+async def _seed_mixed_role_staff(session_factory):
+    async with session_factory() as session:
+        for trip_id, title in [
+            ("mixed-staff-trip", "Mixed Staff Trip"),
+            ("mixed-traveler-trip", "Mixed Traveler Trip"),
+        ]:
+            await session.execute(
+                text(
+                    "INSERT INTO wetravel_trips "
+                    "(trip_uuid, title, destination, start_date, end_date) "
+                    "VALUES (:trip_id, :title, 'Brazil', '2027-08-01', '2027-08-10')"
+                ),
+                {"trip_id": trip_id, "title": title},
+            )
+
+        user = User(
+            phone="+5511888000099",
+            full_name="Mixed Role Person",
+            status="active",
+            role="traveler",
+        )
+        session.add(user)
+        await session.flush()
+        session.add_all(
+            [
+                TripTraveler(wetravel_trip_uuid="mixed-staff-trip", user_id=user.id),
+                TripTraveler(wetravel_trip_uuid="mixed-traveler-trip", user_id=user.id),
+                TripStaff(wetravel_trip_uuid="mixed-staff-trip", user_id=user.id),
+            ]
+        )
+        await session.commit()
+        return str(user.id)
+
+
+def _scoped_auth(user_id: str, phone: str, trip_id: str, role: str) -> dict:
+    from app.services.auth_service import _create_session_token
+
+    token = _create_session_token(user_id, phone, trip_id, role)
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_staff_access_is_authorized_per_selected_trip(seeded_client, session_factory):
+    user_id = asyncio.run(_seed_mixed_role_staff(session_factory))
+
+    staff_response = seeded_client.get(
+        "/me/staff/trip/contacts",
+        headers=_scoped_auth(user_id, "+5511888000099", "mixed-staff-trip", "staff"),
+    )
+    traveler_response = seeded_client.get(
+        "/me/staff/trip/contacts",
+        headers=_scoped_auth(
+            user_id,
+            "+5511888000099",
+            "mixed-traveler-trip",
+            "traveler",
+        ),
+    )
+
+    assert staff_response.status_code == 200
+    assert staff_response.json()["wetravel_trip_uuid"] == "mixed-staff-trip"
+    assert traveler_response.status_code == 403
+
+
+def test_staff_access_revalidates_membership_after_token_issuance(
+    seeded_client,
+    session_factory,
+):
+    user_id = asyncio.run(_seed_mixed_role_staff(session_factory))
+    headers = _scoped_auth(user_id, "+5511888000099", "mixed-staff-trip", "staff")
+
+    async def _remove_staff_membership():
+        async with session_factory() as session:
+            await session.execute(
+                delete(TripStaff).where(
+                    TripStaff.user_id == user_id,
+                    TripStaff.wetravel_trip_uuid == "mixed-staff-trip",
+                )
+            )
+            await session.commit()
+
+    asyncio.run(_remove_staff_membership())
+    response = seeded_client.get("/me/staff/trip/contacts", headers=headers)
+
+    assert response.status_code == 403
+
+
 def test_get_staff_trip_includes_only_current_staff_tasks(seeded_client, session_factory):
     asyncio.run(_seed_staff_trip_with_tasks(session_factory))
     headers = _auth(seeded_client, "+5511888000001")
@@ -216,9 +314,9 @@ def test_get_staff_trip_activity_includes_per_activity_checkin_counters(
     activities = response.json()["days"][0]["activities"]
     activity_by_id = {activity["id"]: activity for activity in activities}
     assert activity_by_id[seed["activity_id"]]["checkin_steps"][0]["count"] == 1
-    assert activity_by_id[seed["activity_id"]]["traveler_count"] == 2
+    assert activity_by_id[seed["activity_id"]]["traveler_count"] == 4
     assert activity_by_id[seed["second_activity_id"]]["checkin_steps"] == []
-    assert activity_by_id[seed["second_activity_id"]]["traveler_count"] == 2
+    assert activity_by_id[seed["second_activity_id"]]["traveler_count"] == 4
 
 
 def test_scan_activity_checkin_returns_checked_in(seeded_client, session_factory):
@@ -360,7 +458,10 @@ def test_scan_activity_checkin_rejects_wrong_trip_qr(seeded_client, session_fact
     assert asyncio.run(_count_checkins()) == 0
 
 
-def test_scan_activity_checkin_rejects_non_traveler_qr(seeded_client, session_factory):
+def test_scan_activity_checkin_accepts_staff_trip_membership_as_traveler(
+    seeded_client,
+    session_factory,
+):
     seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
     headers = _auth(seeded_client, "+5511888000001")
 
@@ -370,7 +471,8 @@ def test_scan_activity_checkin_rejects_non_traveler_qr(seeded_client, session_fa
         json={"qr_payload": seed["staff_qr_payload"]},
     )
 
-    assert response.status_code in (400, 403)
+    assert response.status_code == 200
+    assert response.json()["trip_traveler_id"] == seed["staff_trip_traveler_id"]
 
     async def _count_checkins():
         async with session_factory() as session:
@@ -383,7 +485,7 @@ def test_scan_activity_checkin_rejects_non_traveler_qr(seeded_client, session_fa
                 )
             )
 
-    assert asyncio.run(_count_checkins()) == 0
+    assert asyncio.run(_count_checkins()) == 1
 
 
 def test_scan_activity_checkin_uses_authenticated_staff_user(
