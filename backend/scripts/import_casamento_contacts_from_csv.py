@@ -22,6 +22,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from scripts._phone import normalize_phone
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -70,13 +71,6 @@ def load_database_url() -> str:
 
 def clean(value: str | None) -> str:
     return (value or "").strip()
-
-
-def normalize_phone(value: str | None) -> str:
-    phone = clean(value)
-    if not phone:
-        return ""
-    return phone if phone.startswith("+") else f"+{phone}"
 
 
 def read_contacts(path: Path) -> list[dict[str, str]]:

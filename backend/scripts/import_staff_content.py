@@ -37,7 +37,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from scripts.import_casamento_contacts_from_csv import normalize_phone
+from scripts._phone import normalize_phone
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
@@ -270,9 +270,20 @@ async def write_staff_tasks(conn: asyncpg.Connection, trip_uuid: str, tasks: lis
 
         inserted = 0
         for task in tasks:
+            # Staff-ness is per trip: match via a trip_staff row for THIS trip,
+            # never the global users.role — a person who is staff only on another
+            # trip must not be assignable to a task here, and a person staff on
+            # this trip must be found regardless of their global role value.
             staff_rows = await conn.fetch(
-                "SELECT id FROM users WHERE phone = $1 AND role = 'staff'",
+                """
+                SELECT u.id
+                FROM users u
+                JOIN trip_staff ts ON ts.user_id = u.id
+                WHERE u.phone = $1
+                  AND ts.wetravel_trip_uuid = $2
+                """,
                 task["staff_phone"],
+                trip_uuid,
             )
             staff = _require_single_row(staff_rows, "staff", task["staff_phone"])
 
@@ -380,13 +391,15 @@ async def write_activity_participants(conn: asyncpg.Connection, trip_uuid: str, 
             )
             activity = _require_single_row(activity_rows, "activity", participant["atividade_nome"])
 
+            # Membership in THIS trip's trip_travelers is the check — never the
+            # global users.role, which may say 'staff' for someone who is only
+            # staff on a different trip but a plain participant here.
             traveler_rows = await conn.fetch(
                 """
                 SELECT tt.id
                 FROM users u
                 JOIN trip_travelers tt ON tt.user_id = u.id
                 WHERE u.phone = $1
-                  AND u.role = 'traveler'
                   AND tt.wetravel_trip_uuid = $2
                 """,
                 participant["traveler_phone"],

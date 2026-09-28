@@ -263,3 +263,29 @@ async def test_run_audit_does_not_write_to_the_database(database_url):
         after_travelers,
         after_staff,
     )
+
+
+@pytest.mark.asyncio
+async def test_readonly_transaction_used_by_run_audit_rejects_writes(database_url):
+    """Prove writes are actually impossible, not merely absent: attempting a write
+    inside the exact transaction mode `run_audit` uses (`conn.transaction(readonly=
+    True)`) must be rejected by Postgres itself, regardless of what queries the
+    audit's finder functions happen to run today.
+    """
+    conn = await asyncpg.connect(_pg_url(database_url))
+    try:
+        with pytest.raises(asyncpg.exceptions.ReadOnlySQLTransactionError):
+            async with conn.transaction(readonly=True):
+                await conn.execute(
+                    "INSERT INTO users (id, phone, status, role, created_at, updated_at)"
+                    " VALUES ($1, '+5511990009990', 'active', 'traveler', now(), now())",
+                    uuid.uuid4(),
+                )
+
+        # The rejected write must not have landed (the failed transaction rolls back).
+        count = await conn.fetchval(
+            "SELECT count(*) FROM users WHERE phone = $1", "+5511990009990"
+        )
+        assert count == 0
+    finally:
+        await conn.close()
