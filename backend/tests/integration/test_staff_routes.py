@@ -393,6 +393,29 @@ def test_activity_travelers_excludes_controlled_participant_from_other_trip(
     ]
 
 
+def test_open_activity_travelers_excludes_staff_on_this_trip(
+    seeded_client,
+    session_factory,
+):
+    """`/activities/{id}/travelers` on an open (uncontrolled) activity must not
+    list people who are `trip_staff` on this trip, even though they hold a
+    `trip_travelers` row too (so they can use the traveler view).
+    """
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.get(
+        f"/me/staff/activities/{seed['second_activity_id']}/travelers",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    ids = {row["id"] for row in response.json()["travelers"]}
+    assert seed["staff_trip_traveler_id"] not in ids
+    assert seed["trip_traveler_id"] in ids
+    assert seed["second_trip_traveler_id"] in ids
+
+
 def test_staff_trip_summary_excludes_controlled_participant_from_other_trip(
     seeded_client,
     session_factory,
@@ -524,10 +547,18 @@ def test_get_staff_trip_activity_includes_per_activity_checkin_counters(
     assert response.status_code == 200
     activities = response.json()["days"][0]["activities"]
     activity_by_id = {activity["id"]: activity for activity in activities}
+    # "Staff One" and "Staff Two" both hold a `trip_travelers` row on this trip (so
+    # they can use the traveler view) AND a `trip_staff` row for this same trip —
+    # that trip_staff row is what makes them staff here, and it must exclude them
+    # from traveler counts and lists, per trip.
     assert activity_by_id[seed["activity_id"]]["checkin_steps"][0]["count"] == 1
-    assert activity_by_id[seed["activity_id"]]["traveler_count"] == 4
+    assert activity_by_id[seed["activity_id"]]["traveler_count"] == 2
     assert activity_by_id[seed["second_activity_id"]]["checkin_steps"] == []
-    assert activity_by_id[seed["second_activity_id"]]["traveler_count"] == 4
+    assert activity_by_id[seed["second_activity_id"]]["traveler_count"] == 2
+    assert activity_by_id[seed["second_activity_id"]]["absent_travelers"] == [
+        "Traveler One",
+        "Traveler Two",
+    ]
 
 
 def test_scan_activity_checkin_returns_checked_in(seeded_client, session_factory):
@@ -669,10 +700,14 @@ def test_scan_activity_checkin_rejects_wrong_trip_qr(seeded_client, session_fact
     assert asyncio.run(_count_checkins()) == 0
 
 
-def test_scan_activity_checkin_accepts_staff_trip_membership_as_traveler(
+def test_scan_activity_checkin_rejects_staff_trip_membership_as_traveler(
     seeded_client,
     session_factory,
 ):
+    """A `trip_travelers` row that belongs to someone who is also `trip_staff` on
+    THIS trip must not be scannable as a traveler check-in — they are staff here,
+    a `trip_travelers` row only exists so they can use the traveler view.
+    """
     seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
     headers = _auth(seeded_client, "+5511888000001")
 
@@ -682,8 +717,7 @@ def test_scan_activity_checkin_accepts_staff_trip_membership_as_traveler(
         json={"qr_payload": seed["staff_qr_payload"]},
     )
 
-    assert response.status_code == 200
-    assert response.json()["trip_traveler_id"] == seed["staff_trip_traveler_id"]
+    assert response.status_code in (400, 403)
 
     async def _count_checkins():
         async with session_factory() as session:
@@ -696,7 +730,55 @@ def test_scan_activity_checkin_accepts_staff_trip_membership_as_traveler(
                 )
             )
 
-    assert asyncio.run(_count_checkins()) == 1
+    assert asyncio.run(_count_checkins()) == 0
+
+
+def test_scan_activity_checkin_accepts_traveler_who_is_staff_on_another_trip(
+    seeded_client,
+    session_factory,
+):
+    """Staff-ness is derived per trip: someone who is `trip_staff` on a
+    different trip but only a plain traveler here must still be scannable.
+    """
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+
+    async def _seed_cross_trip_staff_traveler():
+        async with session_factory() as session:
+            user = User(
+                phone="+5511888000777",
+                full_name="Staff Elsewhere",
+                status="active",
+            )
+            session.add(user)
+            await session.flush()
+            trip_traveler = TripTraveler(
+                wetravel_trip_uuid="staff-route-test", user_id=user.id
+            )
+            session.add(trip_traveler)
+            session.add(
+                TripStaff(
+                    wetravel_trip_uuid="staff-route-other-trip-test", user_id=user.id
+                )
+            )
+            await session.flush()
+            qr_payload = create_traveler_qr_payload(
+                trip_traveler_id=str(trip_traveler.id),
+                trip_uuid="staff-route-test",
+            )
+            await session.commit()
+            return {"trip_traveler_id": str(trip_traveler.id), "qr_payload": qr_payload}
+
+    cross_trip_seed = asyncio.run(_seed_cross_trip_staff_traveler())
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": cross_trip_seed["qr_payload"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["trip_traveler_id"] == cross_trip_seed["trip_traveler_id"]
 
 
 def test_scan_activity_checkin_uses_authenticated_staff_user(

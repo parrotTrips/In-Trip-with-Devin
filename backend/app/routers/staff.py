@@ -145,11 +145,31 @@ async def _resolve_activity_checkin_scan(
         await session.commit()
         raise HTTPException(status_code=403, detail="Traveler is outside staff active trip")
 
-    traveler_name = await session.scalar(
-        select(User.full_name)
+    traveler_row = await session.execute(
+        select(User.id, User.full_name)
         .join(TripTraveler, TripTraveler.user_id == User.id)
         .where(TripTraveler.id == trip_traveler_id)
     )
+    traveler_user_id, traveler_name = traveler_row.one()
+
+    is_staff_on_this_trip = await session.scalar(
+        select(TripStaff.id).where(
+            TripStaff.user_id == traveler_user_id,
+            TripStaff.wetravel_trip_uuid == staff_trip_uuid,
+        )
+    )
+    if is_staff_on_this_trip is not None:
+        await _record_scan_event(
+            session,
+            trip_activity_id=activity_id,
+            trip_traveler_id=trip_traveler_id,
+            scanned_by_user_id=staff_user_id,
+            status="not_traveler",
+            raw_payload=qr_payload,
+            failure_reason="QR code does not belong to a traveler",
+        )
+        await session.commit()
+        raise HTTPException(status_code=403, detail="QR code does not belong to a traveler")
 
     participant_count = await session.scalar(
         select(func.count())
@@ -341,6 +361,11 @@ async def get_staff_trip(
             FROM trip_travelers tt
             JOIN users u ON u.id = tt.user_id
             WHERE tt.wetravel_trip_uuid = :uuid
+              AND NOT EXISTS (
+                  SELECT 1 FROM trip_staff ts
+                  WHERE ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                    AND ts.user_id = tt.user_id
+              )
         """),
         {"uuid": trip_uuid},
     )
@@ -360,13 +385,20 @@ async def get_staff_trip(
     )
     controlled_counts = {row.trip_activity_id: row.cnt for row in controlled_counts_result}
 
-    # All traveler names for the trip (for absent list)
+    # All traveler names for the trip (for absent list). Excludes people who are
+    # `trip_staff` on THIS trip — a `trip_travelers` row lets staff use the
+    # traveler view, but it must not make them count as an absent traveler here.
     all_travelers_result = await session.execute(
         text("""
             SELECT tt.id as traveler_id, u.full_name
             FROM trip_travelers tt
             JOIN users u ON u.id = tt.user_id
             WHERE tt.wetravel_trip_uuid = :uuid
+              AND NOT EXISTS (
+                  SELECT 1 FROM trip_staff ts
+                  WHERE ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                    AND ts.user_id = tt.user_id
+              )
             ORDER BY u.full_name
         """),
         {"uuid": trip_uuid},
@@ -658,13 +690,20 @@ async def get_activity_travelers(
             {"act_id": str(activity_id), "trip_uuid": staff_trip_uuid},
         )
     else:
-        # Open — return all travelers in the trip
+        # Open — return all travelers in the trip, excluding people who are
+        # `trip_staff` on this trip (their `trip_travelers` row only exists so
+        # they can use the traveler view; they must not be check-in-able here).
         rows = await session.execute(
             text("""
                 SELECT tt.id as traveler_id, u.full_name
                 FROM trip_travelers tt
                 JOIN users u ON u.id = tt.user_id
                 WHERE tt.wetravel_trip_uuid = :trip_uuid
+                  AND NOT EXISTS (
+                      SELECT 1 FROM trip_staff ts
+                      WHERE ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                        AND ts.user_id = tt.user_id
+                  )
                 ORDER BY u.full_name
             """),
             {"trip_uuid": staff_trip_uuid},
