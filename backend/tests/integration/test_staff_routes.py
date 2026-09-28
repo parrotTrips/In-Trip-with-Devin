@@ -331,6 +331,26 @@ def test_staff_access_is_authorized_per_selected_trip(seeded_client, session_fac
     assert traveler_response.status_code == 403
 
 
+def test_staff_access_uses_database_membership_when_token_role_is_traveler(
+    seeded_client,
+    session_factory,
+):
+    user_id = asyncio.run(_seed_mixed_role_staff(session_factory))
+
+    response = seeded_client.get(
+        "/me/staff/trip/contacts",
+        headers=_scoped_auth(
+            user_id,
+            "+5511888000099",
+            "mixed-staff-trip",
+            "traveler",
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["wetravel_trip_uuid"] == "mixed-staff-trip"
+
+
 def test_staff_access_revalidates_membership_after_token_issuance(
     seeded_client,
     session_factory,

@@ -289,7 +289,6 @@ async def get_staff_trip(
 
     activity_ids = [act.id for act in activities]
     tasks_by_activity: dict = {}
-    checkin_counts_by_activity: dict = {}
     if activity_ids:
         tasks_result = await session.execute(
             select(StaffTask)
@@ -347,7 +346,6 @@ async def get_staff_trip(
     )
 
     # Per-activity allowed participant counts (only for controlled activities)
-    activity_ids = [act.id for act in activities]
     controlled_counts_result = await session.execute(
         text("""
             SELECT trip_activity_id, COUNT(*) as cnt
