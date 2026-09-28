@@ -8,7 +8,13 @@ Reports (never writes):
     `wetravel_trips`;
   - users with more than one current/future ("eligible") trip and their
     per-trip derived role (traveler vs staff), using the same eligibility rule
-    as `app.services.trip_membership_service`.
+    as `app.services.trip_membership_service`;
+  - `users.role = 'staff'` accounts with at least one eligible trip membership
+    but no `trip_staff` row on those trips — the deploy-time staff loss that
+    happens because the old global-role model granted staff access from
+    `users.role` alone, and nothing since has backfilled `trip_staff` for them;
+  - phones that do not match `scripts._phone.normalize_phone(phone)` — i.e.
+    what the importers would have written for that same number today.
 
 This script NEVER reads DATABASE_URL from the environment or a .env file, and it
 NEVER writes to the database (every query runs inside a read-only transaction).
@@ -32,6 +38,8 @@ from typing import Any
 
 import asyncpg
 
+from scripts._phone import normalize_phone
+
 
 def pg_url(database_url: str) -> str:
     """Normalize a SQLAlchemy-style URL to a plain asyncpg-compatible one."""
@@ -45,10 +53,13 @@ def pg_url(database_url: str) -> str:
 def normalize_phone_digits(phone: str | None) -> str:
     """Digits-only normalization used purely for duplicate DETECTION here.
 
-    This is intentionally more aggressive than the writer-side `normalize_phone`
-    helpers (which only ensure a leading "+"): it strips every non-digit
-    character so differently formatted representations of the same number
-    (spaces, dashes, a missing "+") are grouped together for reporting.
+    This strips every non-digit character (spaces, dashes, parentheses, a
+    missing or extra leading "+") so differently formatted representations of
+    the same number are grouped together for reporting. It matches what the
+    writer-side `scripts._phone.normalize_phone` helper does internally before
+    it restores a single leading "+" — see `find_unnormalized_phones` below,
+    which compares against that writer helper directly rather than this
+    digits-only key.
     """
     return re.sub(r"\D", "", phone or "")
 
@@ -156,6 +167,62 @@ async def find_users_with_multiple_eligible_trips(conn: asyncpg.Connection) -> l
     ]
 
 
+async def find_users_with_role_staff_missing_trip_staff(
+    conn: asyncpg.Connection,
+) -> list[dict[str, Any]]:
+    """Deploy-time staff loss: `users.role = 'staff'` accounts that hold at
+    least one eligible (current/future) trip membership but no matching
+    `trip_staff` row on those trips.
+
+    Before this rollout, staff access came from `users.role` alone; now it
+    requires a `trip_staff` row per trip. An account reported here lost staff
+    capabilities on the listed trips and needs `trip_staff` backfilled before
+    the new flow is enabled for them.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT u.id AS user_id, u.phone, tt.wetravel_trip_uuid AS trip_uuid
+        FROM users u
+        JOIN trip_travelers tt ON tt.user_id = u.id
+        JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
+        LEFT JOIN trip_staff ts
+          ON ts.wetravel_trip_uuid = tt.wetravel_trip_uuid AND ts.user_id = tt.user_id
+        WHERE u.role = 'staff'
+          AND (wt.end_date IS NULL OR wt.end_date >= CURRENT_DATE)
+          AND ts.id IS NULL
+        ORDER BY u.phone, tt.wetravel_trip_uuid
+        """
+    )
+    by_user: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        user_id = str(r["user_id"])
+        entry = by_user.setdefault(
+            user_id, {"user_id": user_id, "phone": r["phone"], "trips": []}
+        )
+        entry["trips"].append(r["trip_uuid"])
+    return list(by_user.values())
+
+
+async def find_unnormalized_phones(conn: asyncpg.Connection) -> list[dict[str, Any]]:
+    """Users whose stored phone does not match what the write-boundary
+    normalizer (`scripts._phone.normalize_phone`) would produce for it today —
+    i.e. what an importer would have written for that same number.
+    """
+    rows = await conn.fetch("SELECT id, phone FROM users WHERE phone IS NOT NULL")
+    report = []
+    for r in rows:
+        normalized = normalize_phone(r["phone"])
+        if normalized != r["phone"]:
+            report.append(
+                {
+                    "user_id": str(r["id"]),
+                    "phone": r["phone"],
+                    "normalized_phone": normalized,
+                }
+            )
+    return report
+
+
 async def run_audit(database_url: str) -> dict[str, Any]:
     conn = await asyncpg.connect(pg_url(database_url))
     try:
@@ -164,6 +231,10 @@ async def run_audit(database_url: str) -> dict[str, Any]:
             orphaned_staff = await find_staff_missing_traveler_link(conn)
             missing_trip_memberships = await find_memberships_with_missing_trip(conn)
             multi_trip_users = await find_users_with_multiple_eligible_trips(conn)
+            role_staff_missing_trip_staff = (
+                await find_users_with_role_staff_missing_trip_staff(conn)
+            )
+            unnormalized_phones = await find_unnormalized_phones(conn)
     finally:
         await conn.close()
 
@@ -172,6 +243,8 @@ async def run_audit(database_url: str) -> dict[str, Any]:
         "staff_missing_trip_traveler_link": orphaned_staff,
         "memberships_missing_trip": missing_trip_memberships,
         "users_with_multiple_eligible_trips": multi_trip_users,
+        "users_role_staff_missing_trip_staff": role_staff_missing_trip_staff,
+        "unnormalized_phones": unnormalized_phones,
     }
 
 
@@ -205,6 +278,22 @@ def format_report(report: dict[str, Any]) -> str:
     for u in multi:
         trips = ", ".join(f"{t['trip_uuid']}={t['role']}" for t in u["trips"])
         lines.append(f"  - {u['user_id']} ({u['phone']}): {trips}")
+
+    role_staff_missing = report["users_role_staff_missing_trip_staff"]
+    lines.append(
+        "\nusers.role='staff' with an eligible trip but no trip_staff row: "
+        f"{len(role_staff_missing)}"
+    )
+    for u in role_staff_missing:
+        trips = ", ".join(u["trips"])
+        lines.append(f"  - {u['user_id']} ({u['phone']}): {trips}")
+
+    unnormalized = report["unnormalized_phones"]
+    lines.append(f"\nPhones that do not match normalize_phone(phone): {len(unnormalized)}")
+    for u in unnormalized:
+        lines.append(
+            f"  - {u['user_id']}: {u['phone']!r} -> {u['normalized_phone']!r}"
+        )
 
     return "\n".join(lines)
 

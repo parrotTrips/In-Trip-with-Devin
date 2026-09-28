@@ -58,9 +58,15 @@ Ele nunca grava nada no banco (roda tudo em uma transação somente leitura) e n
 - telefones duplicados com formatação inconsistente (ex.: com e sem "+");
 - pessoas cadastradas como staff de uma viagem sem o vínculo de participante correspondente;
 - vínculos de viagem que apontam para uma viagem inexistente;
-- pessoas com mais de uma viagem elegível no momento, e o papel derivado em cada uma.
+- pessoas com mais de uma viagem elegível no momento, e o papel derivado em cada uma;
+- contas com `users.role = 'staff'` que têm ao menos uma viagem elegível mas nenhum vínculo `trip_staff` nela — ou seja, pessoas que **perderam acesso de staff** porque o modelo antigo (papel global em `users.role`) foi aposentado e o `trip_staff` daquela viagem nunca foi preenchido;
+- telefones que não batem com a normalização usada pelos importadores (`scripts._phone.normalize_phone`), sinal de que o valor salvo tem formatação inconsistente e pode não casar com uma nova importação.
 
 Este script é só para diagnóstico — quem for rodá-lo deve apontar explicitamente para o banco desejado (nunca rodar automaticamente contra produção sem revisão humana do resultado).
+
+**Antes de habilitar o login multi-viagem em uma base existente**, rode essa auditoria e resolva os dois pontos acima primeiro: preencha os `trip_staff` faltantes para quem aparecer na lista de "perdeu acesso de staff", e corrija os telefones fora do padrão. Sem isso, staff que dependia do papel global (`users.role`) fica sem acesso quando o novo fluxo entra no ar.
+
+**Importante sobre `/admin/users/set-role`**: esse endpoint continua existindo, mas hoje ele só atualiza a coluna `users.role` — isso **não** concede nem revoga acesso de staff em nenhuma viagem. Quem decide o papel de alguém em uma viagem é exclusivamente o vínculo `trip_staff` daquela viagem (criado pela importação de staff da planilha). Usar `set-role` para tentar promover alguém a staff não tem efeito no app.
 
 ### Rollback
 

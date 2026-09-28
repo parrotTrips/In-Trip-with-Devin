@@ -921,7 +921,18 @@ async def admin_import_activity_participants(trip_uuid: str) -> dict:
 
 
 async def admin_set_user_role(phone: str, role: str) -> dict:
-    """Set the role of a user identified by phone number."""
+    """Set the `users.role` column of a user identified by phone number.
+
+    Deliberately unchanged by the multi-trip login rollout: this only updates
+    `users.role`, which no longer decides in-app authorization or staff
+    display anywhere. Per-trip staff access is granted by a `trip_staff` row
+    for that (trip, user), independent of this column. Calling this with
+    role="staff" does NOT make the user staff on any trip; use the trip's
+    staff import to create/remove `trip_staff` rows instead. See
+    `docs/guia-interno-parrot-app.md` and
+    `scripts/audit_multi_trip_memberships.py` for backfilling accounts that
+    lost staff access when the old global-role model was retired.
+    """
     if role not in ("traveler", "staff"):
         raise ValueError(f"Invalid role '{role}'. Must be 'traveler' or 'staff'.")
 

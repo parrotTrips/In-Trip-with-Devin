@@ -20,7 +20,9 @@ from scripts.audit_multi_trip_memberships import (
     find_duplicate_normalized_phones,
     find_memberships_with_missing_trip,
     find_staff_missing_traveler_link,
+    find_unnormalized_phones,
     find_users_with_multiple_eligible_trips,
+    find_users_with_role_staff_missing_trip_staff,
     normalize_phone_digits,
     parse_args,
     run_audit,
@@ -211,6 +213,69 @@ async def test_find_users_with_multiple_eligible_trips_derives_role_per_trip(dat
 
 
 @pytest.mark.asyncio
+async def test_find_users_with_role_staff_missing_trip_staff_reports_deploy_time_loss(
+    database_url,
+):
+    """A `users.role = 'staff'` account with an eligible trip membership but no
+    matching `trip_staff` row for that trip lost staff access when the old
+    global-role model was retired — this must be flagged so it can be backfilled
+    before enabling the new flow.
+    """
+    conn = await asyncpg.connect(_pg_url(database_url))
+    try:
+        trip_a = "audit-trip-role-staff-a"
+        trip_b = "audit-trip-role-staff-b"
+        ended_trip = "audit-trip-role-staff-ended"
+        await _insert_trip(conn, trip_a, end_date=None)
+        await _insert_trip(conn, trip_b, end_date=None)
+        await _insert_trip(conn, ended_trip, end_date=date.today() - timedelta(days=1))
+
+        # Lost staff access on trip_a (no trip_staff row there at all).
+        lost_user = await _insert_user(conn, "+5511990011111", role="staff")
+        await _insert_trip_traveler(conn, trip_a, lost_user)
+        # Also a member of an ended trip — must not be reported for that trip.
+        await _insert_trip_traveler(conn, ended_trip, lost_user)
+
+        # Already backfilled: has both users.role='staff' and a trip_staff row.
+        backfilled_user = await _insert_user(conn, "+5511990022222", role="staff")
+        await _insert_trip_traveler(conn, trip_b, backfilled_user)
+        await _insert_trip_staff(conn, trip_b, backfilled_user)
+
+        # Plain traveler: users.role != 'staff', must never be reported.
+        traveler_user = await _insert_user(conn, "+5511990033333", role="traveler")
+        await _insert_trip_traveler(conn, trip_a, traveler_user)
+
+        report = await find_users_with_role_staff_missing_trip_staff(conn)
+
+        assert len(report) == 1
+        entry = report[0]
+        assert entry["user_id"] == str(lost_user)
+        assert entry["phone"] == "+5511990011111"
+        assert entry["trips"] == [trip_a]
+    finally:
+        await conn.close()
+
+
+@pytest.mark.asyncio
+async def test_find_unnormalized_phones_reports_mismatch_with_normalize_phone(database_url):
+    conn = await asyncpg.connect(_pg_url(database_url))
+    try:
+        normalized_user = await _insert_user(conn, "+5511990044444")
+        messy_user = await _insert_user(conn, "55 (11) 99005-5555")
+
+        report = await find_unnormalized_phones(conn)
+
+        ids = {r["user_id"] for r in report}
+        assert str(messy_user) in ids
+        assert str(normalized_user) not in ids
+        entry = next(r for r in report if r["user_id"] == str(messy_user))
+        assert entry["phone"] == "55 (11) 99005-5555"
+        assert entry["normalized_phone"] == "+5511990055555"
+    finally:
+        await conn.close()
+
+
+@pytest.mark.asyncio
 async def test_run_audit_and_format_report_end_to_end(database_url):
     conn = await asyncpg.connect(_pg_url(database_url))
     try:
@@ -225,11 +290,15 @@ async def test_run_audit_and_format_report_end_to_end(database_url):
 
     assert report["staff_missing_trip_traveler_link"]
     assert report["staff_missing_trip_traveler_link"][0]["trip_uuid"] == trip_uuid
+    assert "users_role_staff_missing_trip_staff" in report
+    assert "unnormalized_phones" in report
 
     text = format_report(report)
     assert "Multi-trip membership audit" in text
     assert "trip_staff rows missing a trip_travelers row: 1" in text
     assert trip_uuid in text
+    assert "users.role='staff' with an eligible trip but no trip_staff row" in text
+    assert "Phones that do not match normalize_phone" in text
 
 
 @pytest.mark.asyncio
