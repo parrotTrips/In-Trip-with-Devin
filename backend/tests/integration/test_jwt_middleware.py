@@ -1,8 +1,10 @@
 """Integration tests for JWT authentication middleware."""
 
 from datetime import UTC, datetime, timedelta
+import uuid
 
 from jose import jwt
+import pytest
 
 
 TEST_SECRET = "test-secret-for-middleware"
@@ -179,3 +181,57 @@ def test_admin_token_is_rejected_outside_console(seeded_client):
 
     assert seeded_client.get("/me/trip", headers=headers).status_code == 401
     assert seeded_client.get("/me/staff/trip", headers=headers).status_code == 401
+
+
+def test_console_like_path_is_not_treated_as_console_namespace(seeded_client):
+    from app.core.config import JWT_SECRET
+
+    claims = jwt.get_unverified_claims(
+        _make_token(
+            user_id=str(uuid.uuid4()), token_type="admin", role="admin"
+        )
+    )
+    token = jwt.encode(claims, JWT_SECRET, algorithm=TEST_ALGORITHM)
+
+    response = seeded_client.get(
+        "/console-evil", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sub": "not-a-uuid"},
+        {"sub": ""},
+        {"sub": 123},
+        {"phone": ""},
+        {"phone": 123},
+        {"role": ""},
+        {"role": 123},
+        {"trip_id": ""},
+        {"trip_id": 123},
+    ],
+)
+def test_session_claims_require_valid_types_and_non_empty_values(
+    seeded_client, overrides
+):
+    from app.core.config import JWT_SECRET
+
+    claims = {
+        "sub": str(uuid.uuid4()),
+        "phone": "+5511999999999",
+        "token_type": "session",
+        "role": "traveler",
+        "trip_id": "external-trip-id",
+        "exp": datetime.now(UTC) + timedelta(minutes=10),
+        **overrides,
+    }
+    token = jwt.encode(claims, JWT_SECRET, algorithm=TEST_ALGORITHM)
+
+    response = seeded_client.get(
+        "/me/trip", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 401
