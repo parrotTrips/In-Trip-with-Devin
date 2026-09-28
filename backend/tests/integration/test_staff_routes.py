@@ -8,6 +8,7 @@ from app.db.models.staff import (
     ActivityCheckinScanEvent,
     ActivityParticipant,
     StaffTask,
+    TripAnnouncement,
     TripStaff,
 )
 from app.db.models.trip import TripActivity, TripPhase, TripTraveler
@@ -168,6 +169,7 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
             "second_activity_id": str(second_activity.id),
             "trip_traveler_id": str(trip_traveler.id),
             "second_trip_traveler_id": str(second_trip_traveler.id),
+            "other_trip_traveler_id": str(other_trip_traveler.id),
             "staff_trip_traveler_id": str(staff_trip_traveler.id),
             "qr_payload": create_traveler_qr_payload(
                 trip_traveler_id=str(trip_traveler.id),
@@ -186,6 +188,75 @@ async def _seed_staff_trip_with_tasks(session_factory, *, seed_checkin: bool = F
                 trip_uuid="staff-route-other-trip-test",
             ),
         }
+
+
+async def _seed_cross_trip_activity(session_factory, seed):
+    async with session_factory() as session:
+        other_phase = TripPhase(
+            wetravel_trip_uuid="staff-route-other-trip-test",
+            phase_type="in-trip",
+            title="Other Trip Day",
+            short_description="Other trip day",
+            sort_order=0,
+            is_locked_by_default=False,
+            is_visible=True,
+        )
+        session.add(other_phase)
+        await session.flush()
+        other_activity = TripActivity(
+            trip_phase_id=other_phase.id,
+            name="Other Trip Activity",
+            activity_type="meeting",
+            short_description="Other trip activity",
+            sort_order=0,
+        )
+        session.add(other_activity)
+        await session.commit()
+        return str(other_activity.id)
+
+
+async def _seed_inconsistent_controlled_participant(session_factory, seed):
+    async with session_factory() as session:
+        session.add_all(
+            [
+                ActivityParticipant(
+                    trip_activity_id=seed["activity_id"],
+                    trip_traveler_id=seed["trip_traveler_id"],
+                    status="allowed",
+                ),
+                ActivityParticipant(
+                    trip_activity_id=seed["activity_id"],
+                    trip_traveler_id=seed["other_trip_traveler_id"],
+                    status="allowed",
+                ),
+            ]
+        )
+        await session.commit()
+
+
+async def _seed_other_trip_announcement(session_factory, seed):
+    async with session_factory() as session:
+        announcement = TripAnnouncement(
+            wetravel_trip_uuid="staff-route-other-trip-test",
+            title="Other trip announcement",
+            body="Must remain isolated",
+            sent_by_user_id=seed["staff_user_id"],
+        )
+        session.add(announcement)
+        await session.commit()
+        return str(announcement.id)
+
+
+async def _seed_inconsistent_cross_trip_checkin(session_factory, seed):
+    async with session_factory() as session:
+        session.add(
+            ActivityCheckin(
+                trip_activity_id=seed["activity_id"],
+                trip_traveler_id=seed["other_trip_traveler_id"],
+                scanned_by_user_id=seed["staff_user_id"],
+            )
+        )
+        await session.commit()
 
 
 def _auth(client, phone: str) -> dict:
@@ -281,6 +352,126 @@ def test_staff_access_revalidates_membership_after_token_issuance(
     response = seeded_client.get("/me/staff/trip/contacts", headers=headers)
 
     assert response.status_code == 403
+
+
+def test_activity_travelers_excludes_controlled_participant_from_other_trip(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    asyncio.run(_seed_inconsistent_controlled_participant(session_factory, seed))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.get(
+        f"/me/staff/activities/{seed['activity_id']}/travelers",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["travelers"]] == [
+        seed["trip_traveler_id"]
+    ]
+
+
+def test_staff_trip_summary_excludes_controlled_participant_from_other_trip(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    asyncio.run(_seed_inconsistent_controlled_participant(session_factory, seed))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.get("/me/staff/trip", headers=headers)
+
+    assert response.status_code == 200
+    activity = next(
+        activity
+        for activity in response.json()["days"][0]["activities"]
+        if activity["id"] == seed["activity_id"]
+    )
+    assert activity["traveler_count"] == 1
+    assert activity["absent_travelers"] == ["Traveler One"]
+
+
+def test_staff_trip_summary_excludes_checkin_traveler_from_other_trip(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    asyncio.run(_seed_inconsistent_cross_trip_checkin(session_factory, seed))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.get("/me/staff/trip", headers=headers)
+
+    assert response.status_code == 200
+    activity = next(
+        activity
+        for activity in response.json()["days"][0]["activities"]
+        if activity["id"] == seed["activity_id"]
+    )
+    assert activity["checkin_steps"] == []
+
+
+def test_staff_activity_endpoints_reject_activity_from_other_trip(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    other_activity_id = asyncio.run(_seed_cross_trip_activity(session_factory, seed))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    travelers = seeded_client.get(
+        f"/me/staff/activities/{other_activity_id}/travelers",
+        headers=headers,
+    )
+    preview = seeded_client.post(
+        f"/me/staff/activities/{other_activity_id}/checkins/preview",
+        headers=headers,
+        json={"qr_payload": seed["other_trip_qr_payload"]},
+    )
+    scan = seeded_client.post(
+        f"/me/staff/activities/{other_activity_id}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["other_trip_qr_payload"]},
+    )
+
+    assert travelers.status_code == 403
+    assert preview.status_code == 403
+    assert scan.status_code == 403
+
+
+def test_staff_announcements_are_isolated_to_selected_trip(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    other_announcement_id = asyncio.run(
+        _seed_other_trip_announcement(session_factory, seed)
+    )
+    headers = _auth(seeded_client, "+5511888000001")
+
+    created = seeded_client.post(
+        "/me/staff/announcements",
+        headers=headers,
+        json={"title": "Selected trip", "body": "Visible here"},
+    )
+    listed = seeded_client.get("/me/staff/announcements", headers=headers)
+    updated = seeded_client.put(
+        f"/me/staff/announcements/{other_announcement_id}",
+        headers=headers,
+        json={"title": "Leaked", "body": "Must be blocked"},
+    )
+    deleted = seeded_client.delete(
+        f"/me/staff/announcements/{other_announcement_id}",
+        headers=headers,
+    )
+
+    assert created.status_code == 200
+    assert [row["title"] for row in listed.json()["announcements"]] == [
+        "Selected trip"
+    ]
+    assert updated.status_code == 404
+    assert deleted.status_code == 404
 
 
 def test_get_staff_trip_includes_only_current_staff_tasks(seeded_client, session_factory):

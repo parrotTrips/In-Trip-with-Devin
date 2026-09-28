@@ -154,7 +154,14 @@ async def _resolve_activity_checkin_scan(
     participant_count = await session.scalar(
         select(func.count())
         .select_from(ActivityParticipant)
-        .where(ActivityParticipant.trip_activity_id == activity_id)
+        .join(
+            TripTraveler,
+            TripTraveler.id == ActivityParticipant.trip_traveler_id,
+        )
+        .where(
+            ActivityParticipant.trip_activity_id == activity_id,
+            TripTraveler.wetravel_trip_uuid == staff_trip_uuid,
+        )
     )
     if participant_count:
         allowed = await session.scalar(
@@ -310,9 +317,10 @@ async def get_staff_trip(
                 JOIN trip_travelers tt ON tt.id = ac.trip_traveler_id
                 JOIN users u ON u.id = tt.user_id
                 WHERE ac.trip_activity_id = ANY(:ids)
+                  AND tt.wetravel_trip_uuid = :trip_uuid
                 ORDER BY ac.trip_activity_id, ac.scan_number, ac.checked_in_at
             """),
-            {"ids": activity_ids},
+            {"ids": activity_ids, "trip_uuid": trip_uuid},
         )
         # Build: {activity_id: {step: [{name, checked_in_at}]}} and set of checked-in traveler_ids per activity
         checkin_steps_by_activity: dict = {}
@@ -343,12 +351,14 @@ async def get_staff_trip(
     controlled_counts_result = await session.execute(
         text("""
             SELECT trip_activity_id, COUNT(*) as cnt
-            FROM activity_participants
-            WHERE trip_activity_id = ANY(:ids)
-              AND status = 'allowed'
-            GROUP BY trip_activity_id
+            FROM activity_participants ap
+            JOIN trip_travelers tt ON tt.id = ap.trip_traveler_id
+            WHERE ap.trip_activity_id = ANY(:ids)
+              AND ap.status = 'allowed'
+              AND tt.wetravel_trip_uuid = :trip_uuid
+            GROUP BY ap.trip_activity_id
         """),
-        {"ids": activity_ids},
+        {"ids": activity_ids, "trip_uuid": trip_uuid},
     )
     controlled_counts = {row.trip_activity_id: row.cnt for row in controlled_counts_result}
 
@@ -375,10 +385,12 @@ async def get_staff_trip(
             FROM activity_participants ap
             JOIN trip_travelers tt ON tt.id = ap.trip_traveler_id
             JOIN users u ON u.id = tt.user_id
-            WHERE ap.trip_activity_id = ANY(:ids) AND ap.status = 'allowed'
+            WHERE ap.trip_activity_id = ANY(:ids)
+              AND ap.status = 'allowed'
+              AND tt.wetravel_trip_uuid = :trip_uuid
             ORDER BY u.full_name
         """),
-        {"ids": activity_ids},
+        {"ids": activity_ids, "trip_uuid": trip_uuid},
     )
     allowed_by_activity: dict = {}
     for row in allowed_travelers_result.mappings():
@@ -622,7 +634,14 @@ async def get_activity_travelers(
     participant_count = await session.scalar(
         select(func.count())
         .select_from(ActivityParticipant)
-        .where(ActivityParticipant.trip_activity_id == activity_id)
+        .join(
+            TripTraveler,
+            TripTraveler.id == ActivityParticipant.trip_traveler_id,
+        )
+        .where(
+            ActivityParticipant.trip_activity_id == activity_id,
+            TripTraveler.wetravel_trip_uuid == staff_trip_uuid,
+        )
     )
 
     if participant_count:
@@ -633,10 +652,12 @@ async def get_activity_travelers(
                 FROM activity_participants ap
                 JOIN trip_travelers tt ON tt.id = ap.trip_traveler_id
                 JOIN users u ON u.id = tt.user_id
-                WHERE ap.trip_activity_id = :act_id AND ap.status = 'allowed'
+                WHERE ap.trip_activity_id = :act_id
+                  AND ap.status = 'allowed'
+                  AND tt.wetravel_trip_uuid = :trip_uuid
                 ORDER BY u.full_name
             """),
-            {"act_id": str(activity_id)},
+            {"act_id": str(activity_id), "trip_uuid": staff_trip_uuid},
         )
     else:
         # Open — return all travelers in the trip
