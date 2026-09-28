@@ -195,6 +195,22 @@ async def _seed_two_trips(session_factory):
         }
 
 
+def test_traveler_route_rejects_session_with_no_trip_travelers_row_for_trip_id(
+    seeded_client, session_factory
+):
+    """A session token's trip_id is trusted only as far as `require_trip_membership`
+    confirms it: a token whose trip_id has no trip_travelers row for that user at
+    all (not just a different trip than the one requested) must be rejected too.
+    """
+    seed = asyncio.run(_seed_two_trips(session_factory))
+    headers = _scoped_auth(seed["user_id"], seed["phone"], "trip-with-no-membership-at-all")
+
+    response = seeded_client.get("/me/trip", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Trip membership required"}
+
+
 def test_me_trip_returns_selected_trip_only(seeded_client, session_factory):
     seed = asyncio.run(_seed_two_trips(session_factory))
     headers = _scoped_auth(seed["user_id"], seed["phone"], seed["trip_b"])
