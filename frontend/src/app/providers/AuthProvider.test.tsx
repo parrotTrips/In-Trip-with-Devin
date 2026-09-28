@@ -1,7 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { http, HttpResponse } from 'msw';
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
+import { request } from '../../shared/api/client';
+import { server } from '../../test/server';
 import { AuthProvider } from './AuthProvider';
 import { useAuth, type TripChoice } from './auth-context';
 
@@ -53,16 +57,12 @@ function Probe() {
         begin-selection
       </button>
       <button
-        onClick={() =>
-          auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-a', TRIP_A.role, TRIP_A)
-        }
+        onClick={() => auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-a', TRIP_A)}
       >
         select-trip-a
       </button>
       <button
-        onClick={() =>
-          auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-b', TRIP_B.role, TRIP_B)
-        }
+        onClick={() => auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-b', TRIP_B)}
       >
         select-trip-b
       </button>
@@ -79,6 +79,26 @@ function renderProbe() {
       <Probe />
     </AuthProvider>
   );
+}
+
+/**
+ * Mimics TripProvider: a child that fetches through the shared API client
+ * from its own mount/update effect, keyed on the current session token. Its
+ * effect commits in the same React flush as the parent AuthProvider's
+ * effects (children run first), so it only ever sees the right
+ * `Authorization` header if the token reached localStorage *before* React
+ * started committing at all — i.e. synchronously inside the action that
+ * changed the session, not from a `useEffect` in AuthProvider itself.
+ */
+function ChildThatFetchesOnTokenChange() {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    void request('/probe');
+  }, [user?.token]);
+
+  return null;
 }
 
 describe('AuthProvider trip-scoped session state', () => {
@@ -187,6 +207,32 @@ describe('AuthProvider trip-scoped session state', () => {
 
     expect(screen.getByTestId('logged-in')).toHaveTextContent('false');
     expect(localStorage.getItem('parrot_user')).toBeNull();
+  });
+
+  test('a child effect sees the new token immediately on first login and after a trip switch', async () => {
+    const seenAuthHeaders: Array<string | null> = [];
+    server.use(
+      http.get('http://localhost:8000/probe', ({ request: req }) => {
+        seenAuthHeaders.push(req.headers.get('Authorization'));
+        return HttpResponse.json({ ok: true });
+      })
+    );
+
+    const user = userEvent.setup();
+    render(
+      <AuthProvider>
+        <Probe />
+        <ChildThatFetchesOnTokenChange />
+      </AuthProvider>
+    );
+
+    await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
+    await waitFor(() => expect(seenAuthHeaders).toHaveLength(1));
+    expect(seenAuthHeaders[0]).toBe('Bearer tok-a');
+
+    await user.click(screen.getByRole('button', { name: 'select-trip-b' }));
+    await waitFor(() => expect(seenAuthHeaders).toHaveLength(2));
+    expect(seenAuthHeaders[1]).toBe('Bearer tok-b');
   });
 
   test('logout clears the session, pending selection and switcher state', async () => {

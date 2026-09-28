@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import * as Sentry from '@sentry/react';
 import posthog from 'posthog-js';
 
@@ -58,20 +58,36 @@ function identify(newUser: AuthUser) {
   Sentry.setUser({ id: newUser.userId, username: newUser.name ?? newUser.phone });
 }
 
+function getInitialUser(): AuthUser | null {
+  const stored = getStoredUser();
+  if (stored) return stored;
+
+  const devUser = getDevAutoLoginUser();
+  if (devUser) {
+    // Persist synchronously during the lazy initializer (i.e. before React's
+    // first commit, let alone any effect) so a child mounted once
+    // `isLoggedIn` is true never races the API client's localStorage-backed
+    // getToken() — same reasoning as establishSession below.
+    localStorage.setItem('parrot_user', JSON.stringify(devUser));
+  }
+  return devUser;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => getStoredUser() ?? getDevAutoLoginUser());
+  const [user, setUser] = useState<AuthUser | null>(getInitialUser);
   const [pendingSelection, setPendingSelection] = useState<PendingTripSelection | null>(null);
   const [isTripSwitcherOpen, setIsTripSwitcherOpen] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('parrot_user', JSON.stringify(user));
-      return;
-    }
-    localStorage.removeItem('parrot_user');
-  }, [user]);
-
   const establishSession = (newUser: AuthUser) => {
+    // Persist synchronously, before setUser, and never from a useEffect:
+    // React commits child effects before a parent's, so any child mounted
+    // once isLoggedIn flips true (e.g. TripProvider fetching /me/trip) would
+    // otherwise run before an AuthProvider effect had persisted the token,
+    // reading a missing or stale value from localStorage via the API
+    // client's getToken(). Writing here — inside the same event handler that
+    // calls setUser — guarantees the token is already there before React
+    // even starts rendering, exactly like logout()'s synchronous removeItem.
+    localStorage.setItem('parrot_user', JSON.stringify(newUser));
     // One setState call per piece of state: no intermediate render can see a
     // half-replaced session (e.g. new tripId with the old token), whether
     // this is the first login or an in-app trip switch.
@@ -94,10 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone: string,
     name: string | null,
     token: string,
-    role: UserRole,
     activeTrip: TripChoice
   ) => {
-    establishSession({ userId, phone, name, token, role, tripId: activeTrip.trip_id, activeTrip });
+    // Role is derived from activeTrip.role rather than accepted separately,
+    // so a caller can't pass a role that disagrees with the chosen trip.
+    establishSession({ userId, phone, name, token, role: activeTrip.role, tripId: activeTrip.trip_id, activeTrip });
   };
 
   const openTripSwitcher = () => setIsTripSwitcherOpen(true);

@@ -95,7 +95,6 @@ export default function LoginScreen() {
             result.phone,
             result.name,
             result.access_token,
-            result.role,
             result.active_trip
           );
           break;

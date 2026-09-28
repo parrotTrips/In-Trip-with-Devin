@@ -65,14 +65,16 @@ export interface AuthContextType {
    * Atomically (re)establishes the trip-scoped session — used both for the
    * first trip choice after OTP and for switching trips in-app later (Task
    * 7): the previous session (if any) and any pending selection are replaced
-   * in one update, never left partially applied.
+   * in one update, never left partially applied. `role` is not a separate
+   * parameter: it is always `activeTrip.role`, so a caller can't pass a role
+   * that disagrees with the chosen trip. Pass a `trip_selected`/`select-trip`
+   * result's fields directly.
    */
   completeTripSelection: (
     userId: string,
     phone: string,
     name: string | null,
     token: string,
-    role: UserRole,
     activeTrip: TripChoice
   ) => void;
 
