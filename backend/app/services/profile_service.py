@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models.staff import TripStaff
 from app.db.models.traveler import TravelerProfile
 from app.db.models.trip import TripTraveler
 from app.db.models.user import User
@@ -437,13 +438,26 @@ async def update_profile(
 
 
 async def get_trip_travelers(trip_id: str, session: AsyncSession) -> dict:
-    """List all travelers available for roommate selection in a trip."""
+    """List all travelers available for roommate selection in a trip.
+
+    Excludes people who are staff on THIS trip specifically (a `trip_staff` row for
+    `trip_id`), not by global `User.role` — a person can be staff on one trip and a
+    traveler on another, and `users.role` no longer decides authorization or display.
+    """
+    not_staff_on_this_trip = ~(
+        select(TripStaff.id)
+        .where(
+            TripStaff.wetravel_trip_uuid == trip_id,
+            TripStaff.user_id == TripTraveler.user_id,
+        )
+        .exists()
+    )
     rows = await session.execute(
         select(User)
         .join(TripTraveler, TripTraveler.user_id == User.id)
         .where(
             TripTraveler.wetravel_trip_uuid == trip_id,
-            User.role == "traveler",
+            not_staff_on_this_trip,
         )
         .order_by(User.phone)
     )

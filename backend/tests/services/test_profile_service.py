@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import select, text
 
+from app.db.models.staff import TripStaff
 from app.db.models.traveler import TravelerProfile
 from app.db.models.trip import TripTraveler
 from app.db.models.user import User
@@ -71,6 +72,10 @@ async def seed_trip_assignment(
 
         trip_traveler = TripTraveler(wetravel_trip_uuid=wetravel_trip_uuid, user_id=user.id)
         session.add(trip_traveler)
+        if role == "staff":
+            # Staff-ness is per trip: a `trip_staff` row for THIS trip, not the
+            # global `users.role`, is what excludes someone from the traveler list.
+            session.add(TripStaff(wetravel_trip_uuid=wetravel_trip_uuid, user_id=user.id))
         await session.commit()
 
         return {
@@ -252,6 +257,58 @@ def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(sessio
                 }
             ],
         }
+
+    asyncio.run(run_test())
+
+
+def test_get_trip_travelers_excludes_person_only_on_the_trip_they_staff(session_factory):
+    """A person who is staff on trip B and a plain traveler on trip A must appear in
+    trip A's traveler list and be excluded only from trip B's — derived per trip from
+    `trip_staff`, never from a global `users.role`.
+    """
+    async def run_test():
+        mixed_phone = "+5511666000001"
+        other_b_phone = "+5511666000002"
+
+        async with session_factory() as session:
+            for trip_uuid in (TEST_TRIP_A, TEST_TRIP_B):
+                await session.execute(
+                    text(
+                        "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                        " VALUES (:uuid, :title, :dest, :sd, :ed)"
+                        " ON CONFLICT (trip_uuid) DO NOTHING"
+                    ),
+                    {
+                        "uuid": trip_uuid,
+                        "title": "Test Trip",
+                        "dest": "Brazil",
+                        "sd": date(2027, 7, 1),
+                        "ed": date(2027, 7, 10),
+                    },
+                )
+            mixed_user = User(phone=mixed_phone, full_name="Mixed Role", status="active")
+            other_b_user = User(phone=other_b_phone, full_name="Other B", status="active")
+            session.add_all([mixed_user, other_b_user])
+            await session.flush()
+            session.add_all([
+                TripTraveler(wetravel_trip_uuid=TEST_TRIP_A, user_id=mixed_user.id),
+                TripTraveler(wetravel_trip_uuid=TEST_TRIP_B, user_id=mixed_user.id),
+                TripStaff(wetravel_trip_uuid=TEST_TRIP_B, user_id=mixed_user.id),
+                TripTraveler(wetravel_trip_uuid=TEST_TRIP_B, user_id=other_b_user.id),
+            ])
+            await session.commit()
+
+        async with session_factory() as session:
+            response_a = await get_trip_travelers(TEST_TRIP_A, session)
+        async with session_factory() as session:
+            response_b = await get_trip_travelers(TEST_TRIP_B, session)
+
+        phones_a = {t["phone"] for t in response_a["travelers"]}
+        phones_b = {t["phone"] for t in response_b["travelers"]}
+
+        assert mixed_phone in phones_a, "must appear in trip A's traveler list"
+        assert mixed_phone not in phones_b, "must be excluded from trip B's traveler list"
+        assert other_b_phone in phones_b
 
     asyncio.run(run_test())
 

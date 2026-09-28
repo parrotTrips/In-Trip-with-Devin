@@ -18,6 +18,7 @@ from app.db.models.trip import (
     TripTraveler,
 )
 from app.db.models.progress import TravelerPhaseProgress
+from app.db.models.staff import TripStaff
 from app.db.models.user import User
 
 SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
@@ -273,12 +274,20 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
     await _require_trip_traveler(user_id, trip_id, session)
     trip_uuid = trip_id
 
+    not_staff_on_this_trip = ~(
+        select(TripStaff.id)
+        .where(
+            TripStaff.wetravel_trip_uuid == trip_uuid,
+            TripStaff.user_id == TripTraveler.user_id,
+        )
+        .exists()
+    )
     tt_result = await session.execute(
         select(TripTraveler, User)
         .join(User, User.id == TripTraveler.user_id)
         .where(
             TripTraveler.wetravel_trip_uuid == trip_uuid,
-            User.role == "traveler",
+            not_staff_on_this_trip,
         )
     )
     rows = tt_result.all()
