@@ -100,7 +100,11 @@ async def get_checklist_progress(
             TripPhaseChecklistItem.id
             == TravelerChecklistProgress.trip_phase_checklist_item_id,
         )
-        .where(TravelerChecklistProgress.trip_traveler_id == trip_traveler.id)
+        .join(TripPhase, TripPhase.id == TripPhaseChecklistItem.trip_phase_id)
+        .where(
+            TravelerChecklistProgress.trip_traveler_id == trip_traveler.id,
+            TripPhase.wetravel_trip_uuid == trip_id,
+        )
     )
 
     progress: dict[str, dict[str, bool]] = {}
@@ -161,8 +165,11 @@ async def get_phase_completions(
     """Return all persisted phase completion states for one user and trip."""
     trip_traveler = await _resolve_trip_traveler(user_id, trip_id, session)
     rows = await session.scalars(
-        select(TravelerPhaseProgress).where(
-            TravelerPhaseProgress.trip_traveler_id == trip_traveler.id
+        select(TravelerPhaseProgress)
+        .join(TripPhase, TripPhase.id == TravelerPhaseProgress.trip_phase_id)
+        .where(
+            TravelerPhaseProgress.trip_traveler_id == trip_traveler.id,
+            TripPhase.wetravel_trip_uuid == trip_id,
         )
     )
 

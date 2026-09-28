@@ -62,4 +62,4 @@ async def get_trip_travelers_handler(
 ):
     """List travelers used by the roommate selection flow."""
     _require_matching_trip(trip_id, request)
-    return await get_trip_travelers(trip_id, session)
+    return await get_trip_travelers(request.state.user_id, trip_id, session)

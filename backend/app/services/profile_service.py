@@ -437,13 +437,19 @@ async def update_profile(
     return {"message": "Profile updated", "updated_fields": updated_fields}
 
 
-async def get_trip_travelers(trip_id: str, session: AsyncSession) -> dict:
+async def get_trip_travelers(
+    user_id: str,
+    trip_id: str,
+    session: AsyncSession,
+) -> dict:
     """List all travelers available for roommate selection in a trip.
 
     Excludes people who are staff on THIS trip specifically (a `trip_staff` row for
     `trip_id`), not by global `User.role` — a person can be staff on one trip and a
     traveler on another, and `users.role` no longer decides authorization or display.
     """
+    await _resolve_trip_traveler(user_id, session, trip_id)
+
     not_staff_on_this_trip = ~(
         select(TripStaff.id)
         .where(

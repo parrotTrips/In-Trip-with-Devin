@@ -245,7 +245,9 @@ def test_get_trip_travelers_returns_only_travelers_for_the_requested_trip(sessio
         )
 
         async with session_factory() as session:
-            response = await get_trip_travelers(primary["wetravel_trip_uuid"], session)
+            response = await get_trip_travelers(
+                primary["user_id"], primary["wetravel_trip_uuid"], session
+            )
 
         assert response == {
             "trip_id": primary["wetravel_trip_uuid"],
@@ -297,11 +299,12 @@ def test_get_trip_travelers_excludes_person_only_on_the_trip_they_staff(session_
                 TripTraveler(wetravel_trip_uuid=TEST_TRIP_B, user_id=other_b_user.id),
             ])
             await session.commit()
+            mixed_user_id = str(mixed_user.id)
 
         async with session_factory() as session:
-            response_a = await get_trip_travelers(TEST_TRIP_A, session)
+            response_a = await get_trip_travelers(mixed_user_id, TEST_TRIP_A, session)
         async with session_factory() as session:
-            response_b = await get_trip_travelers(TEST_TRIP_B, session)
+            response_b = await get_trip_travelers(mixed_user_id, TEST_TRIP_B, session)
 
         phones_a = {t["phone"] for t in response_a["travelers"]}
         phones_b = {t["phone"] for t in response_b["travelers"]}
