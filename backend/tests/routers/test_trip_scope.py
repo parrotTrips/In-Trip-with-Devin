@@ -68,7 +68,8 @@ async def _seed_two_trips(session_factory):
         tt_a = TripTraveler(wetravel_trip_uuid=TRIP_A, user_id=user.id)
         tt_b = TripTraveler(wetravel_trip_uuid=TRIP_B, user_id=user.id)
         tt_other_b = TripTraveler(wetravel_trip_uuid=TRIP_B, user_id=other_user.id)
-        session.add_all([tt_a, tt_b, tt_other_b])
+        tt_staff_b = TripTraveler(wetravel_trip_uuid=TRIP_B, user_id=trip_b_staff.id)
+        session.add_all([tt_a, tt_b, tt_other_b, tt_staff_b])
         await session.flush()
 
         def _phase(trip_id: str, title: str, sort_order: int) -> TripPhase:
@@ -162,6 +163,14 @@ async def _seed_two_trips(session_factory):
             [
                 TravelerProfile(trip_traveler_id=tt_a.id, preferred_name="Name A"),
                 TravelerProfile(trip_traveler_id=tt_b.id, preferred_name="Name B"),
+                TravelerProfile(
+                    trip_traveler_id=tt_other_b.id,
+                    preferred_name="Preferred Traveler B",
+                ),
+                TravelerProfile(
+                    trip_traveler_id=tt_staff_b.id,
+                    preferred_name="Preferred Staff B",
+                ),
             ]
         )
 
@@ -246,6 +255,10 @@ def test_me_trip_travelers_returns_only_selected_trip_members(seeded_client, ses
     assert response.status_code == 200
     ids = {t["id"] for t in response.json()["travelers"]}
     assert ids == {seed["user_id"], seed["other_user_id"]}
+    assert {t["name"] for t in response.json()["travelers"]} == {
+        "Name B",
+        "Preferred Traveler B",
+    }
 
 
 def test_me_team_returns_only_selected_trip_staff(seeded_client, session_factory):
@@ -256,7 +269,7 @@ def test_me_team_returns_only_selected_trip_staff(seeded_client, session_factory
 
     assert response.status_code == 200
     assert [(member["name"], member["function"]) for member in response.json()["team"]] == [
-        ("Trip B Staff", "Trip B host")
+        ("Preferred Staff B", "Trip B host")
     ]
 
 
@@ -397,6 +410,15 @@ def test_profile_update_changes_only_selected_trip_profile(seeded_client, sessio
 
     assert response.status_code == 200
 
+    profile_a = seeded_client.get(
+        f"/profile/{seed['user_id']}",
+        params={"trip_id": seed["trip_a"]},
+        headers=_scoped_auth(seed["user_id"], seed["phone"], seed["trip_a"]),
+    )
+    profile_b = seeded_client.get(f"/profile/{seed['user_id']}", headers=headers)
+    travelers_b = seeded_client.get("/me/trip/travelers", headers=headers)
+    roommates_b = seeded_client.get(f"/trip/{seed['trip_b']}/travelers", headers=headers)
+
     async def _load_names():
         async with session_factory() as session:
             rows = await session.execute(
@@ -406,12 +428,34 @@ def test_profile_update_changes_only_selected_trip_profile(seeded_client, sessio
                     )
                 )
             )
-            return {str(trip_traveler_id): name for trip_traveler_id, name in rows.all()}
+            user_name = await session.scalar(
+                select(User.full_name).where(User.id == seed["user_id"])
+            )
+            return user_name, {
+                str(trip_traveler_id): name for trip_traveler_id, name in rows.all()
+            }
 
-    assert asyncio.run(_load_names()) == {
-        seed["trip_traveler_a_id"]: "Name A",
-        seed["trip_traveler_b_id"]: "Updated B",
-    }
+    assert asyncio.run(_load_names()) == (
+        "Multi Trip Traveler",
+        {
+            seed["trip_traveler_a_id"]: "Name A",
+            seed["trip_traveler_b_id"]: "Updated B",
+        },
+    )
+    assert profile_a.json()["name"] == "Name A"
+    assert profile_a.json()["profile"]["preferred_name"] == "Name A"
+    assert profile_b.json()["name"] == "Updated B"
+    assert profile_b.json()["profile"]["preferred_name"] == "Updated B"
+    assert next(
+        traveler["name"]
+        for traveler in travelers_b.json()["travelers"]
+        if traveler["id"] == seed["user_id"]
+    ) == "Updated B"
+    assert next(
+        traveler["name"]
+        for traveler in roommates_b.json()["travelers"]
+        if traveler["id"] == seed["other_user_id"]
+    ) == "Preferred Traveler B"
 
 
 def test_staff_session_can_use_traveler_view_for_selected_trip(seeded_client, session_factory):

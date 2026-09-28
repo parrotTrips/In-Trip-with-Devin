@@ -13,6 +13,7 @@ from app.db.models.staff import TripStaff
 from app.db.models.traveler import TravelerProfile
 from app.db.models.trip import TripTraveler
 from app.db.models.user import User
+from app.services.trip_membership_service import require_trip_membership
 
 PROFILE_FIELD_DEFAULTS = {
     "preferred_name": None,
@@ -171,14 +172,9 @@ async def _resolve_trip_traveler(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    trip_traveler = await session.scalar(
-        select(TripTraveler).where(
-            TripTraveler.user_id == parsed_user_id,
-            TripTraveler.wetravel_trip_uuid == wetravel_trip_uuid,
-        )
+    trip_traveler = await require_trip_membership(
+        user_id, wetravel_trip_uuid, session
     )
-    if trip_traveler is None:
-        raise HTTPException(status_code=403, detail="Trip membership required")
 
     return user, trip_traveler
 
@@ -313,7 +309,7 @@ async def get_profile(
         "user_id": user_id,
         "wetravel_trip_uuid": wetravel_uuid,
         "phone": user.phone,
-        "name": user.full_name,
+        "name": profile.preferred_name if profile and profile.preferred_name else user.full_name,
         "profile": profile_dict if (profile or wetravel_row) else None,
         "roommate": None,
     }
@@ -351,7 +347,6 @@ async def update_profile(
 
     if "preferred_name" in update_data:
         profile.preferred_name = update_data["preferred_name"]
-        user.full_name = update_data["preferred_name"]
         updated_fields.append("preferred_name")
     if "dob" in update_data:
         profile.date_of_birth = _parse_optional_date(update_data["dob"], "dob")
@@ -459,20 +454,28 @@ async def get_trip_travelers(
         .exists()
     )
     rows = await session.execute(
-        select(User)
+        select(User, TravelerProfile.preferred_name)
         .join(TripTraveler, TripTraveler.user_id == User.id)
+        .outerjoin(
+            TravelerProfile,
+            TravelerProfile.trip_traveler_id == TripTraveler.id,
+        )
         .where(
             TripTraveler.wetravel_trip_uuid == trip_id,
             not_staff_on_this_trip,
         )
         .order_by(User.phone)
     )
-    users = rows.scalars().all()
+    users = rows.all()
 
     return {
         "trip_id": trip_id,
         "travelers": [
-            {"id": str(user.id), "name": user.full_name, "phone": user.phone}
-            for user in users
+            {
+                "id": str(user.id),
+                "name": preferred_name or user.full_name,
+                "phone": user.phone,
+            }
+            for user, preferred_name in users
         ],
     }

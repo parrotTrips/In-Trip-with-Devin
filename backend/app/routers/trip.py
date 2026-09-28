@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
@@ -18,6 +18,7 @@ from app.db.models.trip import (
     TripTraveler,
 )
 from app.db.models.user import User
+from app.db.models.traveler import TravelerProfile
 from app.services.qr_service import create_traveler_qr_payload
 from app.services.service_agreement_service import resolve_service_agreement_url
 from app.services.trip_service import (
@@ -25,23 +26,13 @@ from app.services.trip_service import (
     get_trip_phases,
     get_trip_travelers,
 )
+from app.services.trip_membership_service import require_trip_membership
 
 router = APIRouter(tags=["trip"])
 
 
 class AppFeedbackRequest(BaseModel):
     feedback: str = Field(max_length=5000)
-
-
-async def _get_trip_traveler(user_id: str, trip_id: str, session: AsyncSession) -> TripTraveler:
-    """Revalidate that the authenticated user belongs to the selected trip."""
-    membership = await session.scalar(select(TripTraveler).where(
-        TripTraveler.user_id == uuid.UUID(user_id),
-        TripTraveler.wetravel_trip_uuid == trip_id,
-    ))
-    if membership is None:
-        raise HTTPException(status_code=403, detail="Trip membership required")
-    return membership
 
 
 @router.get("/me/trip")
@@ -51,7 +42,7 @@ async def get_my_trip(
 ):
     """Return the authenticated traveler's selected trip info."""
     trip_id = request.state.trip_id
-    await _get_trip_traveler(request.state.user_id, trip_id, session)
+    await require_trip_membership(request.state.user_id, trip_id, session)
 
     result = await session.execute(
         text("""
@@ -89,7 +80,7 @@ async def get_my_qr_code(
 ):
     """Return the authenticated traveler's signed QR payload for the selected trip."""
     trip_id = request.state.trip_id
-    trip_traveler = await _get_trip_traveler(request.state.user_id, trip_id, session)
+    trip_traveler = await require_trip_membership(request.state.user_id, trip_id, session)
 
     trip_traveler_id = str(trip_traveler.id)
     qr_payload = create_traveler_qr_payload(
@@ -143,7 +134,7 @@ async def get_my_announcements(
     user_id = request.state.user_id
     user_uuid = uuid.UUID(user_id)
     trip_uuid = request.state.trip_id
-    await _get_trip_traveler(user_id, trip_uuid, session)
+    await require_trip_membership(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripAnnouncement, User.full_name, TripAnnouncementRead.id)
@@ -184,7 +175,7 @@ async def mark_my_announcement_read(
     user_id = request.state.user_id
     user_uuid = uuid.UUID(user_id)
     trip_uuid = request.state.trip_id
-    await _get_trip_traveler(user_id, trip_uuid, session)
+    await require_trip_membership(user_id, trip_uuid, session)
 
     announcement = await session.scalar(
         select(TripAnnouncement).where(
@@ -215,7 +206,7 @@ async def create_my_app_feedback(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create one app feedback submission for the authenticated traveler and selected trip."""
-    trip_traveler = await _get_trip_traveler(
+    trip_traveler = await require_trip_membership(
         request.state.user_id, request.state.trip_id, session
     )
     text_value = body.feedback.strip()
@@ -246,11 +237,22 @@ async def get_my_team(
     """Return Parrot staff members assigned to the traveler's selected trip."""
     user_id = request.state.user_id
     trip_uuid = request.state.trip_id
-    await _get_trip_traveler(user_id, trip_uuid, session)
+    await require_trip_membership(user_id, trip_uuid, session)
 
     staff_rows = (await session.execute(
-        select(TripStaff, User.full_name, User.phone)
+        select(TripStaff, User.full_name, User.phone, TravelerProfile.preferred_name)
         .join(User, User.id == TripStaff.user_id)
+        .outerjoin(
+            TripTraveler,
+            and_(
+                TripTraveler.user_id == TripStaff.user_id,
+                TripTraveler.wetravel_trip_uuid == TripStaff.wetravel_trip_uuid,
+            ),
+        )
+        .outerjoin(
+            TravelerProfile,
+            TravelerProfile.trip_traveler_id == TripTraveler.id,
+        )
         .where(TripStaff.wetravel_trip_uuid == trip_uuid)
         .order_by(User.full_name)
     )).all()
@@ -259,13 +261,13 @@ async def get_my_team(
         "team": [
             {
                 "id": str(ts.id),
-                "name": name,
+                "name": preferred_name or name,
                 "function": ts.function,
                 "phone": phone,
                 "photo_url": ts.photo_url,
                 "bio": ts.bio,
             }
-            for ts, name, phone in staff_rows
+            for ts, name, phone, preferred_name in staff_rows
         ]
     }
 
@@ -277,7 +279,7 @@ async def get_my_emergency_contacts(
     """Return emergency contacts for the traveler's selected trip."""
     user_id = request.state.user_id
     trip_uuid = request.state.trip_id
-    await _get_trip_traveler(user_id, trip_uuid, session)
+    await require_trip_membership(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripEmergencyContact)
@@ -307,7 +309,7 @@ async def get_my_recommendations(
     """Return local recommendations for the traveler's selected trip."""
     user_id = request.state.user_id
     trip_uuid = request.state.trip_id
-    await _get_trip_traveler(user_id, trip_uuid, session)
+    await require_trip_membership(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripRecommendation)
@@ -349,7 +351,7 @@ async def get_my_faq(
     """Return FAQ items for the traveler's selected trip."""
     user_id = request.state.user_id
     trip_uuid = request.state.trip_id
-    await _get_trip_traveler(user_id, trip_uuid, session)
+    await require_trip_membership(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripFaq)
@@ -373,7 +375,7 @@ async def get_my_cancellation_policy(
     """Return cancellation policy items for the traveler's selected trip."""
     user_id = request.state.user_id
     trip_uuid = request.state.trip_id
-    await _get_trip_traveler(user_id, trip_uuid, session)
+    await require_trip_membership(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripCancellationPolicy)

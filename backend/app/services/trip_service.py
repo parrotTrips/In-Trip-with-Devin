@@ -19,7 +19,9 @@ from app.db.models.trip import (
 )
 from app.db.models.progress import TravelerPhaseProgress
 from app.db.models.staff import TripStaff
+from app.db.models.traveler import TravelerProfile
 from app.db.models.user import User
+from app.services.trip_membership_service import require_trip_membership
 
 SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -110,25 +112,8 @@ def compute_current_phase_id(
     return ordered_phases[-1]["id"]
 
 
-async def _require_trip_traveler(user_id: str, trip_id: str, session: AsyncSession) -> None:
-    """Revalidate that the user belongs to the selected trip. 403 otherwise."""
-    try:
-        parsed_user_id = _uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
-    membership = await session.scalar(
-        select(TripTraveler.id).where(
-            TripTraveler.user_id == parsed_user_id,
-            TripTraveler.wetravel_trip_uuid == trip_id,
-        )
-    )
-    if membership is None:
-        raise HTTPException(status_code=403, detail="Trip membership required")
-
-
 async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> dict:
-    await _require_trip_traveler(user_id, trip_id, session)
+    await require_trip_membership(user_id, trip_id, session)
     trip_uuid = trip_id
 
     phases_result = await session.execute(
@@ -200,7 +185,7 @@ async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> 
 async def get_trip_phase_detail(
     user_id: str, trip_id: str, phase_id: str, session: AsyncSession
 ) -> dict:
-    await _require_trip_traveler(user_id, trip_id, session)
+    await require_trip_membership(user_id, trip_id, session)
     trip_uuid = trip_id
 
     try:
@@ -271,7 +256,7 @@ async def get_trip_phase_detail(
 
 
 async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) -> dict:
-    await _require_trip_traveler(user_id, trip_id, session)
+    await require_trip_membership(user_id, trip_id, session)
     trip_uuid = trip_id
 
     not_staff_on_this_trip = ~(
@@ -283,8 +268,12 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
         .exists()
     )
     tt_result = await session.execute(
-        select(TripTraveler, User)
+        select(TripTraveler, User, TravelerProfile.preferred_name)
         .join(User, User.id == TripTraveler.user_id)
+        .outerjoin(
+            TravelerProfile,
+            TravelerProfile.trip_traveler_id == TripTraveler.id,
+        )
         .where(
             TripTraveler.wetravel_trip_uuid == trip_uuid,
             not_staff_on_this_trip,
@@ -295,7 +284,7 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
     if not rows:
         return {"travelers": []}
 
-    tt_ids = [tt.id for tt, _ in rows]
+    tt_ids = [tt.id for tt, _, _ in rows]
 
     all_phases_result = await session.execute(
         select(TripPhase)
@@ -329,13 +318,13 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
         db_completed_ids.setdefault(prog.trip_traveler_id, set()).add(str(prog.trip_phase_id))
 
     travelers = []
-    for tt, user in rows:
+    for tt, user, preferred_name in rows:
         completed_phase_ids = db_completed_ids.get(tt.id, set()) | {
             pid for pid, is_completed in date_completions.items() if is_completed
         }
         travelers.append({
             "id": str(user.id),
-            "name": user.full_name,
+            "name": preferred_name or user.full_name,
             "phone": user.phone,
             "current_phase_id": compute_current_phase_id(
                 phases=phase_dicts,

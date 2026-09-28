@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from sqlalchemy import text
+from uuid import UUID
+
+from fastapi import HTTPException
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models.trip import TripTraveler
 
 
 _ELIGIBLE_TRIPS_SQL = """
@@ -61,3 +66,28 @@ async def get_eligible_trip_membership(
     )
     row = result.mappings().first()
     return dict(row) if row else None
+
+
+async def require_trip_membership(
+    user_id: str, trip_id: str, session: AsyncSession
+) -> TripTraveler:
+    """Return the exact trip membership, or 403 if the session was revoked.
+
+    Unlike trip selection, authenticated endpoints do not apply current/future
+    eligibility rules here; they only revalidate that the selected membership
+    still exists.
+    """
+    try:
+        parsed_user_id = UUID(user_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="Trip membership required") from exc
+
+    membership = await session.scalar(
+        select(TripTraveler).where(
+            TripTraveler.user_id == parsed_user_id,
+            TripTraveler.wetravel_trip_uuid == trip_id,
+        )
+    )
+    if membership is None:
+        raise HTTPException(status_code=403, detail="Trip membership required")
+    return membership
