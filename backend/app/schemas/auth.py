@@ -14,3 +14,9 @@ class OTPVerify(BaseModel):
 
     phone: str
     code: str
+
+
+class TripSelectionRequest(BaseModel):
+    """Trip selected by a phone-authenticated user."""
+
+    trip_id: str

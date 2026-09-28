@@ -27,6 +27,9 @@ WHATSAPP_API_URL = (
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = 14
+JWT_SELECTION_EXPIRY_MINUTES = int(
+    os.environ.get("JWT_SELECTION_EXPIRY_MINUTES", "15")
+)
 
 
 def get_database_url() -> str:

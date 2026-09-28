@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import (
     JWT_ALGORITHM,
     JWT_EXPIRY_DAYS,
+    JWT_SELECTION_EXPIRY_MINUTES,
     JWT_SECRET,
     WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_API_URL,
@@ -26,12 +27,53 @@ from app.core.config import (
 from app.core.logger import log, log_erro
 from app.db.models.auth import OTPCode
 from app.db.models.user import User
+from app.services.trip_membership_service import list_eligible_trips
 
 
-def _create_access_token(user_id: str, phone: str, role: str) -> str:
-    expire = datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS)
-    payload = {"sub": user_id, "phone": phone, "role": role, "exp": expire}
+def _encode_token(payload: dict, expires_at: datetime) -> str:
+    payload = {**payload, "exp": expires_at}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def _create_selection_token(user_id: str, phone: str) -> str:
+    return _encode_token(
+        {"sub": user_id, "phone": phone, "token_type": "trip_selection"},
+        datetime.now(UTC) + timedelta(minutes=JWT_SELECTION_EXPIRY_MINUTES),
+    )
+
+
+def _create_session_token(user_id: str, phone: str, trip_id: str, role: str) -> str:
+    return _encode_token(
+        {
+            "sub": user_id,
+            "phone": phone,
+            "token_type": "session",
+            "trip_id": trip_id,
+            "role": role,
+        },
+        datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS),
+    )
+
+
+def create_trip_session_payload(
+    user_id: str,
+    phone: str,
+    name: str | None,
+    membership: dict,
+) -> dict:
+    """Build the response and scoped JWT for one selected membership."""
+    return {
+        "status": "trip_selected",
+        "user_id": user_id,
+        "phone": phone,
+        "name": name,
+        "role": membership["role"],
+        "message": "Login successful",
+        "access_token": _create_session_token(
+            user_id, phone, membership["trip_id"], membership["role"]
+        ),
+        "active_trip": membership,
+    }
 
 
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
@@ -170,14 +212,29 @@ async def verify_otp(
     await session.commit()
     await session.refresh(user)
 
-    log("login_ok", telefone=phone, usuario_id=str(user.id), papel=user.role)
-    access_token = _create_access_token(str(user.id), user.phone, user.role)
-
-    return {
-        "user_id": str(user.id),
+    user_id = str(user.id)
+    trips = await list_eligible_trips(user_id, session)
+    identity = {
+        "user_id": user_id,
         "phone": user.phone,
         "name": user.full_name,
-        "role": user.role,
-        "message": "Login successful",
-        "access_token": access_token,
+    }
+    log("login_ok", telefone=phone, usuario_id=user_id, viagens=len(trips))
+
+    if not trips:
+        return {
+            **identity,
+            "status": "no_trips",
+            "message": "No current or future trips available",
+        }
+    if len(trips) == 1:
+        return create_trip_session_payload(
+            user_id, user.phone, user.full_name, trips[0]
+        )
+    return {
+        **identity,
+        "status": "selection_required",
+        "message": "Trip selection required",
+        "selection_token": _create_selection_token(user_id, user.phone),
+        "trips": trips,
     }
