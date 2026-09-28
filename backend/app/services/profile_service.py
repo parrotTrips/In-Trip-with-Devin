@@ -162,7 +162,7 @@ async def _validate_trip_roommate(
 async def _resolve_trip_traveler(
     user_id: str,
     session: AsyncSession,
-    wetravel_trip_uuid: str | None = None,
+    wetravel_trip_uuid: str,
 ) -> tuple[User, TripTraveler]:
     parsed_user_id = _parse_uuid(user_id, "User not found")
 
@@ -170,42 +170,14 @@ async def _resolve_trip_traveler(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if wetravel_trip_uuid:
-        result = await session.execute(
-            text("""
-                SELECT tt.id
-                FROM trip_travelers tt
-                JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-                WHERE tt.user_id = CAST(:user_id AS uuid)
-                  AND tt.wetravel_trip_uuid = :trip_uuid
-                  AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-                LIMIT 1
-            """),
-            {"user_id": user_id, "trip_uuid": wetravel_trip_uuid},
+    trip_traveler = await session.scalar(
+        select(TripTraveler).where(
+            TripTraveler.user_id == parsed_user_id,
+            TripTraveler.wetravel_trip_uuid == wetravel_trip_uuid,
         )
-    else:
-        result = await session.execute(
-            text("""
-                SELECT tt.id
-                FROM trip_travelers tt
-                JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-                WHERE tt.user_id = CAST(:user_id AS uuid)
-                  AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-                ORDER BY wt.start_date ASC
-                LIMIT 1
-            """),
-            {"user_id": user_id},
-        )
-
-    row = result.mappings().first()
-    trip_traveler = (
-        await session.get(TripTraveler, row["id"])
-        if row
-        else None
     )
-
-    if not trip_traveler:
-        raise HTTPException(status_code=404, detail="Traveler not found for trip")
+    if trip_traveler is None:
+        raise HTTPException(status_code=403, detail="Trip membership required")
 
     return user, trip_traveler
 
@@ -249,7 +221,7 @@ def _decode_yes_no(value: str | None, field_name: str) -> bool | None:
 
 async def get_profile(
     user_id: str,
-    trip_id: str | None,
+    trip_id: str,
     session: AsyncSession,
 ) -> dict:
     """Return one traveler profile together with the linked basic user data."""
@@ -348,7 +320,7 @@ async def get_profile(
 
 async def update_profile(
     user_id: str,
-    trip_id: str | None,
+    trip_id: str,
     update: dict,
     session: AsyncSession,
 ) -> dict:

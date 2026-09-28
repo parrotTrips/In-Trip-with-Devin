@@ -33,32 +33,33 @@ class AppFeedbackRequest(BaseModel):
     feedback: str = Field(max_length=5000)
 
 
+async def _get_trip_traveler(user_id: str, trip_id: str, session: AsyncSession) -> TripTraveler:
+    """Revalidate that the authenticated user belongs to the selected trip."""
+    membership = await session.scalar(select(TripTraveler).where(
+        TripTraveler.user_id == uuid.UUID(user_id),
+        TripTraveler.wetravel_trip_uuid == trip_id,
+    ))
+    if membership is None:
+        raise HTTPException(status_code=403, detail="Trip membership required")
+    return membership
+
+
 @router.get("/me/trip")
 async def get_my_trip(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return the authenticated traveler's active trip info."""
-    user_id = request.state.user_id
+    """Return the authenticated traveler's selected trip info."""
+    trip_id = request.state.trip_id
+    await _get_trip_traveler(request.state.user_id, trip_id, session)
 
     result = await session.execute(
         text("""
-            SELECT
-                tt.wetravel_trip_uuid,
-                wt.title,
-                wt.destination,
-                wt.start_date,
-                wt.end_date,
-                wt.url,
-                wt.service_agreement_url
-            FROM trip_travelers tt
-            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-            WHERE tt.user_id = CAST(:user_id AS uuid)
-              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-            ORDER BY wt.start_date ASC
-            LIMIT 1
+            SELECT title, destination, start_date, end_date, url, service_agreement_url
+            FROM wetravel_trips
+            WHERE trip_uuid = :trip_id
         """),
-        {"user_id": user_id},
+        {"trip_id": trip_id},
     )
     row = result.mappings().first()
 
@@ -66,11 +67,10 @@ async def get_my_trip(
         return {"trip": None}
 
     from app.services.trip_service import _get_trip_mode
-    trip_uuid = row["wetravel_trip_uuid"]
-    trip_mode = await _get_trip_mode(trip_uuid, session)
+    trip_mode = await _get_trip_mode(trip_id, session)
     return {
         "trip": {
-            "wetravel_trip_uuid": trip_uuid,
+            "wetravel_trip_uuid": trip_id,
             "title": row["title"],
             "destination": row["destination"],
             "start_date": row["start_date"],
@@ -87,37 +87,18 @@ async def get_my_qr_code(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return the authenticated traveler's signed QR payload."""
-    user_id = request.state.user_id
+    """Return the authenticated traveler's signed QR payload for the selected trip."""
+    trip_id = request.state.trip_id
+    trip_traveler = await _get_trip_traveler(request.state.user_id, trip_id, session)
 
-    result = await session.execute(
-        text("""
-            SELECT
-                tt.id AS trip_traveler_id,
-                tt.wetravel_trip_uuid
-            FROM trip_travelers tt
-            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-            WHERE tt.user_id = CAST(:user_id AS uuid)
-              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-            ORDER BY wt.start_date ASC NULLS LAST, tt.created_at ASC
-            LIMIT 1
-        """),
-        {"user_id": user_id},
-    )
-    row = result.mappings().first()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Viagem não encontrada para este usuário")
-
-    trip_traveler_id = str(row["trip_traveler_id"])
-    trip_uuid = row["wetravel_trip_uuid"]
+    trip_traveler_id = str(trip_traveler.id)
     qr_payload = create_traveler_qr_payload(
         trip_traveler_id=trip_traveler_id,
-        trip_uuid=trip_uuid,
+        trip_uuid=trip_id,
     )
 
     return {
-        "trip_uuid": trip_uuid,
+        "trip_uuid": trip_id,
         "trip_traveler_id": trip_traveler_id,
         "qr_payload": qr_payload,
     }
@@ -128,8 +109,8 @@ async def get_my_trip_phases(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Retorna todas as fases da viagem do usuário autenticado."""
-    return await get_trip_phases(request.state.user_id, session)
+    """Retorna todas as fases da viagem selecionada do usuário autenticado."""
+    return await get_trip_phases(request.state.user_id, request.state.trip_id, session)
 
 
 @router.get("/me/trip/phases/{phase_id}")
@@ -139,7 +120,9 @@ async def get_my_trip_phase_detail(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Retorna uma fase específica com atividades."""
-    return await get_trip_phase_detail(request.state.user_id, phase_id, session)
+    return await get_trip_phase_detail(
+        request.state.user_id, request.state.trip_id, phase_id, session
+    )
 
 
 @router.get("/me/trip/travelers")
@@ -147,50 +130,8 @@ async def get_my_trip_travelers(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Retorna todos os viajantes do mesmo trip com fase atual de cada um."""
-    return await get_trip_travelers(request.state.user_id, session)
-
-
-async def _get_traveler_trip_uuid(user_id: str, session: AsyncSession) -> str:
-    result = await session.execute(
-        text("""
-            SELECT tt.wetravel_trip_uuid
-            FROM trip_travelers tt
-            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-            WHERE tt.user_id = CAST(:user_id AS uuid)
-              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-            ORDER BY wt.start_date ASC
-            LIMIT 1
-        """),
-        {"user_id": user_id},
-    )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="No active trip found")
-    return row["wetravel_trip_uuid"]
-
-
-async def _get_active_trip_traveler(user_id: str, session: AsyncSession) -> TripTraveler:
-    result = await session.execute(
-        text("""
-            SELECT tt.id
-            FROM trip_travelers tt
-            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-            WHERE tt.user_id = CAST(:user_id AS uuid)
-              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-            ORDER BY wt.start_date ASC
-            LIMIT 1
-        """),
-        {"user_id": user_id},
-    )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="No active trip found")
-
-    trip_traveler = await session.get(TripTraveler, row["id"])
-    if trip_traveler is None:
-        raise HTTPException(status_code=404, detail="No active trip found")
-    return trip_traveler
+    """Retorna todos os viajantes da viagem selecionada com fase atual de cada um."""
+    return await get_trip_travelers(request.state.user_id, request.state.trip_id, session)
 
 
 @router.get("/me/announcements")
@@ -201,7 +142,8 @@ async def get_my_announcements(
     """Return trip announcements for the authenticated traveler, newest first."""
     user_id = request.state.user_id
     user_uuid = uuid.UUID(user_id)
-    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+    trip_uuid = request.state.trip_id
+    await _get_trip_traveler(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripAnnouncement, User.full_name, TripAnnouncementRead.id)
@@ -241,7 +183,8 @@ async def mark_my_announcement_read(
     """Mark one announcement as read for the authenticated traveler."""
     user_id = request.state.user_id
     user_uuid = uuid.UUID(user_id)
-    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+    trip_uuid = request.state.trip_id
+    await _get_trip_traveler(user_id, trip_uuid, session)
 
     announcement = await session.scalar(
         select(TripAnnouncement).where(
@@ -271,8 +214,10 @@ async def create_my_app_feedback(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Create one app feedback submission for the authenticated traveler and active trip."""
-    trip_traveler = await _get_active_trip_traveler(request.state.user_id, session)
+    """Create one app feedback submission for the authenticated traveler and selected trip."""
+    trip_traveler = await _get_trip_traveler(
+        request.state.user_id, request.state.trip_id, session
+    )
     text_value = body.feedback.strip()
     if not text_value:
         raise HTTPException(status_code=400, detail="Feedback cannot be empty")
@@ -298,11 +243,11 @@ async def get_my_team(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return Parrot staff members assigned to the traveler's active trip."""
+    """Return Parrot staff members assigned to the traveler's selected trip."""
     user_id = request.state.user_id
-    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+    trip_uuid = request.state.trip_id
+    await _get_trip_traveler(user_id, trip_uuid, session)
 
-    # Primary: read from trip_staff (has function, photo_url, bio)
     staff_rows = (await session.execute(
         select(TripStaff, User.full_name, User.phone)
         .join(User, User.id == TripStaff.user_id)
@@ -310,29 +255,29 @@ async def get_my_team(
         .order_by(User.full_name)
     )).all()
 
-    if staff_rows:
-        return {
-            "team": [
-                {
-                    "id": str(ts.id),
-                    "name": name,
-                    "function": ts.function,
-                    "phone": phone,
-                    "photo_url": ts.photo_url,
-                    "bio": ts.bio,
-                }
-                for ts, name, phone in staff_rows
-            ]
-        }
+    return {
+        "team": [
+            {
+                "id": str(ts.id),
+                "name": name,
+                "function": ts.function,
+                "phone": phone,
+                "photo_url": ts.photo_url,
+                "bio": ts.bio,
+            }
+            for ts, name, phone in staff_rows
+        ]
+    }
 
 @router.get("/me/emergency-contacts")
 async def get_my_emergency_contacts(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return emergency contacts for the traveler's active trip."""
+    """Return emergency contacts for the traveler's selected trip."""
     user_id = request.state.user_id
-    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+    trip_uuid = request.state.trip_id
+    await _get_trip_traveler(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripEmergencyContact)
@@ -359,9 +304,10 @@ async def get_my_recommendations(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return local recommendations for the traveler's active trip."""
+    """Return local recommendations for the traveler's selected trip."""
     user_id = request.state.user_id
-    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+    trip_uuid = request.state.trip_id
+    await _get_trip_traveler(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripRecommendation)
@@ -400,9 +346,10 @@ async def get_my_faq(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return FAQ items for the traveler's active trip."""
+    """Return FAQ items for the traveler's selected trip."""
     user_id = request.state.user_id
-    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+    trip_uuid = request.state.trip_id
+    await _get_trip_traveler(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripFaq)
@@ -423,9 +370,10 @@ async def get_my_cancellation_policy(
     request: Request,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return cancellation policy items for the traveler's active trip."""
+    """Return cancellation policy items for the traveler's selected trip."""
     user_id = request.state.user_id
-    trip_uuid = await _get_traveler_trip_uuid(user_id, session)
+    trip_uuid = request.state.trip_id
+    await _get_trip_traveler(user_id, trip_uuid, session)
 
     rows = (await session.execute(
         select(TripCancellationPolicy)
@@ -437,31 +385,5 @@ async def get_my_cancellation_policy(
         "cancellation_policy": [
             {"id": str(r.id), "title": r.title, "body": r.body, "sort_order": r.sort_order}
             for r in rows
-        ]
-    }
-
-
-    # Fallback: trip_staff empty, use trip_travelers with role=staff
-    traveler_rows = (await session.execute(
-        select(TripTraveler, User.full_name, User.phone)
-        .join(User, User.id == TripTraveler.user_id)
-        .where(
-            TripTraveler.wetravel_trip_uuid == trip_uuid,
-            User.role == "staff",
-        )
-        .order_by(User.full_name)
-    )).all()
-
-    return {
-        "team": [
-            {
-                "id": str(tt.id),
-                "name": name,
-                "function": None,
-                "phone": phone,
-                "photo_url": None,
-                "bio": None,
-            }
-            for tt, name, phone in traveler_rows
         ]
     }

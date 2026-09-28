@@ -7,7 +7,7 @@ from datetime import UTC, datetime as _datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.trip import (
@@ -109,33 +109,26 @@ def compute_current_phase_id(
     return ordered_phases[-1]["id"]
 
 
-async def _get_trip_uuid(user_id: str, session: AsyncSession) -> str:
-    """Return the user's next active trip uuid."""
+async def _require_trip_traveler(user_id: str, trip_id: str, session: AsyncSession) -> None:
+    """Revalidate that the user belongs to the selected trip. 403 otherwise."""
     try:
-        _uuid.UUID(user_id)
+        parsed_user_id = _uuid.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    result = await session.execute(
-        text("""
-            SELECT tt.wetravel_trip_uuid
-            FROM trip_travelers tt
-            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-            WHERE tt.user_id = CAST(:user_id AS uuid)
-              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-            ORDER BY wt.start_date ASC
-            LIMIT 1
-        """),
-        {"user_id": user_id},
+    membership = await session.scalar(
+        select(TripTraveler.id).where(
+            TripTraveler.user_id == parsed_user_id,
+            TripTraveler.wetravel_trip_uuid == trip_id,
+        )
     )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Viagem não encontrada para este usuário")
-    return row["wetravel_trip_uuid"]
+    if membership is None:
+        raise HTTPException(status_code=403, detail="Trip membership required")
 
 
-async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
-    trip_uuid = await _get_trip_uuid(user_id, session)
+async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> dict:
+    await _require_trip_traveler(user_id, trip_id, session)
+    trip_uuid = trip_id
 
     phases_result = await session.execute(
         select(TripPhase)
@@ -203,8 +196,11 @@ async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
     }
 
 
-async def get_trip_phase_detail(user_id: str, phase_id: str, session: AsyncSession) -> dict:
-    trip_uuid = await _get_trip_uuid(user_id, session)
+async def get_trip_phase_detail(
+    user_id: str, trip_id: str, phase_id: str, session: AsyncSession
+) -> dict:
+    await _require_trip_traveler(user_id, trip_id, session)
+    trip_uuid = trip_id
 
     try:
         pid = _uuid.UUID(phase_id)
@@ -273,8 +269,9 @@ async def get_trip_phase_detail(user_id: str, phase_id: str, session: AsyncSessi
     }
 
 
-async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
-    trip_uuid = await _get_trip_uuid(user_id, session)
+async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) -> dict:
+    await _require_trip_traveler(user_id, trip_id, session)
+    trip_uuid = trip_id
 
     tt_result = await session.execute(
         select(TripTraveler, User)
