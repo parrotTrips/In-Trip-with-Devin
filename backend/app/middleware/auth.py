@@ -37,8 +37,24 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
             if not user_id or not phone:
                 log("jwt_payload_invalido", rota=path)
                 return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            token_type = payload.get("token_type")
+            role = payload.get("role")
+            trip_id = payload.get("trip_id")
+
+            if token_type == "admin":
+                if not path.startswith("/console") or role != "admin":
+                    return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            elif token_type == "session":
+                if path.startswith("/console") or role not in {"traveler", "staff"} or not trip_id:
+                    return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+            else:
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
             request.state.user_id = user_id
             request.state.phone = phone
+            request.state.role = role
+            if token_type == "session":
+                request.state.trip_id = trip_id
         except JWTError:
             log("jwt_invalido_ou_expirado", rota=path)
             return JSONResponse({"detail": "Unauthorized"}, status_code=401)

@@ -22,10 +22,21 @@ async def _seed_admin_and_trip(session_factory):
                 "ed": date(2027, 7, 10),
             },
         )
-        session.add_all([
-            User(phone="+5511777000001", full_name="Admin", status="active", role="admin"),
-            User(phone="+5511777000002", full_name="Trav", status="active", role="traveler"),
-        ])
+        admin = User(
+            phone="+5511777000001", full_name="Admin", status="active", role="admin"
+        )
+        traveler = User(
+            phone="+5511777000002", full_name="Trav", status="active", role="traveler"
+        )
+        session.add_all([admin, traveler])
+        await session.flush()
+        await session.execute(
+            text(
+                "INSERT INTO trip_travelers (id, wetravel_trip_uuid, user_id)"
+                " VALUES (gen_random_uuid(), 'console-test', :user_id)"
+            ),
+            {"user_id": traveler.id},
+        )
         await session.commit()
 
 
@@ -46,12 +57,41 @@ def test_console_trips_requires_a_token(client, session_factory):
 def test_console_trips_rejects_non_admin(client, session_factory):
     asyncio.run(_seed_admin_and_trip(session_factory))
     headers = _auth(client, "+5511777000002")
-    assert client.get("/console/trips", headers=headers).status_code == 403
+    assert client.get("/console/trips", headers=headers).status_code == 401
+
+
+def test_console_rechecks_admin_role_in_database(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+
+    async def traveler_identity():
+        async with session_factory() as session:
+            return await session.execute(
+                text(
+                    "SELECT id, phone FROM users WHERE phone = '+5511777000002'"
+                )
+            )
+
+    row = asyncio.run(traveler_identity()).one()
+    from app.services.auth_service import _create_admin_token
+
+    token = _create_admin_token(str(row.id), row.phone)
+    response = client.get(
+        "/console/trips", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 403
 
 
 def test_console_trips_lists_trips_for_admin(client, session_factory):
     asyncio.run(_seed_admin_and_trip(session_factory))
-    headers = _auth(client, "+5511777000001")
+    otp = client.post("/auth/request-otp", json={"phone": "+5511777000001"})
+    login = client.post(
+        "/auth/verify-otp",
+        json={"phone": "+5511777000001", "code": otp.json()["debug_code"]},
+    )
+    assert login.json()["status"] == "admin_authenticated"
+    assert login.json()["role"] == "admin"
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     res = client.get("/console/trips", headers=headers)
     assert res.status_code == 200
     assert "console-test" in [t["trip_uuid"] for t in res.json()["trips"]]

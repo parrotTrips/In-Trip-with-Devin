@@ -185,7 +185,7 @@ def test_verify_otp_selects_only_trip_and_returns_scoped_session_token(
 
     async def run_test():
         async with session_factory() as session:
-            user = await _seed_user(session, "+5511777777777", role="admin")
+            user = await _seed_user(session, "+5511777777777", role="traveler")
             await _seed_trip(session, user, "trip-only", days_from_now=1, staff=True)
             await request_otp(
                 "+5511777777777",
@@ -255,5 +255,42 @@ def test_verify_otp_requires_selection_for_multiple_trips(session_factory, monke
             assert "trip_id" not in payload
             assert "role" not in payload
             assert "exp" in payload
+
+    asyncio.run(run_test())
+
+
+def test_verify_otp_authenticates_admin_without_trip_membership(
+    session_factory, monkeypatch
+):
+    monkeypatch.setenv("JWT_SECRET", "test-secret-for-jwt")
+    import sys
+    for mod in list(sys.modules):
+        if "app.core.config" in mod or "app.services.auth_service" in mod:
+            sys.modules.pop(mod)
+    from app.services.auth_service import request_otp, verify_otp
+
+    async def run_test():
+        async with session_factory() as session:
+            admin = await _seed_user(session, "+5511777777779", role="admin")
+            await request_otp(
+                admin.phone,
+                session,
+                otp_sender=fake_sender,
+                code_generator=fixed_code,
+            )
+
+            response = await verify_otp(admin.phone, "123456", session)
+
+            assert response["status"] == "admin_authenticated"
+            assert response["role"] == "admin"
+            assert response["user_id"] == str(admin.id)
+            claims = jwt.decode(
+                response["access_token"],
+                "test-secret-for-jwt",
+                algorithms=["HS256"],
+            )
+            assert claims["token_type"] == "admin"
+            assert claims["role"] == "admin"
+            assert "trip_id" not in claims
 
     asyncio.run(run_test())

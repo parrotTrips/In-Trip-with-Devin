@@ -195,7 +195,7 @@ def test_sections_require_admin(client, session_factory):
     traveler = _auth(client, "+5511666000002")
     assert client.get(
         f"/console/trips/{TRIP}/sections", headers=traveler
-    ).status_code == 403
+    ).status_code == 401
 
 
 def test_put_section_replaces_list_and_sets_order(client, session_factory):

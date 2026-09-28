@@ -424,8 +424,8 @@ def test_get_my_qr_code_returns_signed_traveler_payload(seeded_client, session_f
     assert decoded_payload["trip_traveler_id"] == trip_traveler_id
 
 
-def test_get_my_qr_code_returns_404_without_synced_trip(seeded_client, session_factory):
-    """GET /me/qr-code does not mint QR payloads for unsynced trip assignments."""
+def test_login_returns_no_trips_without_synced_trip(seeded_client, session_factory):
+    """Unsynced trip assignments do not produce an application session."""
     phone = "+5511333000011"
     orphan_trip_uuid = "trip-qr-code-unsynced-001"
 
@@ -443,15 +443,17 @@ def test_get_my_qr_code_returns_404_without_synced_trip(seeded_client, session_f
             await session.commit()
 
     asyncio.run(_seed_unsynced_trip_assignment())
-    headers = _auth(seeded_client, phone)
+    otp = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    response = seeded_client.post(
+        "/auth/verify-otp",
+        json={"phone": phone, "code": otp.json()["debug_code"]},
+    )
 
-    response = seeded_client.get("/me/qr-code", headers=headers)
-
-    assert response.status_code == 404
+    assert response.json()["status"] == "no_trips"
 
 
-def test_get_my_trip_phases_returns_404_when_no_trip_assigned(seeded_client, session_factory):
-    """GET /me/trip/phases returns 404 when user has no trip assignment."""
+def test_login_returns_no_trips_when_no_trip_assigned(seeded_client, session_factory):
+    """A user without a trip assignment does not receive an application session."""
     phone = "+5511333000004"
     # Create user but NO trip_traveler row
     async def _seed_user_only():
@@ -460,15 +462,17 @@ def test_get_my_trip_phases_returns_404_when_no_trip_assigned(seeded_client, ses
             session.add(user)
             await session.commit()
     asyncio.run(_seed_user_only())
-    headers = _auth(seeded_client, phone)
+    otp = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    response = seeded_client.post(
+        "/auth/verify-otp",
+        json={"phone": phone, "code": otp.json()["debug_code"]},
+    )
 
-    response = seeded_client.get("/me/trip/phases", headers=headers)
-
-    assert response.status_code == 404
+    assert response.json()["status"] == "no_trips"
 
 
-def test_get_my_trip_phases_returns_404_when_only_trip_is_ended(seeded_client, session_factory):
-    """Ended trips remain stored but are not visible in the traveler app."""
+def test_login_returns_no_trips_when_only_trip_is_ended(seeded_client, session_factory):
+    """Ended trips remain stored but do not produce an application session."""
     phone = "+5511333000022"
     trip_uuid = "trip-ended-traveler-hidden"
     asyncio.run(
@@ -481,14 +485,13 @@ def test_get_my_trip_phases_returns_404_when_only_trip_is_ended(seeded_client, s
         )
     )
     asyncio.run(_seed_phases(session_factory, trip_uuid=trip_uuid))
-    headers = _auth(seeded_client, phone)
+    otp = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    response = seeded_client.post(
+        "/auth/verify-otp",
+        json={"phone": phone, "code": otp.json()["debug_code"]},
+    )
 
-    trip_response = seeded_client.get("/me/trip", headers=headers)
-    phases_response = seeded_client.get("/me/trip/phases", headers=headers)
-
-    assert trip_response.status_code == 200
-    assert trip_response.json()["trip"] is None
-    assert phases_response.status_code == 404
+    assert response.json()["status"] == "no_trips"
 
 
 def test_get_my_trip_travelers_returns_all_trip_members(seeded_client, session_factory):

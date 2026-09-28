@@ -1,16 +1,15 @@
 import asyncio
-from uuid import UUID
+from datetime import date
 
-from app.db.models.trip import TripPhase, TripPhaseChecklistItem, TripTraveler
+from sqlalchemy import text
+
+from app.db.models.trip import TripPhase, TripPhaseChecklistItem
 
 TEST_TRIP_UUID = "test_checklist_trip_001"
 
 
 async def seed_checklist_context(session_factory, *, user_id):
     async with session_factory() as session:
-        session.add(TripTraveler(wetravel_trip_uuid=TEST_TRIP_UUID, user_id=UUID(user_id)))
-        await session.flush()
-
         phase = TripPhase(
             wetravel_trip_uuid=TEST_TRIP_UUID,
             phase_type="pre_trip",
@@ -45,7 +44,33 @@ async def seed_checklist_context(session_factory, *, user_id):
         }
 
 
-def create_user(seeded_client, phone="+5511991000000"):
+def create_user(seeded_client, session_factory, phone="+5511991000000"):
+    async def seed_membership():
+        async with session_factory() as session:
+            user_id = await session.scalar(text("SELECT id FROM users WHERE phone = :phone"), {"phone": phone})
+            await session.execute(
+                text(
+                    "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                    " VALUES (:trip_id, 'Checklist Trip', 'Brazil', :start_date, :end_date)"
+                    " ON CONFLICT (trip_uuid) DO NOTHING"
+                ),
+                {
+                    "trip_id": TEST_TRIP_UUID,
+                    "start_date": date(2027, 7, 1),
+                    "end_date": date(2027, 7, 10),
+                },
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO trip_travelers (id, wetravel_trip_uuid, user_id)"
+                    " VALUES (gen_random_uuid(), :trip_id, :user_id)"
+                    " ON CONFLICT (wetravel_trip_uuid, user_id) DO NOTHING"
+                ),
+                {"trip_id": TEST_TRIP_UUID, "user_id": user_id},
+            )
+            await session.commit()
+
+    asyncio.run(seed_membership())
     otp_response = seeded_client.post("/auth/request-otp", json={"phone": phone})
     verify_response = seeded_client.post(
         "/auth/verify-otp",
@@ -56,7 +81,7 @@ def create_user(seeded_client, phone="+5511991000000"):
 
 
 def test_checklist_routes_persist_progress(seeded_client, session_factory):
-    user_id, token = create_user(seeded_client)
+    user_id, token = create_user(seeded_client, session_factory)
     headers = {"Authorization": f"Bearer {token}"}
     seeded = asyncio.run(seed_checklist_context(session_factory, user_id=user_id))
 
@@ -83,7 +108,9 @@ def test_checklist_routes_persist_progress(seeded_client, session_factory):
 
 
 def test_phase_routes_persist_completion(seeded_client, session_factory):
-    user_id, token = create_user(seeded_client, phone="+5511991000001")
+    user_id, token = create_user(
+        seeded_client, session_factory, phone="+5511991000001"
+    )
     headers = {"Authorization": f"Bearer {token}"}
     seeded = asyncio.run(seed_checklist_context(session_factory, user_id=user_id))
 

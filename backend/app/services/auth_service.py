@@ -55,6 +55,18 @@ def _create_session_token(user_id: str, phone: str, trip_id: str, role: str) -> 
     )
 
 
+def _create_admin_token(user_id: str, phone: str) -> str:
+    return _encode_token(
+        {
+            "sub": user_id,
+            "phone": phone,
+            "token_type": "admin",
+            "role": "admin",
+        },
+        datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS),
+    )
+
+
 def create_trip_session_payload(
     user_id: str,
     phone: str,
@@ -221,6 +233,14 @@ async def verify_otp(
     }
     log("login_ok", telefone=phone, usuario_id=user_id, viagens=len(trips))
 
+    if user.role == "admin":
+        return {
+            **identity,
+            "status": "admin_authenticated",
+            "role": "admin",
+            "message": "Login successful",
+            "access_token": _create_admin_token(user_id, user.phone),
+        }
     if not trips:
         return {
             **identity,

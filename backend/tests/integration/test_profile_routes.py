@@ -25,7 +25,14 @@ async def seed_trip_assignment(session_factory, *, user_id):
                 "ed": date(2027, 7, 10),
             },
         )
-        session.add(TripTraveler(wetravel_trip_uuid=TEST_TRIP_UUID, user_id=UUID(user_id)))
+        await session.execute(
+            text(
+                "INSERT INTO trip_travelers (id, wetravel_trip_uuid, user_id)"
+                " VALUES (gen_random_uuid(), :trip_id, CAST(:user_id AS uuid))"
+                " ON CONFLICT (wetravel_trip_uuid, user_id) DO NOTHING"
+            ),
+            {"trip_id": TEST_TRIP_UUID, "user_id": user_id},
+        )
         await session.commit()
         return TEST_TRIP_UUID
 
@@ -57,7 +64,15 @@ async def seed_synced_trip_assignment(
         return trip_uuid
 
 
-def create_user(seeded_client, phone="+5511990000000"):
+def create_user(seeded_client, session_factory, phone="+5511990000000"):
+    async def seed_membership():
+        async with session_factory() as session:
+            user_id = await session.scalar(
+                text("SELECT id FROM users WHERE phone = :phone"), {"phone": phone}
+            )
+        await seed_trip_assignment(session_factory, user_id=str(user_id))
+
+    asyncio.run(seed_membership())
     otp_response = seeded_client.post("/auth/request-otp", json={"phone": phone})
     verify_response = seeded_client.post(
         "/auth/verify-otp",
@@ -68,7 +83,7 @@ def create_user(seeded_client, phone="+5511990000000"):
 
 
 def test_profile_routes_read_and_update_profile(seeded_client, session_factory):
-    user_id, token = create_user(seeded_client)
+    user_id, token = create_user(seeded_client, session_factory)
     headers = {"Authorization": f"Bearer {token}"}
     trip_uuid = asyncio.run(seed_trip_assignment(session_factory, user_id=user_id))
 
@@ -98,8 +113,12 @@ def test_profile_routes_read_and_update_profile(seeded_client, session_factory):
 def test_trip_travelers_route_scopes_roommate_selection_to_the_trip(
     seeded_client, session_factory
 ):
-    user_1_id, token_1 = create_user(seeded_client, phone="+5511990000001")
-    user_2_id, _ = create_user(seeded_client, phone="+5511990000002")
+    user_1_id, token_1 = create_user(
+        seeded_client, session_factory, phone="+5511990000001"
+    )
+    user_2_id, _ = create_user(
+        seeded_client, session_factory, phone="+5511990000002"
+    )
     headers = {"Authorization": f"Bearer {token_1}"}
 
     asyncio.run(seed_trip_assignment(session_factory, user_id=user_1_id))
@@ -115,26 +134,35 @@ def test_trip_travelers_route_scopes_roommate_selection_to_the_trip(
 
 
 def test_profile_route_without_trip_id_ignores_ended_trip_assignment(seeded_client, session_factory):
-    user_id, token = create_user(seeded_client, phone="+5511990000003")
-    headers = {"Authorization": f"Bearer {token}"}
-    asyncio.run(
-        seed_synced_trip_assignment(
+    phone = "+5511990000003"
+    async def seed_ended_membership():
+        async with session_factory() as session:
+            user_id = await session.scalar(
+                text("SELECT id FROM users WHERE phone = :phone"), {"phone": phone}
+            )
+        await seed_synced_trip_assignment(
             session_factory,
-            user_id=user_id,
+            user_id=str(user_id),
             trip_uuid="profile-ended-trip",
             start_date=date(2000, 1, 1),
             end_date=date(2000, 1, 2),
         )
+
+    asyncio.run(seed_ended_membership())
+    otp = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    response = seeded_client.post(
+        "/auth/verify-otp",
+        json={"phone": phone, "code": otp.json()["debug_code"]},
     )
 
-    response = seeded_client.get(f"/profile/{user_id}", headers=headers)
-
-    assert response.status_code == 404
+    assert response.json()["status"] == "no_trips"
 
 
 def test_profile_route_ignores_unsupported_orphan_fields(seeded_client, session_factory):
     """Read-only WeTravel fields are silently ignored, not rejected with 400."""
-    user_id, token = create_user(seeded_client, phone="+5511990000003")
+    user_id, token = create_user(
+        seeded_client, session_factory, phone="+5511990000003"
+    )
     headers = {"Authorization": f"Bearer {token}"}
     trip_uuid = asyncio.run(seed_trip_assignment(session_factory, user_id=user_id))
 
@@ -153,7 +181,9 @@ def test_profile_route_ignores_unsupported_orphan_fields(seeded_client, session_
 
 
 def test_profile_route_persists_pre_departure_information(seeded_client, session_factory):
-    user_id, token = create_user(seeded_client, phone="+5511991000001")
+    user_id, token = create_user(
+        seeded_client, session_factory, phone="+5511991000001"
+    )
     headers = {"Authorization": f"Bearer {token}"}
     trip_uuid = asyncio.run(seed_trip_assignment(session_factory, user_id=user_id))
 
