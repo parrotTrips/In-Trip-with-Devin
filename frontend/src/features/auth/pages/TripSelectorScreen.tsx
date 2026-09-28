@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Calendar, Loader2, LogOut, MapPin, X } from 'lucide-react';
 
 import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
@@ -12,8 +12,10 @@ export interface TripSelectorScreenProps {
   token: string;
   /**
    * The trip the current session is scoped to, if any — used to mark it
-   * "Viagem atual" in the list. Left unset (or `null`) for the first,
-   * post-OTP selection, where there is no active trip yet.
+   * "Viagem ativa" in the list. Left unset (or `null`) for the first,
+   * post-OTP selection, where there is no active session yet. Distinct from
+   * a trip's own `is_current` ("Em andamento"): this marks *which* trip the
+   * session token is scoped to, not whether that trip is happening now.
    */
   activeTripId?: string | null;
   /**
@@ -24,9 +26,30 @@ export interface TripSelectorScreenProps {
   onCancel?: () => void;
 }
 
+const PT_MONTHS_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+function parseIsoDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const monthIndex = Number(month) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+  return { day: String(Number(day)), month: PT_MONTHS_ABBR[monthIndex], year };
+}
+
+/** Formats a trip's date range in pt-BR (e.g. "10 jan – 20 jan 2026"), tolerating missing or malformed dates. */
 function formatDateRange(start: string | null, end: string | null) {
-  if (start && end) return `${start} – ${end}`;
-  return start ?? end ?? null;
+  const startParts = start ? parseIsoDate(start) : null;
+  const endParts = end ? parseIsoDate(end) : null;
+
+  if (startParts && endParts) {
+    return startParts.year === endParts.year
+      ? `${startParts.day} ${startParts.month} – ${endParts.day} ${endParts.month} ${endParts.year}`
+      : `${startParts.day} ${startParts.month} ${startParts.year} – ${endParts.day} ${endParts.month} ${endParts.year}`;
+  }
+  if (startParts) return `${startParts.day} ${startParts.month} ${startParts.year}`;
+  if (endParts) return `${endParts.day} ${endParts.month} ${endParts.year}`;
+  return null;
 }
 
 export default function TripSelectorScreen({ trips, token, activeTripId = null, onCancel }: TripSelectorScreenProps) {
@@ -36,17 +59,38 @@ export default function TripSelectorScreen({ trips, token, activeTripId = null, 
 
   const isBusy = selectingId !== null;
 
+  // Guards against a select-trip response that resolves *after* the person
+  // has already backed out (Sair/Cancelar) or this screen has unmounted —
+  // without this, a late response would still call completeTripSelection
+  // and silently (re)establish a session the person just signed out of.
+  const isLiveRef = useRef(true);
+  useEffect(() => {
+    isLiveRef.current = true;
+    return () => {
+      isLiveRef.current = false;
+    };
+  }, []);
+
   const handleSelect = async (tripId: string) => {
     if (isBusy) return;
     setSelectingId(tripId);
     setError('');
     try {
       const result = await selectTrip(token, tripId);
+      if (!isLiveRef.current) return;
       completeTripSelection(result.user_id, result.phone, result.name, result.access_token, result.active_trip);
     } catch (err) {
+      if (!isLiveRef.current) return;
       setError(err instanceof Error ? err.message : 'Failed to select trip');
       setSelectingId(null);
     }
+  };
+
+  const handleBack = () => {
+    // Mark stale immediately so a select-trip call already in flight can't
+    // complete the session after the person has backed out.
+    isLiveRef.current = false;
+    (onCancel ?? logout)();
   };
 
   return (
@@ -74,7 +118,7 @@ export default function TripSelectorScreen({ trips, token, activeTripId = null, 
               )}
               <ul className="space-y-2">
                 {trips.map(trip => {
-                  const isActive = trip.trip_id === activeTripId;
+                  const isActiveSession = trip.trip_id === activeTripId;
                   const isSelectingThis = selectingId === trip.trip_id;
                   const dateRange = formatDateRange(trip.start_date, trip.end_date);
 
@@ -95,9 +139,14 @@ export default function TripSelectorScreen({ trips, token, activeTripId = null, 
                                 Staff
                               </span>
                             )}
-                            {isActive && (
+                            {trip.is_current && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full">
+                                Em andamento
+                              </span>
+                            )}
+                            {isActiveSession && (
                               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                                Viagem atual
+                                Viagem ativa
                               </span>
                             )}
                           </div>
@@ -115,7 +164,12 @@ export default function TripSelectorScreen({ trips, token, activeTripId = null, 
                           )}
                         </div>
                         {isSelectingThis && (
-                          <Loader2 size={18} className="animate-spin text-emerald-600 shrink-0" />
+                          <Loader2
+                            size={18}
+                            role="status"
+                            aria-label="Selecionando viagem"
+                            className="animate-spin text-emerald-600 shrink-0"
+                          />
                         )}
                       </button>
                     </li>
@@ -125,11 +179,13 @@ export default function TripSelectorScreen({ trips, token, activeTripId = null, 
             </>
           )}
 
-          {error && <p className="text-red-500 text-xs text-center mt-4">{error}</p>}
+          {error && (
+            <p role="alert" className="text-red-500 text-xs text-center mt-4">{error}</p>
+          )}
 
           <button
             type="button"
-            onClick={onCancel ?? logout}
+            onClick={handleBack}
             className="w-full mt-5 py-3 text-sm text-gray-500 hover:text-emerald-600 transition-colors flex items-center justify-center gap-2"
           >
             {onCancel ? <X size={16} /> : <LogOut size={16} />}

@@ -205,6 +205,7 @@ export default function LoginScreen() {
                 Você não tem viagens atuais ou futuras
               </p>
               <button
+                type="button"
                 onClick={resetToPhoneEntry}
                 className="w-full py-3.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-all"
               >
