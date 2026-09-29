@@ -14,6 +14,8 @@ from app.db.models.trip import TripTraveler
 _SAO_PAULO_TODAY_SQL = (
     "(CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo')::date"
 )
+_START_DATE_SQL = "NULLIF(wt.start_date::text, '')::date"
+_END_DATE_SQL = "NULLIF(wt.end_date::text, '')::date"
 
 _ELIGIBLE_TRIPS_SQL = f"""
     SELECT
@@ -24,8 +26,8 @@ _ELIGIBLE_TRIPS_SQL = f"""
         wt.end_date,
         CASE WHEN ts.id IS NULL THEN 'traveler' ELSE 'staff' END AS role,
         CASE
-            WHEN wt.start_date <= {_SAO_PAULO_TODAY_SQL}
-             AND (wt.end_date IS NULL OR wt.end_date >= {_SAO_PAULO_TODAY_SQL})
+            WHEN {_START_DATE_SQL} <= {_SAO_PAULO_TODAY_SQL}
+             AND ({_END_DATE_SQL} IS NULL OR {_END_DATE_SQL} >= {_SAO_PAULO_TODAY_SQL})
             THEN TRUE
             ELSE FALSE
         END AS is_current
@@ -36,16 +38,16 @@ _ELIGIBLE_TRIPS_SQL = f"""
       ON ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
      AND ts.user_id = tt.user_id
     WHERE tt.user_id = CAST(:user_id AS uuid)
-      AND (wt.end_date IS NULL OR wt.end_date >= {_SAO_PAULO_TODAY_SQL})
+      AND ({_END_DATE_SQL} IS NULL OR {_END_DATE_SQL} >= {_SAO_PAULO_TODAY_SQL})
       {{trip_filter}}
     ORDER BY
         CASE
-            WHEN wt.start_date <= {_SAO_PAULO_TODAY_SQL}
-             AND (wt.end_date IS NULL OR wt.end_date >= {_SAO_PAULO_TODAY_SQL})
+            WHEN {_START_DATE_SQL} <= {_SAO_PAULO_TODAY_SQL}
+             AND ({_END_DATE_SQL} IS NULL OR {_END_DATE_SQL} >= {_SAO_PAULO_TODAY_SQL})
             THEN 0
             ELSE 1
         END,
-        wt.start_date NULLS LAST
+        {_START_DATE_SQL} NULLS LAST
 """
 
 
@@ -84,11 +86,12 @@ async def require_trip_membership(
     wetravel_trips = table(
         "wetravel_trips",
         column("trip_uuid", Text),
-        column("end_date", Date),
+        column("end_date", Text),
     )
     sao_paulo_today = func.timezone(
         "America/Sao_Paulo", func.current_timestamp()
     ).cast(Date)
+    end_date = func.nullif(wetravel_trips.c.end_date.cast(Text), "").cast(Date)
     membership = await session.scalar(
         select(TripTraveler)
         .join(
@@ -99,8 +102,8 @@ async def require_trip_membership(
             TripTraveler.user_id == parsed_user_id,
             TripTraveler.wetravel_trip_uuid == trip_id,
             or_(
-                wetravel_trips.c.end_date.is_(None),
-                wetravel_trips.c.end_date >= sao_paulo_today,
+                end_date.is_(None),
+                end_date >= sao_paulo_today,
             ),
         )
     )

@@ -169,6 +169,43 @@ def test_get_eligible_trip_membership_reuses_eligibility_and_association_rules(s
     assert unrelated is None
 
 
+def test_list_eligible_trips_supports_legacy_text_date_columns(session_factory):
+    """Production still stores WeTravel dates as ISO text."""
+    from app.services.trip_membership_service import (
+        list_eligible_trips,
+        require_trip_membership,
+    )
+
+    user_id, _ = asyncio.run(_seed_memberships(session_factory))
+
+    async def run():
+        async with session_factory() as session:
+            await session.execute(
+                text(
+                    """
+                    ALTER TABLE wetravel_trips
+                        ALTER COLUMN start_date TYPE TEXT USING start_date::text,
+                        ALTER COLUMN end_date TYPE TEXT USING end_date::text
+                    """
+                )
+            )
+            await session.commit()
+            trips = await list_eligible_trips(user_id, session)
+            membership = await require_trip_membership(
+                user_id, "trip-current", session
+            )
+            return trips, membership
+
+    trips, membership = asyncio.run(run())
+
+    assert [trip["trip_id"] for trip in trips] == [
+        "trip-current",
+        "trip-future-next",
+        "trip-future-later",
+    ]
+    assert membership.wetravel_trip_uuid == "trip-current"
+
+
 def test_eligibility_uses_sao_paulo_date_regardless_of_database_timezone(session_factory):
     from app.services.trip_membership_service import (
         list_eligible_trips,
