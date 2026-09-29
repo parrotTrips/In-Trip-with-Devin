@@ -119,7 +119,8 @@ export default function LoginScreen() {
             result.phone,
             result.name,
             result.access_token,
-            result.active_trip
+            result.active_trip,
+            result.can_switch_trips
           );
           break;
         case 'admin_authenticated':

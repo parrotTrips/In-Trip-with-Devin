@@ -1201,13 +1201,15 @@ export default function ProfileScreen() {
       {/* Trip switch + Sign Out buttons */}
       <div className="px-4 pt-4">
         <div className="space-y-2">
-          <button
-            onClick={openTripSwitcher}
-            className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
-          >
-            <ArrowRightLeft size={18} />
-            Trocar de viagem
-          </button>
+          {user?.canSwitchTrips && (
+            <button
+              onClick={openTripSwitcher}
+              className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+            >
+              <ArrowRightLeft size={18} />
+              Trocar de viagem
+            </button>
+          )}
           <button
             onClick={logout}
             className="w-full py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-red-500 bg-red-50 hover:bg-red-100 transition-colors"

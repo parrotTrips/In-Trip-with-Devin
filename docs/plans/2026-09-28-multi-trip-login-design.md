@@ -63,7 +63,7 @@ Phone -> OTP -> resolve eligible trips
 
 The trip selector displays cards with name, destination, dates, current-trip state, and a `Staff` badge where applicable. Selecting a card shows an inline loading state and enters either the staff or traveler experience according to that trip's role.
 
-The profile/menu exposes `Trocar de viagem`. It returns to the selector without another OTP. If only one trip is eligible, the screen shows the current trip and explains that no alternatives are available.
+The profile/menu exposes `Trocar de viagem` only when at least two trips are eligible. With one eligible trip, the action is hidden and internal attempts to open the selector are ignored. If recovery from a revoked membership leaves exactly one different eligible trip, the app selects it automatically instead of showing a one-option selector.
 
 The auth state stores the active trip ID and its summary alongside the session token and effective role. Changing trips replaces the session atomically and remounts trip-dependent providers so itinerary, travelers, announcements, profile, and staff data cannot leak across trips.
 

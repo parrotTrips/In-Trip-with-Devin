@@ -43,6 +43,7 @@ export type VerifyOTPResult =
       message: string;
       access_token: string;
       active_trip: TripChoice;
+      can_switch_trips: boolean;
     }
   | {
       status: 'admin_authenticated';

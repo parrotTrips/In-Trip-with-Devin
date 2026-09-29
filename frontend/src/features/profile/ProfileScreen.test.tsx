@@ -41,6 +41,7 @@ function setUpSwitcherSession() {
       role: 'traveler',
       tripId: 'trip-001',
       activeTrip: SWITCH_TRIP_CURRENT,
+      canSwitchTrips: true,
     })
   );
 }
@@ -93,7 +94,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -171,7 +172,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -300,7 +301,7 @@ describe('ProfileScreen', () => {
   test('opens pre departure information from a section deep link', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -346,7 +347,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'traveler-1', phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null })
+      JSON.stringify({ userId: 'traveler-1', phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -485,6 +486,19 @@ describe('ProfileScreen', () => {
     // No OTP step is shown — the switcher opens directly from the profile.
     expect(screen.queryByPlaceholderText('Phone number')).not.toBeInTheDocument();
     expect(screen.queryByText('Verification Code')).not.toBeInTheDocument();
+  });
+
+  test('hides Trocar de viagem when only one trip is eligible', async () => {
+    setUpSwitcherSession();
+    const stored = JSON.parse(localStorage.getItem('parrot_user')!);
+    localStorage.setItem('parrot_user', JSON.stringify({ ...stored, canSwitchTrips: false }));
+    window.history.pushState({}, '', '/profile');
+    setUpSwitcherAppHandlers();
+
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'My Profile' });
+    expect(screen.queryByRole('button', { name: /trocar de viagem/i })).not.toBeInTheDocument();
   });
 
   test('cancelling the switcher returns to the exact previous session untouched', async () => {

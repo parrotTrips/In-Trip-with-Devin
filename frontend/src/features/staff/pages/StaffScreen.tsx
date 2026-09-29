@@ -820,13 +820,15 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
               <Eye size={14} />
               Traveler view
             </button>
-            <button
-              onClick={openTripSwitcher}
-              className="flex items-center gap-1.5 text-emerald-200 text-xs hover:text-white transition-colors"
-            >
-              <ArrowRightLeft size={14} />
-              Trocar de viagem
-            </button>
+            {user?.canSwitchTrips && (
+              <button
+                onClick={openTripSwitcher}
+                className="flex items-center gap-1.5 text-emerald-200 text-xs hover:text-white transition-colors"
+              >
+                <ArrowRightLeft size={14} />
+                Trocar de viagem
+              </button>
+            )}
             <button onClick={logout} className="flex items-center gap-1 text-emerald-300 text-xs hover:text-white">
               <LogOut size={13} />
               Sign out

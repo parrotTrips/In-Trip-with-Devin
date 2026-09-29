@@ -171,7 +171,7 @@ describe('App composition', () => {
   test('resets a staff traveler preview when switching to a different staff-role trip', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-4', phone: '+15554444444', name: 'Dave Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null })
+      JSON.stringify({ userId: 'uid-4', phone: '+15554444444', name: 'Dave Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null, canSwitchTrips: true })
     );
     window.history.pushState({}, '', '/');
 
@@ -239,7 +239,7 @@ describe('App composition', () => {
   test('consumes the ?view=traveler deep link once, so a later trip switch remount does not reapply it', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-5', phone: '+15555555555', name: 'Eve Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null })
+      JSON.stringify({ userId: 'uid-5', phone: '+15555555555', name: 'Eve Staff', token: 'tok', role: 'staff', tripId: 'test-001', activeTrip: null, canSwitchTrips: true })
     );
     window.history.pushState({}, '', '/profile?view=traveler');
 
@@ -293,7 +293,7 @@ describe('App composition', () => {
   test('makes the app underneath non-interactive while the trip switcher overlay is open', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: null })
+      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: null, canSwitchTrips: true })
     );
     window.history.pushState({}, '', '/profile');
 
@@ -326,7 +326,7 @@ describe('App composition', () => {
   test('keeps focus inside an accessible trip-switch dialog and closes it with Escape', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: null })
+      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: null, canSwitchTrips: true })
     );
     window.history.pushState({}, '', '/profile');
     server.use(
@@ -369,7 +369,7 @@ describe('App composition', () => {
   test('moves focus to the new app after a successful trip switch removes the old trigger', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: OTP_TRIP_CURRENT })
+      JSON.stringify({ userId: 'uid-6', phone: '+15556666666', name: 'Fay Traveler', token: 'tok', role: 'traveler', tripId: 'test-001', activeTrip: OTP_TRIP_CURRENT, canSwitchTrips: true })
     );
     window.history.pushState({}, '', '/profile');
     server.use(

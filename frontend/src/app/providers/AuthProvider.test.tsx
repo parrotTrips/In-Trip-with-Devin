@@ -58,14 +58,19 @@ function Probe() {
         begin-selection
       </button>
       <button
-        onClick={() => auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-a', TRIP_A)}
+        onClick={() => auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-a', TRIP_A, true)}
       >
         select-trip-a
       </button>
       <button
-        onClick={() => auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-b', TRIP_B)}
+        onClick={() => auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-b', TRIP_B, true)}
       >
         select-trip-b
+      </button>
+      <button
+        onClick={() => auth.completeTripSelection('user-1', '+15550000001', 'Alice', 'tok-a', TRIP_A, false)}
+      >
+        select-only-trip
       </button>
       <button onClick={() => auth.login('user-1', '+15550000001', 'Alice', 'tok-dev', 'staff', 'trip-dev')}>
         login-with-trip
@@ -205,6 +210,16 @@ describe('AuthProvider trip-scoped session state', () => {
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
   });
 
+  test('does not open the trip switcher when the session has only one eligible trip', async () => {
+    const user = userEvent.setup();
+    renderProbe();
+
+    await user.click(screen.getByRole('button', { name: 'select-only-trip' }));
+    await user.click(screen.getByRole('button', { name: 'open-switcher' }));
+
+    expect(screen.getByTestId('switcher-open')).toHaveTextContent('false');
+  });
+
   test('login() accepts an optional tripId (dev auto-login / DevUserSwitcher) and it survives reload', async () => {
     const user = userEvent.setup();
     renderProbe();
@@ -300,6 +315,9 @@ describe('AuthProvider trip-scoped session state', () => {
       ),
       http.get('http://localhost:8000/auth/trips', () =>
         HttpResponse.json({ trips: [TRIP_B] })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({ status: 'trip_selected', user_id: 'user-1', phone: '+15550000001', name: 'Alice', role: 'staff', message: 'Login successful', access_token: 'tok-b', active_trip: TRIP_B, can_switch_trips: false })
       )
     );
     const user = userEvent.setup();
@@ -307,7 +325,8 @@ describe('AuthProvider trip-scoped session state', () => {
     await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
     await user.click(screen.getByRole('button', { name: 'protected-request' }));
 
-    await waitFor(() => expect(screen.getByTestId('switcher-open')).toHaveTextContent('true'));
+    await waitFor(() => expect(screen.getByTestId('trip-id')).toHaveTextContent('trip-b'));
+    expect(screen.getByTestId('switcher-open')).toHaveTextContent('false');
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
   });
 
@@ -334,6 +353,9 @@ describe('AuthProvider trip-scoped session state', () => {
       ),
       http.get('http://localhost:8000/auth/trips', () =>
         HttpResponse.json({ trips: [TRIP_B] })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({ status: 'trip_selected', user_id: 'user-1', phone: '+15550000001', name: 'Alice', role: 'staff', message: 'Login successful', access_token: 'tok-b', active_trip: TRIP_B, can_switch_trips: false })
       )
     );
     const user = userEvent.setup();
@@ -341,7 +363,8 @@ describe('AuthProvider trip-scoped session state', () => {
     await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
     await user.click(screen.getByRole('button', { name: 'profile-request' }));
 
-    await waitFor(() => expect(screen.getByTestId('switcher-open')).toHaveTextContent('true'));
+    await waitFor(() => expect(screen.getByTestId('trip-id')).toHaveTextContent('trip-b'));
+    expect(screen.getByTestId('switcher-open')).toHaveTextContent('false');
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
   });
 
@@ -366,6 +389,9 @@ describe('AuthProvider trip-scoped session state', () => {
       ),
       http.get('http://localhost:8000/auth/trips', () =>
         HttpResponse.json({ trips: [TRIP_B] })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({ status: 'trip_selected', user_id: 'user-1', phone: '+15550000001', name: 'Alice', role: 'staff', message: 'Login successful', access_token: 'tok-b', active_trip: TRIP_B, can_switch_trips: false })
       )
     );
     const user = userEvent.setup();
@@ -373,7 +399,8 @@ describe('AuthProvider trip-scoped session state', () => {
     await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
     await user.click(screen.getByRole('button', { name: 'trip-travelers-request' }));
 
-    await waitFor(() => expect(screen.getByTestId('switcher-open')).toHaveTextContent('true'));
+    await waitFor(() => expect(screen.getByTestId('trip-id')).toHaveTextContent('trip-b'));
+    expect(screen.getByTestId('switcher-open')).toHaveTextContent('false');
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
   });
 

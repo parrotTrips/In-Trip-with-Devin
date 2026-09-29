@@ -109,6 +109,7 @@ def create_trip_session_payload(
     phone: str,
     name: str | None,
     membership: dict,
+    can_switch_trips: bool,
     *,
     auth_time: datetime | None = None,
     expires_at: datetime | None = None,
@@ -135,6 +136,7 @@ def create_trip_session_payload(
             expires_at=expires_at,
         ),
         "active_trip": membership,
+        "can_switch_trips": can_switch_trips,
     }
 
 
@@ -299,7 +301,7 @@ async def verify_otp(
         }
     if len(trips) == 1:
         return create_trip_session_payload(
-            user_id, user.phone, user.full_name, trips[0]
+            user_id, user.phone, user.full_name, trips[0], False
         )
     return {
         **identity,

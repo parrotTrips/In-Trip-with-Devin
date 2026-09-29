@@ -130,6 +130,7 @@ function setUpStaffSwitcherSession() {
       role: 'staff',
       tripId: 'trip-staff-1',
       activeTrip: STAFF_TRIP_ONE,
+      canSwitchTrips: true,
     })
   );
 }
@@ -142,7 +143,7 @@ describe('StaffScreen', () => {
     scannerClear.mockClear();
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'staff-1', phone: '+5511888000001', name: 'Marcelo Staff', token: 'tok', role: 'staff' })
+      JSON.stringify({ userId: 'staff-1', phone: '+5511888000001', name: 'Marcelo Staff', token: 'tok', role: 'staff', tripId: 'trip-staff-1', activeTrip: STAFF_TRIP_ONE, canSwitchTrips: true })
     );
     server.use(
       http.get('http://localhost:8000/me/staff/trip', () =>
@@ -454,6 +455,20 @@ describe('StaffScreen', () => {
     expect(await screen.findByRole('button', { name: /trocar de viagem/i })).toBeInTheDocument();
   });
 
+  test('hides Trocar de viagem in the staff header when only one trip is eligible', async () => {
+    const stored = JSON.parse(localStorage.getItem('parrot_user')!);
+    localStorage.setItem('parrot_user', JSON.stringify({ ...stored, canSwitchTrips: false }));
+
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await screen.findByText(/hi, marcelo/i);
+    expect(screen.queryByRole('button', { name: /trocar de viagem/i })).not.toBeInTheDocument();
+  });
+
   test('selecting a traveler-role trip leaves staff UI and enters traveler UI', async () => {
     setUpStaffSwitcherSession();
     window.history.pushState({}, '', '/');
@@ -513,14 +528,12 @@ describe('StaffScreen', () => {
           message: 'Login successful',
           access_token: 'tok-traveler-same-trip',
           active_trip: sameTripAsTraveler,
+          can_switch_trips: false,
         })
       )
     );
 
     render(<App />);
-
-    await screen.findByText('Escolha sua viagem');
-    await userEvent.click(screen.getByText('Staff Trip One').closest('button')!);
 
     await waitFor(() => expect(screen.getByText('Trip Progress')).toBeInTheDocument());
     expect(screen.queryByText('Hi, Marcelo 👋')).not.toBeInTheDocument();

@@ -96,13 +96,17 @@ function TripSwitcherOverlay({
           onNoTrips();
           return;
         }
+        if (res.trips.length === 1) {
+          onCancel();
+          return;
+        }
         setState({ status: 'ready', trips: res.trips });
       })
       .catch(() => {
         if (requestIdRef.current !== requestId) return;
         setState({ status: 'error' });
       });
-  }, [onNoTrips, token]);
+  }, [onCancel, onNoTrips, token]);
 
   useEffect(() => {
     if (!initialTrips) load();

@@ -115,6 +115,7 @@ def test_select_trip_returns_session_token_with_per_trip_staff_role(client, sess
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "trip_selected"
+    assert body["can_switch_trips"] is True
     assert body["name"] == "Multi Trip"
     assert body["active_trip"]["trip_id"] == "trip-staff"
     assert body["active_trip"]["role"] == "staff"

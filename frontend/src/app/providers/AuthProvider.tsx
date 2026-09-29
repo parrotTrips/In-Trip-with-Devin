@@ -3,7 +3,7 @@ import * as Sentry from '@sentry/react';
 import posthog from 'posthog-js';
 
 import type { TripChoice } from '../../features/auth/services/auth-api';
-import { listTrips } from '../../features/auth/services/auth-api';
+import { listTrips, selectTrip } from '../../features/auth/services/auth-api';
 import { API_AUTH_EVENT, type ApiAuthEventDetail } from '../../shared/api/client';
 import {
   AuthContext,
@@ -24,6 +24,15 @@ function getStoredUser(): AuthUser | null {
       // rather than trusting stale/invalid data.
       localStorage.removeItem('parrot_user');
       return null;
+    }
+
+    // Sessions created by the previous frontend do not know how many trips
+    // are eligible. Default closed: hiding the switcher is safer than
+    // exposing a selector that may contain only the active trip. A fresh OTP
+    // or selection response records the authoritative value.
+    if (parsed.canSwitchTrips === undefined) {
+      parsed.canSwitchTrips = false;
+      localStorage.setItem('parrot_user', JSON.stringify(parsed));
     }
 
     return parsed as AuthUser;
@@ -53,6 +62,7 @@ function getDevAutoLoginUser(): AuthUser | null {
     role,
     tripId,
     activeTrip: null,
+    canSwitchTrips: true,
   };
 }
 
@@ -139,7 +149,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: UserRole,
     tripId: string | null = null
   ) => {
-    establishSession({ userId, phone, name, token, role, tripId, activeTrip: null });
+    establishSession({
+      userId,
+      phone,
+      name,
+      token,
+      role,
+      tripId,
+      activeTrip: null,
+      canSwitchTrips: true,
+    });
   };
 
   const beginTripSelection = (selection: PendingTripSelection) => {
@@ -151,14 +170,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone: string,
     name: string | null,
     token: string,
-    activeTrip: TripChoice
+    activeTrip: TripChoice,
+    canSwitchTrips: boolean
   ) => {
     // Role is derived from activeTrip.role rather than accepted separately,
     // so a caller can't pass a role that disagrees with the chosen trip.
-    establishSession({ userId, phone, name, token, role: activeTrip.role, tripId: activeTrip.trip_id, activeTrip });
+    establishSession({
+      userId,
+      phone,
+      name,
+      token,
+      role: activeTrip.role,
+      tripId: activeTrip.trip_id,
+      activeTrip,
+      canSwitchTrips,
+    });
   };
 
   const openTripSwitcher = () => {
+    if (!user?.canSwitchTrips) return;
     setTripSwitcherTrips(null);
     setIsTripSwitcherOpen(true);
   };
@@ -182,6 +212,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!live) return;
         if (result.trips.length === 0) {
           enterNoTrips();
+          return;
+        }
+        if (result.trips.length === 1) {
+          const selected = await selectTrip(user.token, result.trips[0].trip_id);
+          if (!live) return;
+          completeTripSelection(
+            selected.user_id,
+            selected.phone,
+            selected.name,
+            selected.access_token,
+            selected.active_trip,
+            selected.can_switch_trips
+          );
           return;
         }
         setTripSwitcherTrips(result.trips);

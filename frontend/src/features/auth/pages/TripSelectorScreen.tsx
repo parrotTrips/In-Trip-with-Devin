@@ -97,7 +97,7 @@ export default function TripSelectorScreen({ trips, token, activeTripId = null, 
     try {
       const result = await selectTrip(token, tripId);
       if (!isLiveRef.current) return;
-      completeTripSelection(result.user_id, result.phone, result.name, result.access_token, result.active_trip);
+      completeTripSelection(result.user_id, result.phone, result.name, result.access_token, result.active_trip, result.can_switch_trips);
     } catch (err) {
       if (!isLiveRef.current) return;
       const status = err instanceof ApiError ? err.status : null;

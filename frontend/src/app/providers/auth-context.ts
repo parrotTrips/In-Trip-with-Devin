@@ -24,6 +24,8 @@ export interface AuthUser {
   tripId: string | null;
   /** Full trip details for `tripId`, or `null` alongside a `null` `tripId`. */
   activeTrip: TripChoice | null;
+  /** Whether the person currently has more than one eligible trip. */
+  canSwitchTrips: boolean;
 }
 
 /**
@@ -89,7 +91,8 @@ export interface AuthContextType {
     phone: string,
     name: string | null,
     token: string,
-    activeTrip: TripChoice
+    activeTrip: TripChoice,
+    canSwitchTrips: boolean
   ) => void;
 
   /** Opens the in-app trip switcher without touching the current session. */

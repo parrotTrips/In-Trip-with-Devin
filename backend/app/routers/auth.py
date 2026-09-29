@@ -23,10 +23,7 @@ from app.services.auth_service import (
     request_otp,
     verify_otp,
 )
-from app.services.trip_membership_service import (
-    get_eligible_trip_membership,
-    list_eligible_trips,
-)
+from app.services.trip_membership_service import list_eligible_trips
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -125,8 +122,9 @@ async def select_trip(
     and ``_create_session_token``.
     """
     identity = _decode_trip_choice_identity(request)
-    membership = await get_eligible_trip_membership(
-        identity["user_id"], req.trip_id, session
+    trips = await list_eligible_trips(identity["user_id"], session)
+    membership = next(
+        (trip for trip in trips if trip["trip_id"] == req.trip_id), None
     )
     if membership is None:
         raise HTTPException(status_code=403, detail="Trip not available")
@@ -153,6 +151,7 @@ async def select_trip(
         identity["phone"],
         user.full_name if user else None,
         membership,
+        len(trips) > 1,
         auth_time=auth_time,
         expires_at=expires_at,
     )

@@ -536,3 +536,19 @@ Remove a test membership after token issuance. Confirm the relevant request is d
 **Step 5: Record final evidence**
 
 Add the commands and acceptance outcomes to the implementation handoff or pull request description. Do not add production credentials or OTP values to the repository.
+
+### Task 10: Suppress the selector for a single eligible trip
+
+**Files:**
+- Modify: `backend/app/services/auth_service.py`
+- Modify: `backend/app/routers/auth.py`
+- Modify: `backend/tests/services/test_auth_service.py`
+- Modify: `backend/tests/routers/test_auth_trip_selection.py`
+- Modify: `frontend/src/features/auth/services/auth-api.ts`
+- Modify: `frontend/src/app/providers/auth-context.ts`
+- Modify: `frontend/src/app/providers/AuthProvider.tsx`
+- Modify: `frontend/src/features/profile/pages/ProfileScreen.tsx`
+- Modify: `frontend/src/features/staff/pages/StaffScreen.tsx`
+- Modify: relevant frontend tests
+
+Return `can_switch_trips` with every scoped session response, persist it in auth state, hide the switch action when false, and guard the action itself. During membership recovery, automatically select the sole remaining trip; render the selector only for two or more trips. Cover single-trip login, direct switch attempts, traveler/staff controls, and one-trip recovery with failing tests before implementation.

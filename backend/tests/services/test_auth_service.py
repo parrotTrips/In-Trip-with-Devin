@@ -196,6 +196,7 @@ def test_verify_otp_selects_only_trip_and_returns_scoped_session_token(
             response = await verify_otp("+5511777777777", "123456", session)
 
             assert response["status"] == "trip_selected"
+            assert response["can_switch_trips"] is False
             assert response["active_trip"]["trip_id"] == "trip-only"
             assert response["active_trip"]["role"] == "staff"
             payload = jwt.decode(
