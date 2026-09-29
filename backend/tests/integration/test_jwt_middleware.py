@@ -1,18 +1,32 @@
 """Integration tests for JWT authentication middleware."""
 
 from datetime import UTC, datetime, timedelta
+import uuid
 
 from jose import jwt
+import pytest
 
 
 TEST_SECRET = "test-secret-for-middleware"
 TEST_ALGORITHM = "HS256"
 
 
-def _make_token(user_id: str = "abc-123", phone: str = "+5511999999999", days: int = 14) -> str:
+def _make_token(
+    user_id: str = "abc-123",
+    phone: str = "+5511999999999",
+    days: int = 14,
+    token_type: str = "session",
+    **claims,
+) -> str:
     expire = datetime.now(UTC) + timedelta(days=days)
     return jwt.encode(
-        {"sub": user_id, "phone": phone, "exp": expire},
+        {
+            "sub": user_id,
+            "phone": phone,
+            "token_type": token_type,
+            "exp": expire,
+            **claims,
+        },
         TEST_SECRET,
         algorithm=TEST_ALGORITHM,
     )
@@ -62,16 +76,20 @@ def test_protected_route_without_token_returns_401(seeded_client):
     assert response.json()["detail"] == "Unauthorized"
 
 
-def test_protected_route_with_valid_token_passes(seeded_client, monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", TEST_SECRET)
+def test_protected_route_with_valid_token_passes(seeded_client):
+    import uuid
+    from app.core.config import JWT_SECRET
 
-    otp_resp = seeded_client.post("/auth/request-otp", json={"phone": "+5511333333333"})
-    code = otp_resp.json()["debug_code"]
-    verify_resp = seeded_client.post(
-        "/auth/verify-otp", json={"phone": "+5511333333333", "code": code}
+    user_id = str(uuid.uuid4())
+    claims = jwt.get_unverified_claims(
+        _make_token(
+            user_id=user_id,
+            token_type="session",
+            trip_id="test-trip",
+            role="traveler",
+        )
     )
-    token = verify_resp.json()["access_token"]
-    user_id = verify_resp.json()["user_id"]
+    token = jwt.encode(claims, JWT_SECRET, algorithm=TEST_ALGORITHM)
 
     response = seeded_client.get(
         f"/profile/{user_id}",
@@ -142,4 +160,87 @@ def test_profile_still_rejects_google_like_token(seeded_client):
         params={"trip_id": "test-trip"},
         headers={"Authorization": "Bearer google-id-token"},
     )
+    assert response.status_code == 401
+
+
+def test_trip_selection_token_is_rejected_on_protected_routes(seeded_client):
+    from app.core.config import JWT_SECRET
+
+    token = _make_token(token_type="trip_selection")
+    token = jwt.encode(
+        jwt.get_unverified_claims(token), JWT_SECRET, algorithm=TEST_ALGORITHM
+    )
+
+    response = seeded_client.get(
+        "/me/trip", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Unauthorized"}
+
+
+def test_admin_token_is_rejected_outside_console(seeded_client):
+    from app.core.config import JWT_SECRET
+
+    unsigned_claims = jwt.get_unverified_claims(
+        _make_token(token_type="admin", role="admin")
+    )
+    token = jwt.encode(unsigned_claims, JWT_SECRET, algorithm=TEST_ALGORITHM)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert seeded_client.get("/me/trip", headers=headers).status_code == 401
+    assert seeded_client.get("/me/staff/trip", headers=headers).status_code == 401
+
+
+def test_console_like_path_is_not_treated_as_console_namespace(seeded_client):
+    from app.core.config import JWT_SECRET
+
+    claims = jwt.get_unverified_claims(
+        _make_token(
+            user_id=str(uuid.uuid4()), token_type="admin", role="admin"
+        )
+    )
+    token = jwt.encode(claims, JWT_SECRET, algorithm=TEST_ALGORITHM)
+
+    response = seeded_client.get(
+        "/console-evil", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sub": "not-a-uuid"},
+        {"sub": ""},
+        {"sub": 123},
+        {"phone": ""},
+        {"phone": 123},
+        {"role": ""},
+        {"role": 123},
+        {"trip_id": ""},
+        {"trip_id": 123},
+    ],
+)
+def test_session_claims_require_valid_types_and_non_empty_values(
+    seeded_client, overrides
+):
+    from app.core.config import JWT_SECRET
+
+    claims = {
+        "sub": str(uuid.uuid4()),
+        "phone": "+5511999999999",
+        "token_type": "session",
+        "role": "traveler",
+        "trip_id": "external-trip-id",
+        "exp": datetime.now(UTC) + timedelta(minutes=10),
+        **overrides,
+    }
+    token = jwt.encode(claims, JWT_SECRET, algorithm=TEST_ALGORITHM)
+
+    response = seeded_client.get(
+        "/me/trip", headers={"Authorization": f"Bearer {token}"}
+    )
+
     assert response.status_code == 401

@@ -106,7 +106,15 @@ const EMPTY_TRAVELERS = { travelers: [] };
 function setAuthenticatedUser() {
   localStorage.setItem(
     'parrot_user',
-    JSON.stringify({ userId: 'user-001', phone: '+15551111111', name: 'Alice', token: 'tok', role: 'traveler' })
+    JSON.stringify({
+      userId: 'user-001',
+      phone: '+15551111111',
+      name: 'Alice',
+      token: 'tok',
+      role: 'traveler',
+      tripId: 'trip-001',
+      activeTrip: null,
+    })
   );
 }
 

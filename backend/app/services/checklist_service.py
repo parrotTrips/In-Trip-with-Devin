@@ -11,7 +11,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.progress import TravelerChecklistProgress, TravelerPhaseProgress
-from app.db.models.trip import TripPhase, TripPhaseChecklistItem, TripTraveler
+from app.db.models.trip import TripPhase, TripPhaseChecklistItem
+from app.services.trip_membership_service import require_trip_membership
 
 
 def _parse_uuid(value: str, detail: str) -> UUID:
@@ -21,29 +22,13 @@ def _parse_uuid(value: str, detail: str) -> UUID:
         raise HTTPException(status_code=404, detail=detail) from exc
 
 
-async def _resolve_trip_traveler(
-    user_id: str,
-    trip_id: str,
-    session: AsyncSession,
-) -> TripTraveler:
-    trip_traveler = await session.scalar(
-        select(TripTraveler).where(
-            TripTraveler.user_id == _parse_uuid(user_id, "User not found"),
-            TripTraveler.wetravel_trip_uuid == trip_id,
-        )
-    )
-    if not trip_traveler:
-        raise HTTPException(status_code=404, detail="Traveler not found for trip")
-    return trip_traveler
-
-
 async def update_checklist_item(
     user_id: str,
     update: dict,
     session: AsyncSession,
 ) -> dict:
     """Persist one checklist item completion state for a user."""
-    trip_traveler = await _resolve_trip_traveler(user_id, update["trip_id"], session)
+    trip_traveler = await require_trip_membership(user_id, update["trip_id"], session)
     phase_id = _parse_uuid(update["phase_id"], "Phase not found")
     item_id = _parse_uuid(update["item_id"], "Checklist item not found")
 
@@ -89,7 +74,7 @@ async def get_checklist_progress(
     session: AsyncSession,
 ) -> dict:
     """Return all persisted checklist progress for one user and trip."""
-    trip_traveler = await _resolve_trip_traveler(user_id, trip_id, session)
+    trip_traveler = await require_trip_membership(user_id, trip_id, session)
     rows = await session.execute(
         select(
             TravelerChecklistProgress,
@@ -100,7 +85,11 @@ async def get_checklist_progress(
             TripPhaseChecklistItem.id
             == TravelerChecklistProgress.trip_phase_checklist_item_id,
         )
-        .where(TravelerChecklistProgress.trip_traveler_id == trip_traveler.id)
+        .join(TripPhase, TripPhase.id == TripPhaseChecklistItem.trip_phase_id)
+        .where(
+            TravelerChecklistProgress.trip_traveler_id == trip_traveler.id,
+            TripPhase.wetravel_trip_uuid == trip_id,
+        )
     )
 
     progress: dict[str, dict[str, bool]] = {}
@@ -119,7 +108,7 @@ async def update_phase_completion(
     session: AsyncSession,
 ) -> dict:
     """Persist one phase completion state for a user."""
-    trip_traveler = await _resolve_trip_traveler(user_id, update["trip_id"], session)
+    trip_traveler = await require_trip_membership(user_id, update["trip_id"], session)
     phase = await session.scalar(
         select(TripPhase).where(
             TripPhase.id == _parse_uuid(update["phase_id"], "Phase not found"),
@@ -159,10 +148,13 @@ async def get_phase_completions(
     session: AsyncSession,
 ) -> dict:
     """Return all persisted phase completion states for one user and trip."""
-    trip_traveler = await _resolve_trip_traveler(user_id, trip_id, session)
+    trip_traveler = await require_trip_membership(user_id, trip_id, session)
     rows = await session.scalars(
-        select(TravelerPhaseProgress).where(
-            TravelerPhaseProgress.trip_traveler_id == trip_traveler.id
+        select(TravelerPhaseProgress)
+        .join(TripPhase, TripPhase.id == TravelerPhaseProgress.trip_phase_id)
+        .where(
+            TravelerPhaseProgress.trip_traveler_id == trip_traveler.id,
+            TripPhase.wetravel_trip_uuid == trip_id,
         )
     )
 

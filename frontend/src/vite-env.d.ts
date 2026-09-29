@@ -10,6 +10,7 @@ interface ImportMetaEnv {
   readonly VITE_DEV_USER_ROLE: string;
   readonly VITE_DEV_USER_PHONE: string;
   readonly VITE_DEV_USER_NAME: string;
+  readonly VITE_DEV_USER_TRIP_ID: string;
   readonly VITE_DEV_TOKEN: string;
 }
 

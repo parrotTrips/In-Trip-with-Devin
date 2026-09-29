@@ -22,6 +22,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from scripts._phone import normalize_phone
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -72,13 +73,6 @@ def clean(value: str | None) -> str:
     return (value or "").strip()
 
 
-def normalize_phone(value: str | None) -> str:
-    phone = clean(value)
-    if not phone:
-        return ""
-    return phone if phone.startswith("+") else f"+{phone}"
-
-
 def read_contacts(path: Path) -> list[dict[str, str]]:
     contacts: list[dict[str, str]] = []
     with path.open(newline="", encoding="utf-8-sig") as f:
@@ -95,6 +89,21 @@ def read_contacts(path: Path) -> list[dict[str, str]]:
             continue
         contacts.append({"name": name, "phone": phone, "marker": marker})
     return contacts
+
+
+async def table_exists(conn: asyncpg.Connection, table_name: str) -> bool:
+    """Support both legacy databases and the current post-0003 schema."""
+    return bool(
+        await conn.fetchval(
+            """
+            select exists (
+              select 1 from information_schema.tables
+              where table_schema='public' and table_name=$1
+            )
+            """,
+            table_name,
+        )
+    )
 
 
 async def existing_trip_links(conn: asyncpg.Connection) -> dict[str, dict[str, Any]]:
@@ -114,9 +123,13 @@ async def import_contacts(conn: asyncpg.Connection, contacts: list[dict[str, str
     now = datetime.now(UTC)
     inserted: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    has_products = await table_exists(conn, "traveler_products")
 
     async with conn.transaction():
-        for contact in contacts:
+        for raw_contact in contacts:
+            # import_contacts is also called directly by tests/admin scripts, so
+            # do not rely on the CSV reader having normalized this boundary.
+            contact = {**raw_contact, "phone": normalize_phone(raw_contact.get("phone"))}
             existing = await conn.fetchrow(
                 """
                 select u.full_name, u.role, tt.id as trip_traveler_id
@@ -189,18 +202,22 @@ async def import_contacts(conn: asyncpg.Connection, contacts: list[dict[str, str
                 "Casamento Gabriela e Raphael - contato importado do CSV de convidados.",
                 now,
             )
-            await conn.execute(
-                """
-                insert into traveler_products (id, trip_traveler_id, room_type, created_at, updated_at)
-                values ($1, $2, 'Wedding Guest', $3, $3)
-                on conflict (trip_traveler_id) do update
-                set room_type = coalesce(traveler_products.room_type, excluded.room_type),
-                    updated_at = excluded.updated_at
-                """,
-                uuid.uuid4(),
-                trip_traveler_id,
-                now,
-            )
+            if has_products:
+                # `traveler_products` was dropped from the schema (migration
+                # 20260521_0003); this guard keeps the script working against both
+                # older and current databases instead of crashing on a missing table.
+                await conn.execute(
+                    """
+                    insert into traveler_products (id, trip_traveler_id, room_type, created_at, updated_at)
+                    values ($1, $2, 'Wedding Guest', $3, $3)
+                    on conflict (trip_traveler_id) do update
+                    set room_type = coalesce(traveler_products.room_type, excluded.room_type),
+                        updated_at = excluded.updated_at
+                    """,
+                    uuid.uuid4(),
+                    trip_traveler_id,
+                    now,
+                )
             inserted.append(
                 {
                     **contact,
@@ -213,8 +230,17 @@ async def import_contacts(conn: asyncpg.Connection, contacts: list[dict[str, str
 
 
 async def fetch_traveler_audit_rows(conn: asyncpg.Connection) -> list[list[Any]]:
+    # traveler_products was removed in migration 20260521_0003, but this script
+    # still supports older databases where it supplies the audit room type.
+    has_products = await table_exists(conn, "traveler_products")
+    room_type_select = "tprod.room_type" if has_products else "null::text as room_type"
+    products_join = (
+        "left join traveler_products tprod on tprod.trip_traveler_id = tt.id"
+        if has_products
+        else ""
+    )
     rows = await conn.fetch(
-        """
+        f"""
         select
             u.full_name,
             tp.preferred_name,
@@ -222,13 +248,18 @@ async def fetch_traveler_audit_rows(conn: asyncpg.Connection) -> list[list[Any]]
             u.email,
             u.id as user_id,
             tt.id as trip_traveler_id,
-            tprod.room_type
+            {room_type_select}
         from trip_travelers tt
         join users u on u.id = tt.user_id
         left join traveler_profiles tp on tp.trip_traveler_id = tt.id
-        left join traveler_products tprod on tprod.trip_traveler_id = tt.id
+        {products_join}
         where tt.wetravel_trip_uuid = $1
-          and u.role = 'traveler'
+          and not exists (
+              select 1
+              from trip_staff ts
+              where ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                and ts.user_id = tt.user_id
+          )
         order by u.full_name, u.phone
         """,
         TRIP_UUID,

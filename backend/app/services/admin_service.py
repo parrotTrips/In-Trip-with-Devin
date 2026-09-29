@@ -443,7 +443,7 @@ async def admin_import_trip(trip_uuid: str) -> dict:
     pre_trip_phases = parse_fases_tab(fases_rows)
 
     checklist_rows = filter_rows_by_trip(read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Checklist"), trip_uuid)
-    parse_checklist_tab(checklist_rows, pre_trip_phases)
+    checklist_skipped = parse_checklist_tab(checklist_rows, pre_trip_phases)
 
     links_rows = filter_rows_by_trip(read_tab(sheets_svc, TRIP_CONTENT_SHEET_ID, "Links"), trip_uuid)
     parse_links_tab(links_rows, pre_trip_phases)
@@ -465,6 +465,7 @@ async def admin_import_trip(trip_uuid: str) -> dict:
         "trip_uuid": trip_uuid,
         "phases": len(pre_trip_phases),
         "checklist_items": sum(len(p.checklist) for p in pre_trip_phases),
+        "checklist_skipped": checklist_skipped,
         "links": sum(len(p.links) for p in pre_trip_phases),
         "days": len(in_trip_days),
         "activities": sum(len(d.activities) for d in in_trip_days),
@@ -920,7 +921,18 @@ async def admin_import_activity_participants(trip_uuid: str) -> dict:
 
 
 async def admin_set_user_role(phone: str, role: str) -> dict:
-    """Set the role of a user identified by phone number."""
+    """Set the `users.role` column of a user identified by phone number.
+
+    Deliberately unchanged by the multi-trip login rollout: this only updates
+    `users.role`, which no longer decides in-app authorization or staff
+    display anywhere. Per-trip staff access is granted by a `trip_staff` row
+    for that (trip, user), independent of this column. Calling this with
+    role="staff" does NOT make the user staff on any trip; use the trip's
+    staff import to create/remove `trip_staff` rows instead. See
+    `docs/guia-interno-parrot-app.md` and
+    `scripts/audit_multi_trip_memberships.py` for backfilling accounts that
+    lost staff access when the old global-role model was retired.
+    """
     if role not in ("traveler", "staff"):
         raise ValueError(f"Invalid role '{role}'. Must be 'traveler' or 'staff'.")
 

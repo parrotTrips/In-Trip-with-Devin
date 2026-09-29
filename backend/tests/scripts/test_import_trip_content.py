@@ -162,6 +162,67 @@ def test_parse_checklist_tab_attaches_to_phases():
     assert phases[0].checklist[1].is_required is False
 
 
+def test_parse_checklist_tab_accepts_row_without_trailing_obrigatorio():
+    """Sheets omits trailing empty cells, so an unfilled 'obrigatorio' yields a 4-cell row."""
+    phases = [
+        PreTripPhase(fase="visa", title="", subtitle="", icon="", short_description="", detailed_description=""),
+    ]
+    rows = [
+        ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
+        ["gsb-nye-2026", "visa", "1", "Verificar necessidade de visto"],
+    ]
+    parse_checklist_tab(rows, phases)
+    assert len(phases[0].checklist) == 1
+    assert phases[0].checklist[0].label == "Verificar necessidade de visto"
+    assert phases[0].checklist[0].is_required is False
+
+
+def test_parse_checklist_tab_accepts_sim_nao_for_obrigatorio():
+    phases = [
+        PreTripPhase(fase="visa", title="", subtitle="", icon="", short_description="", detailed_description=""),
+    ]
+    rows = [
+        ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
+        ["gsb-nye-2026", "visa", "1", "Obrigatorio", "sim"],
+        ["gsb-nye-2026", "visa", "2", "Opcional", "n\u00e3o"],
+    ]
+    parse_checklist_tab(rows, phases)
+    assert [i.is_required for i in phases[0].checklist] == [True, False]
+
+
+def test_parse_checklist_tab_keeps_both_rows_with_duplicate_ordem():
+    phases = [
+        PreTripPhase(fase="add-ons", title="", subtitle="", icon="", short_description="", detailed_description=""),
+    ]
+    rows = [
+        ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
+        ["gsb-nye-2026", "add-ons", "1", "Check the add on options", "true"],
+        ["gsb-nye-2026", "add-ons", "1", "Book your spot", "true"],
+    ]
+    parse_checklist_tab(rows, phases)
+    assert [i.label for i in phases[0].checklist] == ["Check the add on options", "Book your spot"]
+    assert [i.sort_order for i in phases[0].checklist] == [0, 1]
+
+
+def test_parse_checklist_tab_reports_skipped_rows():
+    phases = [
+        PreTripPhase(fase="visa", title="", subtitle="", icon="", short_description="", detailed_description=""),
+    ]
+    rows = [
+        ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
+        ["gsb-nye-2026", "visa", "1", "Valida", "true"],
+        ["gsb-nye-2026", "unknown_fase", "1", "Fase inexistente", "true"],
+        ["gsb-nye-2026", "visa", "x", "Ordem invalida", "true"],
+        ["gsb-nye-2026", "visa", "2", "", "true"],
+    ]
+    skipped = parse_checklist_tab(rows, phases)
+    assert len(phases[0].checklist) == 1
+    assert len(skipped) == 3
+    joined = " | ".join(skipped)
+    assert "unknown_fase" in joined
+    assert "Ordem invalida" in joined
+
+
 def test_parse_checklist_tab_ignores_unknown_fase():
     phases = [
         PreTripPhase(fase="visa", title="", subtitle="", icon="", short_description="", detailed_description=""),
@@ -267,3 +328,46 @@ def test_parse_roteiro_tab_optional_price():
     ]
     days = parse_roteiro_tab(rows)
     assert days[0].activities[0].amount_brl == 150.0
+
+
+# ---------------------------------------------------------------------------
+# import_one reports dropped checklist rows
+# ---------------------------------------------------------------------------
+
+def test_import_one_reports_dropped_checklist_rows(monkeypatch):
+    """A checklist row pointing at a fase that does not exist must surface in the summary."""
+    import asyncio
+
+    from scripts import import_trip_content as mod
+
+    tabs = {
+        "Viagens": [["trip_uuid", "nome_da_viagem", "data_inicio", "data_fim", "service_agreement_url"]],
+        "Fases": [
+            ["trip_uuid", "ordem", "fase", "titulo", "subtitulo", "icone", "descricao_curta", "descricao_completa"],
+            ["t1", "1", "visa", "Visto", "", "passport", "curta", "completa"],
+        ],
+        "Checklist": [
+            ["trip_uuid", "fase", "ordem", "label", "obrigatorio"],
+            ["t1", "visa", "1", "Item valido"],
+            ["t1", "fase_que_nao_existe", "1", "Item perdido"],
+        ],
+        "Links": [["trip_uuid", "fase", "ordem", "label", "url"]],
+        "Roteiro": [["trip_uuid", "dia", "data", "dia_titulo"]],
+    }
+
+    monkeypatch.setattr(mod, "read_tab", lambda svc, sheet_id, tab: tabs[tab])
+
+    async def fake_write_to_db(conn, trip_uuid, pre_trip_phases, in_trip_days):
+        return None
+
+    monkeypatch.setattr(mod, "write_to_db", fake_write_to_db)
+
+    class FakeConn:
+        async def execute(self, *args, **kwargs):
+            return None
+
+    result = asyncio.run(mod.import_one(object(), FakeConn(), "t1", "sheet-id"))
+
+    assert result["checklist"] == 1
+    assert len(result["checklist_skipped"]) == 1
+    assert "fase_que_nao_existe" in result["checklist_skipped"][0]

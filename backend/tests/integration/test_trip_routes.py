@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from sqlalchemy import func, select
 
-from app.db.models.staff import TripAnnouncement, TripAnnouncementRead
+from app.db.models.staff import TripAnnouncement, TripAnnouncementRead, TripStaff
 from app.db.models.trip import TravelerAppFeedback, TripActivity, TripPhase, TripRecommendation, TripTraveler
 from app.db.models.user import User
 from app.services.qr_service import decode_traveler_qr_payload
@@ -424,8 +424,8 @@ def test_get_my_qr_code_returns_signed_traveler_payload(seeded_client, session_f
     assert decoded_payload["trip_traveler_id"] == trip_traveler_id
 
 
-def test_get_my_qr_code_returns_404_without_synced_trip(seeded_client, session_factory):
-    """GET /me/qr-code does not mint QR payloads for unsynced trip assignments."""
+def test_login_returns_no_trips_without_synced_trip(seeded_client, session_factory):
+    """Unsynced trip assignments do not produce an application session."""
     phone = "+5511333000011"
     orphan_trip_uuid = "trip-qr-code-unsynced-001"
 
@@ -443,15 +443,17 @@ def test_get_my_qr_code_returns_404_without_synced_trip(seeded_client, session_f
             await session.commit()
 
     asyncio.run(_seed_unsynced_trip_assignment())
-    headers = _auth(seeded_client, phone)
+    otp = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    response = seeded_client.post(
+        "/auth/verify-otp",
+        json={"phone": phone, "code": otp.json()["debug_code"]},
+    )
 
-    response = seeded_client.get("/me/qr-code", headers=headers)
-
-    assert response.status_code == 404
+    assert response.json()["status"] == "no_trips"
 
 
-def test_get_my_trip_phases_returns_404_when_no_trip_assigned(seeded_client, session_factory):
-    """GET /me/trip/phases returns 404 when user has no trip assignment."""
+def test_login_returns_no_trips_when_no_trip_assigned(seeded_client, session_factory):
+    """A user without a trip assignment does not receive an application session."""
     phone = "+5511333000004"
     # Create user but NO trip_traveler row
     async def _seed_user_only():
@@ -460,15 +462,17 @@ def test_get_my_trip_phases_returns_404_when_no_trip_assigned(seeded_client, ses
             session.add(user)
             await session.commit()
     asyncio.run(_seed_user_only())
-    headers = _auth(seeded_client, phone)
+    otp = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    response = seeded_client.post(
+        "/auth/verify-otp",
+        json={"phone": phone, "code": otp.json()["debug_code"]},
+    )
 
-    response = seeded_client.get("/me/trip/phases", headers=headers)
-
-    assert response.status_code == 404
+    assert response.json()["status"] == "no_trips"
 
 
-def test_get_my_trip_phases_returns_404_when_only_trip_is_ended(seeded_client, session_factory):
-    """Ended trips remain stored but are not visible in the traveler app."""
+def test_login_returns_no_trips_when_only_trip_is_ended(seeded_client, session_factory):
+    """Ended trips remain stored but do not produce an application session."""
     phone = "+5511333000022"
     trip_uuid = "trip-ended-traveler-hidden"
     asyncio.run(
@@ -481,14 +485,13 @@ def test_get_my_trip_phases_returns_404_when_only_trip_is_ended(seeded_client, s
         )
     )
     asyncio.run(_seed_phases(session_factory, trip_uuid=trip_uuid))
-    headers = _auth(seeded_client, phone)
+    otp = seeded_client.post("/auth/request-otp", json={"phone": phone})
+    response = seeded_client.post(
+        "/auth/verify-otp",
+        json={"phone": phone, "code": otp.json()["debug_code"]},
+    )
 
-    trip_response = seeded_client.get("/me/trip", headers=headers)
-    phases_response = seeded_client.get("/me/trip/phases", headers=headers)
-
-    assert trip_response.status_code == 200
-    assert trip_response.json()["trip"] is None
-    assert phases_response.status_code == 404
+    assert response.json()["status"] == "no_trips"
 
 
 def test_get_my_trip_travelers_returns_all_trip_members(seeded_client, session_factory):
@@ -507,13 +510,15 @@ def test_get_my_trip_travelers_returns_all_trip_members(seeded_client, session_f
                 phone=staff_phone,
                 full_name="Staff With Traveler View",
                 status="active",
-                role="staff",
             )
             session.add_all([user_b, staff_user])
             await session.flush()
             session.add_all([
                 TripTraveler(wetravel_trip_uuid=trip_uuid, user_id=user_b.id),
                 TripTraveler(wetravel_trip_uuid=trip_uuid, user_id=staff_user.id),
+                # A `trip_staff` row for THIS trip — not a global `role` — is what
+                # makes someone staff and excludes them from the traveler list.
+                TripStaff(wetravel_trip_uuid=trip_uuid, user_id=staff_user.id),
             ])
             await session.commit()
     asyncio.run(_seed_trip_members())
@@ -527,6 +532,74 @@ def test_get_my_trip_travelers_returns_all_trip_members(seeded_client, session_f
     assert phone_a in phones
     assert phone_b in phones
     assert staff_phone not in phones
+
+
+def test_get_my_trip_travelers_excludes_staff_only_on_the_trip_they_staff(
+    seeded_client, session_factory
+):
+    """Role is derived per trip: a person who is staff on trip B and a plain
+    traveler on trip A must appear in trip A's traveler list and be excluded
+    only from trip B's — never by a global `users.role`.
+    """
+    from sqlalchemy import text
+
+    from app.services.auth_service import _create_session_token
+
+    trip_a = "trip-travelers-mixed-role-a"
+    trip_b = "trip-travelers-mixed-role-b"
+    mixed_phone = "+5511333000024"
+    other_b_phone = "+5511333000026"
+
+    async def _seed():
+        async with session_factory() as session:
+            for trip_uuid in (trip_a, trip_b):
+                await session.execute(
+                    text(
+                        "INSERT INTO wetravel_trips (trip_uuid, title, destination, start_date, end_date)"
+                        " VALUES (:uuid, :title, :dest, :sd, :ed)"
+                        " ON CONFLICT (trip_uuid) DO NOTHING"
+                    ),
+                    {
+                        "uuid": trip_uuid,
+                        "title": "Test Trip",
+                        "dest": "Brazil",
+                        "sd": date(2027, 7, 1),
+                        "ed": date(2027, 7, 10),
+                    },
+                )
+            mixed_user = User(phone=mixed_phone, full_name="Mixed Role", status="active")
+            other_b = User(phone=other_b_phone, full_name="Traveler B2", status="active")
+            session.add_all([mixed_user, other_b])
+            await session.flush()
+            session.add_all([
+                TripTraveler(wetravel_trip_uuid=trip_a, user_id=mixed_user.id),
+                TripTraveler(wetravel_trip_uuid=trip_b, user_id=mixed_user.id),
+                TripStaff(wetravel_trip_uuid=trip_b, user_id=mixed_user.id),
+                TripTraveler(wetravel_trip_uuid=trip_b, user_id=other_b.id),
+            ])
+            await session.commit()
+            return str(mixed_user.id)
+
+    mixed_user_id = asyncio.run(_seed())
+
+    token_a = _create_session_token(mixed_user_id, mixed_phone, trip_a, "traveler")
+    token_b = _create_session_token(mixed_user_id, mixed_phone, trip_b, "staff")
+
+    response_a = seeded_client.get(
+        "/me/trip/travelers", headers={"Authorization": f"Bearer {token_a}"}
+    )
+    response_b = seeded_client.get(
+        "/me/trip/travelers", headers={"Authorization": f"Bearer {token_b}"}
+    )
+
+    assert response_a.status_code == 200
+    phones_a = {t["phone"] for t in response_a.json()["travelers"]}
+    assert mixed_phone in phones_a, "must appear in trip A's traveler list"
+
+    assert response_b.status_code == 200
+    phones_b = {t["phone"] for t in response_b.json()["travelers"]}
+    assert mixed_phone not in phones_b, "must be excluded from trip B's traveler list"
+    assert other_b_phone in phones_b
 
 
 def test_get_my_trip_travelers_includes_current_phase_id(seeded_client, session_factory):

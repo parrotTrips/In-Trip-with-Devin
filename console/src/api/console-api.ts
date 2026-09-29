@@ -6,8 +6,11 @@ export const PRE_DEPARTURE_LINK =
 export interface Trip {
   trip_uuid: string;
   title: string;
+  destination: string | null;
   start_date: string | null;
   end_date: string | null;
+  traveler_count: number;
+  mode: string | null;
 }
 
 export function listTrips() {
@@ -120,4 +123,107 @@ export function savePhaseContent(phaseId: string, body: PhaseContentInput) {
     `/console/phases/${phaseId}/content`,
     { method: 'PUT', body: JSON.stringify(body) },
   );
+}
+
+export interface TripSection {
+  key: string;
+  label: string;
+  group: string;
+  group_label: string;
+  count: number;
+  editable: boolean;
+  readonly_note: string | null;
+}
+
+export interface SectionColumn {
+  key: string;
+  label: string;
+  required: boolean;
+  kind: 'text' | 'textarea' | 'select' | 'url' | 'number';
+  choices: string[];
+}
+
+export interface SectionRows {
+  key: string;
+  label: string;
+  readonly_note: string | null;
+  editable: boolean;
+  columns: SectionColumn[];
+  rows: Record<string, unknown>[];
+}
+
+export function listSections(tripUuid: string) {
+  return request<{ sections: TripSection[] }>(`/console/trips/${tripUuid}/sections`);
+}
+
+export function getSection(tripUuid: string, sectionKey: string) {
+  return request<SectionRows>(`/console/trips/${tripUuid}/sections/${sectionKey}`);
+}
+
+export function replaceSection(
+  tripUuid: string,
+  sectionKey: string,
+  items: Record<string, unknown>[]
+) {
+  return request<{ key: string; count: number }>(
+    `/console/trips/${tripUuid}/sections/${sectionKey}`,
+    { method: 'PUT', body: JSON.stringify({ items }) }
+  );
+}
+
+export const ACTIVITY_TYPES = ['included', 'optional', 'suggested', 'logistics'] as const;
+
+export interface Activity {
+  id: string;
+  name: string;
+  activity_type: string;
+  starts_at: string | null;
+  duration_minutes: number | null;
+  short_description: string;
+  practical_info: string;
+  address: string | null;
+  max_checkins: number;
+  amount_brl: number | null;
+  sort_order: number;
+  checkin_count: number;
+  scan_count: number;
+}
+
+export interface Day {
+  id: string;
+  title: string;
+  sort_order: number;
+  is_visible: boolean;
+  activities: Activity[];
+}
+
+export function getDays(tripUuid: string) {
+  return request<{ days: Day[] }>(`/console/trips/${tripUuid}/days`);
+}
+
+export function createDay(tripUuid: string, title: string) {
+  return request<{ id: string }>(`/console/trips/${tripUuid}/days`, {
+    method: 'POST',
+    body: JSON.stringify({ title, short_description: '' }),
+  });
+}
+
+export function createActivity(dayId: string, body: Partial<Activity>) {
+  return request<{ id: string }>(`/console/days/${dayId}/activities`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateActivity(activityId: string, body: Partial<Activity>) {
+  return request<{ id: string; updated: boolean }>(`/console/activities/${activityId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteActivity(activityId: string) {
+  return request<{ id: string; deleted: boolean }>(`/console/activities/${activityId}`, {
+    method: 'DELETE',
+  });
 }

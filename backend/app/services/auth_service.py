@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import (
     JWT_ALGORITHM,
     JWT_EXPIRY_DAYS,
+    JWT_SELECTION_EXPIRY_MINUTES,
     JWT_SECRET,
     WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_API_URL,
@@ -26,12 +27,117 @@ from app.core.config import (
 from app.core.logger import log, log_erro
 from app.db.models.auth import OTPCode
 from app.db.models.user import User
+from app.services.trip_membership_service import list_eligible_trips
 
 
-def _create_access_token(user_id: str, phone: str, role: str) -> str:
-    expire = datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS)
-    payload = {"sub": user_id, "phone": phone, "role": role, "exp": expire}
+def _encode_token(payload: dict, expires_at: datetime) -> str:
+    payload = {**payload, "exp": expires_at}
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def _create_selection_token(
+    user_id: str, phone: str, *, auth_time: datetime | None = None
+) -> str:
+    """A short-lived (15 min) token permitting only listing/selecting trips.
+
+    ``auth_time`` marks when the person actually completed OTP verification —
+    the start of their 14-day identity lifetime. It defaults to now, since a
+    selection token is only ever minted fresh, right after OTP verification.
+    """
+    auth_time = auth_time or datetime.now(UTC)
+    return _encode_token(
+        {
+            "sub": user_id,
+            "phone": phone,
+            "token_type": "trip_selection",
+            "auth_time": int(auth_time.timestamp()),
+        },
+        datetime.now(UTC) + timedelta(minutes=JWT_SELECTION_EXPIRY_MINUTES),
+    )
+
+
+def _create_session_token(
+    user_id: str,
+    phone: str,
+    trip_id: str,
+    role: str,
+    *,
+    auth_time: datetime | None = None,
+    expires_at: datetime | None = None,
+) -> str:
+    """A trip-scoped session token.
+
+    ``auth_time`` is the moment the person's identity was last established via
+    OTP — it is carried through every later trip selection/switch so a session
+    (or a stolen token) cannot renew forever by re-selecting a trip every few
+    days. It defaults to now: called directly (e.g. from tests, or the
+    single-eligible-trip auto-selection path in ``verify_otp``), a session
+    starts a fresh 14-day identity lifetime, same as before this change.
+
+    ``expires_at`` lets a caller pin an exact expiry (used for the legacy
+    fallback in ``select_trip`` — see ``app.routers.auth``) instead of deriving
+    it from ``auth_time``.
+    """
+    auth_time = auth_time or datetime.now(UTC)
+    return _encode_token(
+        {
+            "sub": user_id,
+            "phone": phone,
+            "token_type": "session",
+            "trip_id": trip_id,
+            "role": role,
+            "auth_time": int(auth_time.timestamp()),
+        },
+        expires_at or (auth_time + timedelta(days=JWT_EXPIRY_DAYS)),
+    )
+
+
+def _create_admin_token(user_id: str, phone: str) -> str:
+    return _encode_token(
+        {
+            "sub": user_id,
+            "phone": phone,
+            "token_type": "admin",
+            "role": "admin",
+        },
+        datetime.now(UTC) + timedelta(days=JWT_EXPIRY_DAYS),
+    )
+
+
+def create_trip_session_payload(
+    user_id: str,
+    phone: str,
+    name: str | None,
+    membership: dict,
+    can_switch_trips: bool,
+    *,
+    auth_time: datetime | None = None,
+    expires_at: datetime | None = None,
+) -> dict:
+    """Build the response and scoped JWT for one selected membership.
+
+    ``auth_time``/``expires_at``: see ``_create_session_token``. Omitted by
+    ``verify_otp`` (a fresh identity lifetime starts here); passed through by
+    ``POST /auth/select-trip`` so exchanging a token never resets the clock.
+    """
+    return {
+        "status": "trip_selected",
+        "user_id": user_id,
+        "phone": phone,
+        "name": name,
+        "role": membership["role"],
+        "message": "Login successful",
+        "access_token": _create_session_token(
+            user_id,
+            phone,
+            membership["trip_id"],
+            membership["role"],
+            auth_time=auth_time,
+            expires_at=expires_at,
+        ),
+        "active_trip": membership,
+        "can_switch_trips": can_switch_trips,
+    }
 
 
 async def send_whatsapp_otp(phone: str, code: str) -> bool:
@@ -170,14 +276,37 @@ async def verify_otp(
     await session.commit()
     await session.refresh(user)
 
-    log("login_ok", telefone=phone, usuario_id=str(user.id), papel=user.role)
-    access_token = _create_access_token(str(user.id), user.phone, user.role)
-
-    return {
-        "user_id": str(user.id),
+    user_id = str(user.id)
+    trips = await list_eligible_trips(user_id, session)
+    identity = {
+        "user_id": user_id,
         "phone": user.phone,
         "name": user.full_name,
-        "role": user.role,
-        "message": "Login successful",
-        "access_token": access_token,
+    }
+    log("login_ok", telefone=phone, usuario_id=user_id, viagens=len(trips))
+
+    if user.role == "admin":
+        return {
+            **identity,
+            "status": "admin_authenticated",
+            "role": "admin",
+            "message": "Login successful",
+            "access_token": _create_admin_token(user_id, user.phone),
+        }
+    if not trips:
+        return {
+            **identity,
+            "status": "no_trips",
+            "message": "No current or future trips available",
+        }
+    if len(trips) == 1:
+        return create_trip_session_payload(
+            user_id, user.phone, user.full_name, trips[0], False
+        )
+    return {
+        **identity,
+        "status": "selection_required",
+        "message": "Trip selection required",
+        "selection_token": _create_selection_token(user_id, user.phone),
+        "trips": trips,
     }

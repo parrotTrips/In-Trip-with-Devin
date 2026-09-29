@@ -9,6 +9,11 @@ type DevUser = {
   role: 'traveler' | 'staff';
   label: string;
   hasData: boolean;
+  // The trip_id claim baked into `token` — the token is now always a real
+  // trip-scoped session token (the middleware rejects anything else), so
+  // this must match it. Optional only for backwards compatibility with a
+  // stale, not-yet-regenerated devUsers.ts.
+  tripId?: string;
 };
 
 // devUsers.ts é gerado por gen_dev_users.py e está no .gitignore
@@ -30,7 +35,7 @@ export default function DevUserSwitcher() {
   if (!isStaff && !isTraveler) return null;
 
   const handleSelect = (u: DevUser) => {
-    login(u.userId, u.phone, u.name, u.token, u.role);
+    login(u.userId, u.phone, u.name, u.token, u.role, u.tripId ?? null);
     setOpen(false);
     window.location.reload();
   };

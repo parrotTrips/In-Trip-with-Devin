@@ -181,6 +181,25 @@ export default function PhaseDetails() {
       </div>
 
       <div className="px-4 -mt-3 space-y-4">
+        {phase.detailed_description && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="w-full flex items-center justify-between p-4"
+            >
+              <h3 className="font-semibold text-gray-800 font-[Fredoka]">Instructions</h3>
+              {showDetails ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+            </button>
+            {showDetails && (
+              <div className="px-4 pb-4">
+                <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+                  {phase.detailed_description}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {checklist.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 border-b border-gray-50">
@@ -213,25 +232,6 @@ export default function PhaseDetails() {
                 </button>
               ))}
             </div>
-          </div>
-        )}
-
-        {phase.detailed_description && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <button
-              onClick={() => setShowDetails(!showDetails)}
-              className="w-full flex items-center justify-between p-4"
-            >
-              <h3 className="font-semibold text-gray-800 font-[Fredoka]">Instructions</h3>
-              {showDetails ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-            </button>
-            {showDetails && (
-              <div className="px-4 pb-4">
-                <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-                  {phase.detailed_description}
-                </p>
-              </div>
-            )}
           </div>
         )}
 

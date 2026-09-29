@@ -3,10 +3,90 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
 
+import App from '../../app/App';
 import { AuthProvider } from '../../app/providers/AuthProvider';
 import { TripContext } from '../../app/providers/trip-context';
 import { server } from '../../test/server';
+import type { TripChoice } from '../auth/services/auth-api';
 import ProfileScreen from './pages/ProfileScreen';
+
+const SWITCH_TRIP_CURRENT: TripChoice = {
+  trip_id: 'trip-001',
+  title: 'Trip One',
+  destination: 'Rio de Janeiro',
+  start_date: '2026-02-27',
+  end_date: '2026-03-08',
+  role: 'traveler',
+  is_current: true,
+};
+
+const SWITCH_TRIP_OTHER: TripChoice = {
+  trip_id: 'trip-002',
+  title: 'Trip Two',
+  destination: 'Lisbon',
+  start_date: '2026-06-01',
+  end_date: '2026-06-10',
+  role: 'traveler',
+  is_current: false,
+};
+
+function setUpSwitcherSession() {
+  localStorage.setItem(
+    'parrot_user',
+    JSON.stringify({
+      userId: 'traveler-1',
+      phone: '+15550000001',
+      name: 'Alice',
+      token: 'tok',
+      role: 'traveler',
+      tripId: 'trip-001',
+      activeTrip: SWITCH_TRIP_CURRENT,
+      canSwitchTrips: true,
+    })
+  );
+}
+
+function setUpSwitcherAppHandlers() {
+  server.use(
+    http.get('http://localhost:8000/me/trip', () =>
+      HttpResponse.json({
+        trip: {
+          wetravel_trip_uuid: 'trip-001',
+          title: 'Trip One',
+          destination: 'Rio de Janeiro',
+          start_date: '2026-02-27',
+          end_date: '2026-03-08',
+          url: null,
+          service_agreement_url: null,
+          trip_mode: 'in-trip',
+        },
+      })
+    ),
+    http.get('http://localhost:8000/me/trip/phases', () =>
+      HttpResponse.json({ wetravel_trip_uuid: 'trip-001', phases: [], ideal_pace_phase_id: null })
+    ),
+    http.get('http://localhost:8000/me/trip/travelers', () => HttpResponse.json({ travelers: [] })),
+    http.get('http://localhost:8000/me/announcements', () =>
+      HttpResponse.json({ announcements: [], unread_count: 0 })
+    ),
+    http.get('http://localhost:8000/profile/traveler-1', () =>
+      HttpResponse.json({
+        user_id: 'traveler-1',
+        phone: '+15550000001',
+        name: 'Alice',
+        profile: { preferred_name: 'Alice', email: 'alice@example.com' },
+        roommate: null,
+      })
+    ),
+    http.get('http://localhost:8000/me/qr-code', () =>
+      HttpResponse.json({
+        trip_uuid: 'trip-001',
+        trip_traveler_id: 'trip-traveler-001',
+        qr_payload: 'parrot-trip-checkin:trip-001:trip-traveler-001',
+      })
+    )
+  );
+}
 
 describe('ProfileScreen', () => {
   test('loads and saves the profile data', async () => {
@@ -14,7 +94,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -92,7 +172,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -221,7 +301,7 @@ describe('ProfileScreen', () => {
   test('opens pre departure information from a section deep link', async () => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -267,7 +347,7 @@ describe('ProfileScreen', () => {
 
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: 'traveler-1', phone: '+15550000001', name: 'Alice' })
+      JSON.stringify({ userId: 'traveler-1', phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
     );
 
     server.use(
@@ -377,5 +457,132 @@ describe('ProfileScreen', () => {
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/do you know who you will share the room with/i), 'No, please match me with someone.');
     expect(within(preDepartureContainer).queryByLabelText(/requested roommate/i)).not.toBeInTheDocument();
     expect(within(preDepartureContainer).getByLabelText(/roommate gender preference/i)).toBeInTheDocument();
+  });
+
+  test('offers Trocar de viagem, refreshes memberships fresh, and opens the selector without OTP', async () => {
+    let tripsRequests = 0;
+    let lastAuthHeader: string | null = null;
+    setUpSwitcherSession();
+    window.history.pushState({}, '', '/profile');
+    setUpSwitcherAppHandlers();
+    server.use(
+      http.get('http://localhost:8000/auth/trips', ({ request }) => {
+        tripsRequests += 1;
+        lastAuthHeader = request.headers.get('authorization');
+        return HttpResponse.json({ trips: [SWITCH_TRIP_CURRENT, SWITCH_TRIP_OTHER] });
+      })
+    );
+
+    render(<App />);
+
+    const switchButton = await screen.findByRole('button', { name: /trocar de viagem/i });
+    await userEvent.click(switchButton);
+
+    await screen.findByText('Escolha sua viagem');
+    expect(tripsRequests).toBe(1);
+    expect(lastAuthHeader).toBe('Bearer tok');
+    expect(screen.getByText('Trip Two')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancelar/i })).toBeInTheDocument();
+    // No OTP step is shown — the switcher opens directly from the profile.
+    expect(screen.queryByPlaceholderText('Phone number')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verification Code')).not.toBeInTheDocument();
+  });
+
+  test('hides Trocar de viagem when only one trip is eligible', async () => {
+    setUpSwitcherSession();
+    const stored = JSON.parse(localStorage.getItem('parrot_user')!);
+    localStorage.setItem('parrot_user', JSON.stringify({ ...stored, canSwitchTrips: false }));
+    window.history.pushState({}, '', '/profile');
+    setUpSwitcherAppHandlers();
+
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'My Profile' });
+    expect(screen.queryByRole('button', { name: /trocar de viagem/i })).not.toBeInTheDocument();
+  });
+
+  test('cancelling the switcher returns to the exact previous session untouched', async () => {
+    setUpSwitcherSession();
+    window.history.pushState({}, '', '/profile');
+    setUpSwitcherAppHandlers();
+    server.use(
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [SWITCH_TRIP_CURRENT, SWITCH_TRIP_OTHER] })
+      )
+    );
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /trocar de viagem/i }));
+    await screen.findByText('Escolha sua viagem');
+
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    expect(screen.queryByText('Escolha sua viagem')).not.toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'My Profile' });
+    expect(JSON.parse(localStorage.getItem('parrot_user')!)).toMatchObject({
+      userId: 'traveler-1',
+      token: 'tok',
+      tripId: 'trip-001',
+    });
+  });
+
+  test('keeps the current session if selecting a new trip fails', async () => {
+    setUpSwitcherSession();
+    window.history.pushState({}, '', '/profile');
+    setUpSwitcherAppHandlers();
+    server.use(
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [SWITCH_TRIP_CURRENT, SWITCH_TRIP_OTHER] })
+      ),
+      http.post('http://localhost:8000/auth/select-trip', () =>
+        HttpResponse.json({ detail: 'Trip no longer available' }, { status: 409 })
+      )
+    );
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /trocar de viagem/i }));
+    await screen.findByText('Escolha sua viagem');
+
+    await userEvent.click(screen.getByText('Trip Two').closest('button')!);
+
+    await screen.findByRole('alert');
+    expect(screen.getByText('Escolha sua viagem')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('parrot_user')!)).toMatchObject({
+      userId: 'traveler-1',
+      token: 'tok',
+      tripId: 'trip-001',
+    });
+  });
+
+  test('offers a Cancelar option while the switcher is still loading trips', async () => {
+    setUpSwitcherSession();
+    window.history.pushState({}, '', '/profile');
+    setUpSwitcherAppHandlers();
+    let resolveTrips: (() => void) | undefined;
+    server.use(
+      http.get(
+        'http://localhost:8000/auth/trips',
+        () =>
+          new Promise<Response>(resolve => {
+            resolveTrips = () =>
+              resolve(HttpResponse.json({ trips: [SWITCH_TRIP_CURRENT, SWITCH_TRIP_OTHER] }));
+          })
+      )
+    );
+
+    render(<App />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /trocar de viagem/i }));
+
+    expect(await screen.findByRole('status', { name: /carregando viagens/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
+
+    await screen.findByRole('heading', { name: 'My Profile' });
+    expect(screen.queryByRole('status', { name: /carregando viagens/i })).not.toBeInTheDocument();
+
+    // Let the in-flight request settle so it doesn't leak into another test.
+    resolveTrips?.();
   });
 });

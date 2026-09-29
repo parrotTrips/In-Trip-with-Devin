@@ -57,6 +57,9 @@ PG_URL = (
 TRIP_CONTENT_SHEET_ID = os.environ.get("TRIP_CONTENT_SHEET_ID", "")
 TRIP_LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
+# Values the team types in boolean-ish sheet columns; Code.gs documents "sim"/"nao".
+_TRUTHY = ("true", "sim", "yes", "x", "1")
+
 
 def deterministic_phase_id(trip_uuid: str, phase_type: str, phase_key: str | int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"parrot-trips:{trip_uuid}:phase:{phase_type}:{phase_key}"))
@@ -308,39 +311,53 @@ def parse_fases_tab(rows: list[list[str]]) -> list[PreTripPhase]:
     return [p for _, p in sorted(phases, key=lambda x: x[0])]
 
 
-def parse_checklist_tab(rows: list[list[str]], phases: list[PreTripPhase]) -> None:
+def parse_checklist_tab(rows: list[list[str]], phases: list[PreTripPhase]) -> list[str]:
     """Parse Checklist tab (already filtered by trip_uuid) and attach items to phases in-place.
-    Columns: trip_uuid, fase, ordem, label, obrigatorio"""
-    phase_map = {p.fase: p for p in phases}
-    by_fase: dict[str, dict[int, dict[str, str]]] = {}
 
-    for row in rows[1:]:  # skip header
-        if len(row) < 5:
+    Columns: trip_uuid, fase, ordem, label, obrigatorio. Only fase, ordem and label are
+    required: the Sheets API drops trailing empty cells, so an unfilled `obrigatorio`
+    arrives as a four-cell row and must not cost us the item.
+
+    Returns one human-readable line per row that was skipped, so the import summary can
+    say what was dropped instead of swallowing it.
+    """
+    phase_map = {p.fase: p for p in phases}
+    by_fase: dict[str, list[tuple[int, str, str]]] = {}
+    skipped: list[str] = []
+
+    for line, row in enumerate(rows[1:], start=2):  # skip header; `line` matches the sheet
+        if not row:
             continue
-        _, fase, ordem_str, label, obrigatorio = (
-            row[i].strip() if i < len(row) else "" for i in range(5)
+        fase, ordem_str, label, obrigatorio = (
+            row[i].strip() if i < len(row) else "" for i in range(1, 5)
         )
+        if not fase and not label:
+            continue  # blank spacer row
         if not fase or not label:
+            skipped.append(f"linha {line}: fase ou label vazio (fase={fase!r}, label={label!r})")
             continue
         try:
             ordem = int(ordem_str)
         except ValueError:
+            skipped.append(f"linha {line}: ordem invalida {ordem_str!r} (label={label!r})")
             continue
-        if fase not in by_fase:
-            by_fase[fase] = {}
-        by_fase[fase][ordem] = {"label": label, "obrigatorio": obrigatorio}
+        by_fase.setdefault(fase, []).append((ordem, label, obrigatorio))
 
     for fase, items in by_fase.items():
         phase = phase_map.get(fase)
         if not phase:
+            skipped.append(f"fase {fase!r} nao existe na aba Fases ({len(items)} item(ns) perdido(s))")
             continue
-        for sort_order, fields in sorted(items.items()):
-            is_required = fields["obrigatorio"].lower() == "true"
+        # Sort by `ordem` but keep sheet order for ties, so duplicate numbering costs
+        # us the ordering, never the item.
+        for sort_order, (_, label, obrigatorio) in enumerate(sorted(items, key=lambda t: t[0])):
             phase.checklist.append(ChecklistItem(
-                label=fields["label"],
-                is_required=is_required,
-                sort_order=sort_order - 1,
+                label=label,
+                is_required=obrigatorio.lower() in _TRUTHY,
+                sort_order=sort_order,
             ))
+
+    return skipped
 
 
 def parse_links_tab(rows: list[list[str]], phases: list[PreTripPhase]) -> None:
@@ -622,7 +639,7 @@ async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet
     pre_trip_phases = parse_fases_tab(fases_rows)
 
     checklist_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Checklist"), trip_uuid)
-    parse_checklist_tab(checklist_rows, pre_trip_phases)
+    checklist_skipped = parse_checklist_tab(checklist_rows, pre_trip_phases)
 
     links_rows = filter_rows_by_trip(read_tab(sheets_svc, sheet_id, "Links"), trip_uuid)
     parse_links_tab(links_rows, pre_trip_phases)
@@ -645,6 +662,7 @@ async def import_one(sheets_svc, conn: asyncpg.Connection, trip_uuid: str, sheet
         "skipped": False,
         "phases": len(pre_trip_phases),
         "checklist": sum(len(p.checklist) for p in pre_trip_phases),
+        "checklist_skipped": checklist_skipped,
         "links": sum(len(p.links) for p in pre_trip_phases),
         "days": len(in_trip_days),
         "activities": sum(len(d.activities) for d in in_trip_days),
@@ -683,6 +701,8 @@ async def main(trip_uuids: list[str], sheet_id: str) -> None:
                     skipped.append(trip_uuid)
                 else:
                     print(f"   ✅ {result['phases']} phases, {result['checklist']} checklist, {result['links']} links, {result['days']} days, {result['activities']} activities")
+                    for warning in result["checklist_skipped"]:
+                        print(f"   ⚠️  checklist ignorado — {warning}")
                     for k in totals:
                         totals[k] += result[k]
             except Exception as exc:

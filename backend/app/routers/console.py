@@ -6,12 +6,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.console_auth import require_console_access
 from app.db.session import get_db_session
 from app.schemas.console import (
+    ActivityIn,
+    ActivityOrder,
     ChecklistReplace,
+    DayCreate,
+    SectionReplace,
     LinkReplace,
     PhaseContentUpdate,
     PhaseCreate,
     PhaseOrder,
     PhaseUpdate,
+)
+from app.services.console_roteiro import (
+    create_activity,
+    delete_activity,
+    get_days,
+    reorder_activities,
+    update_activity,
+)
+from app.services.console_sections import (
+    get_section_rows,
+    list_sections,
+    replace_section,
 )
 from app.services.console_service import (
     create_phase,
@@ -137,3 +153,99 @@ async def reorder_phases_handler(
 ):
     """Reorder the trip phases according to the list sent."""
     return await reorder_phases(session, trip_uuid, body.phase_ids)
+
+
+@router.get("/trips/{trip_uuid}/sections")
+async def list_sections_handler(
+    trip_uuid: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return every section of the trip with its group and row count."""
+    return await list_sections(session, trip_uuid)
+
+
+@router.get("/trips/{trip_uuid}/sections/{section_key}")
+async def get_section_handler(
+    trip_uuid: str,
+    section_key: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return the rows of one read-only section."""
+    return await get_section_rows(session, trip_uuid, section_key)
+
+
+@router.put("/trips/{trip_uuid}/sections/{section_key}")
+async def replace_section_handler(
+    trip_uuid: str,
+    section_key: str,
+    body: SectionReplace,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Replace the rows of an editable section with the list sent, in order."""
+    return await replace_section(session, trip_uuid, section_key, body.items)
+
+
+@router.get("/trips/{trip_uuid}/days")
+async def get_days_handler(
+    trip_uuid: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Return in-trip days with their activities."""
+    return await get_days(session, trip_uuid)
+
+
+@router.post("/trips/{trip_uuid}/days")
+async def create_day_handler(
+    trip_uuid: str,
+    body: DayCreate,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Create an in-trip day. A day is a phase, so it reuses the phase creation."""
+    payload = {
+        "subtitle": None,
+        "icon": None,
+        "detailed_description": None,
+        **body.model_dump(),
+    }
+    return await create_phase(session, trip_uuid, payload, phase_type="in-trip")
+
+
+@router.post("/days/{day_id}/activities")
+async def create_activity_handler(
+    day_id: str,
+    body: ActivityIn,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Append an activity to a day."""
+    return await create_activity(session, day_id, body.model_dump(exclude_unset=True, mode="json"))
+
+
+@router.patch("/activities/{activity_id}")
+async def update_activity_handler(
+    activity_id: str,
+    body: ActivityIn,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Update an activity in place, preserving its check-ins."""
+    return await update_activity(
+        session, activity_id, body.model_dump(exclude_unset=True, mode="json")
+    )
+
+
+@router.delete("/activities/{activity_id}")
+async def delete_activity_handler(
+    activity_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Delete an activity, refusing when attendance records depend on it."""
+    return await delete_activity(session, activity_id)
+
+
+@router.put("/days/{day_id}/activities/order")
+async def reorder_activities_handler(
+    day_id: str,
+    body: ActivityOrder,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Reorder the activities of a day."""
+    return await reorder_activities(session, day_id, body.activity_ids)

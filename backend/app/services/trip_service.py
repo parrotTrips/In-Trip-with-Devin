@@ -7,7 +7,7 @@ from datetime import UTC, datetime as _datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.trip import (
@@ -18,7 +18,10 @@ from app.db.models.trip import (
     TripTraveler,
 )
 from app.db.models.progress import TravelerPhaseProgress
+from app.db.models.staff import TripStaff
+from app.db.models.traveler import TravelerProfile
 from app.db.models.user import User
+from app.services.trip_membership_service import require_trip_membership
 
 SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -109,33 +112,9 @@ def compute_current_phase_id(
     return ordered_phases[-1]["id"]
 
 
-async def _get_trip_uuid(user_id: str, session: AsyncSession) -> str:
-    """Return the user's next active trip uuid."""
-    try:
-        _uuid.UUID(user_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
-    result = await session.execute(
-        text("""
-            SELECT tt.wetravel_trip_uuid
-            FROM trip_travelers tt
-            JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-            WHERE tt.user_id = CAST(:user_id AS uuid)
-              AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-            ORDER BY wt.start_date ASC
-            LIMIT 1
-        """),
-        {"user_id": user_id},
-    )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Viagem não encontrada para este usuário")
-    return row["wetravel_trip_uuid"]
-
-
-async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
-    trip_uuid = await _get_trip_uuid(user_id, session)
+async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> dict:
+    await require_trip_membership(user_id, trip_id, session)
+    trip_uuid = trip_id
 
     phases_result = await session.execute(
         select(TripPhase)
@@ -203,8 +182,11 @@ async def get_trip_phases(user_id: str, session: AsyncSession) -> dict:
     }
 
 
-async def get_trip_phase_detail(user_id: str, phase_id: str, session: AsyncSession) -> dict:
-    trip_uuid = await _get_trip_uuid(user_id, session)
+async def get_trip_phase_detail(
+    user_id: str, trip_id: str, phase_id: str, session: AsyncSession
+) -> dict:
+    await require_trip_membership(user_id, trip_id, session)
+    trip_uuid = trip_id
 
     try:
         pid = _uuid.UUID(phase_id)
@@ -273,15 +255,28 @@ async def get_trip_phase_detail(user_id: str, phase_id: str, session: AsyncSessi
     }
 
 
-async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
-    trip_uuid = await _get_trip_uuid(user_id, session)
+async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) -> dict:
+    await require_trip_membership(user_id, trip_id, session)
+    trip_uuid = trip_id
 
+    not_staff_on_this_trip = ~(
+        select(TripStaff.id)
+        .where(
+            TripStaff.wetravel_trip_uuid == trip_uuid,
+            TripStaff.user_id == TripTraveler.user_id,
+        )
+        .exists()
+    )
     tt_result = await session.execute(
-        select(TripTraveler, User)
+        select(TripTraveler, User, TravelerProfile.preferred_name)
         .join(User, User.id == TripTraveler.user_id)
+        .outerjoin(
+            TravelerProfile,
+            TravelerProfile.trip_traveler_id == TripTraveler.id,
+        )
         .where(
             TripTraveler.wetravel_trip_uuid == trip_uuid,
-            User.role == "traveler",
+            not_staff_on_this_trip,
         )
     )
     rows = tt_result.all()
@@ -289,7 +284,7 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
     if not rows:
         return {"travelers": []}
 
-    tt_ids = [tt.id for tt, _ in rows]
+    tt_ids = [tt.id for tt, _, _ in rows]
 
     all_phases_result = await session.execute(
         select(TripPhase)
@@ -323,13 +318,13 @@ async def get_trip_travelers(user_id: str, session: AsyncSession) -> dict:
         db_completed_ids.setdefault(prog.trip_traveler_id, set()).add(str(prog.trip_phase_id))
 
     travelers = []
-    for tt, user in rows:
+    for tt, user, preferred_name in rows:
         completed_phase_ids = db_completed_ids.get(tt.id, set()) | {
             pid for pid, is_completed in date_completions.items() if is_completed
         }
         travelers.append({
             "id": str(user.id),
-            "name": user.full_name,
+            "name": preferred_name or user.full_name,
             "phone": user.phone,
             "current_phase_id": compute_current_phase_id(
                 phases=phase_dicts,

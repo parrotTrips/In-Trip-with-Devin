@@ -13,3 +13,7 @@ codex resume 01a034cc-a7ce-7230-978c-fccfffbec6ad <- Metricas PostHog
 codex resume 01a044da-ec6c-7ef0-a3b1-fb4d6026f1ba <- Feedbacks das viagens
 codex resume 01a06420-1bc1-71e3-9885-747cabe5b24b <- Pre Departure Form no app e no supabase
 codex resume 01a06cb2-a14e-7330-bf03-427e32026263 <- Link direcionando para cada uma das secoes por exemplo (Pre Departure Information)
+codex resume 01a08354-dc6a-73c2-b058-161c51eaf800 <- Correção Scan infinito
+codex resume 01a088ab-8204-73e2-9f95-cbec90de2261 <- Dash do Pre Departure 
+claude --resume 59ee133b-9919-4ad0-a7b8-c02eab6145ef <- Inicio da interface do jogo da vida/melhorias sugeridas
+codex resume 01a0c924-8b33-78a3-9918-348591ebada3 <- Angelo, Becker e Sanches em KLatam

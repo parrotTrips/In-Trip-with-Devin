@@ -1,9 +1,10 @@
 import asyncio
 import uuid as _uuid
+from datetime import date, timedelta
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.db.models.progress import TravelerChecklistProgress, TravelerPhaseProgress
 from app.db.models.trip import TripPhase, TripPhaseChecklistItem, TripTraveler
@@ -26,6 +27,18 @@ async def seed_checklist_context(
         wetravel_trip_uuid = f"test_trip_{str(_uuid.uuid4())[:8]}"
 
     async with session_factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO wetravel_trips "
+                "(trip_uuid, title, destination, start_date, end_date) "
+                "VALUES (:trip_id, 'Checklist Trip', 'Brazil', :start_date, :end_date)"
+            ),
+            {
+                "trip_id": wetravel_trip_uuid,
+                "start_date": date.today(),
+                "end_date": date.today() + timedelta(days=1),
+            },
+        )
         user = User(phone=phone, full_name="Ana", status="active")
         session.add(user)
         await session.flush()

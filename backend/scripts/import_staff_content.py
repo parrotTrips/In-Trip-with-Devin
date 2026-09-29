@@ -37,6 +37,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from scripts._phone import normalize_phone
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -173,7 +175,7 @@ def parse_staff_tasks_tab(rows: list[list[str]]) -> list[dict]:
             "trip_uuid": col(row, "trip_uuid"),
             "dia": day,
             "atividade_nome": col(row, "atividade_nome"),
-            "staff_phone": col(row, "staff_phone"),
+            "staff_phone": normalize_phone(col(row, "staff_phone")),
             "titulo": title,
             "descricao": col(row, "descricao") or None,
             "sort_order": sort_order,
@@ -212,7 +214,7 @@ def parse_activity_participants_tab(rows: list[list[str]]) -> list[dict]:
             "trip_uuid": col(row, "trip_uuid"),
             "dia": day,
             "atividade_nome": col(row, "atividade_nome"),
-            "traveler_phone": phone,
+            "traveler_phone": normalize_phone(phone),
             "status": (col(row, "status") or "allowed").lower(),
         })
     return participants
@@ -268,9 +270,20 @@ async def write_staff_tasks(conn: asyncpg.Connection, trip_uuid: str, tasks: lis
 
         inserted = 0
         for task in tasks:
+            # Staff-ness is per trip: match via a trip_staff row for THIS trip,
+            # never the global users.role — a person who is staff only on another
+            # trip must not be assignable to a task here, and a person staff on
+            # this trip must be found regardless of their global role value.
             staff_rows = await conn.fetch(
-                "SELECT id FROM users WHERE phone = $1 AND role = 'staff'",
+                """
+                SELECT u.id
+                FROM users u
+                JOIN trip_staff ts ON ts.user_id = u.id
+                WHERE u.phone = $1
+                  AND ts.wetravel_trip_uuid = $2
+                """,
                 task["staff_phone"],
+                trip_uuid,
             )
             staff = _require_single_row(staff_rows, "staff", task["staff_phone"])
 
@@ -378,13 +391,15 @@ async def write_activity_participants(conn: asyncpg.Connection, trip_uuid: str, 
             )
             activity = _require_single_row(activity_rows, "activity", participant["atividade_nome"])
 
+            # Membership in THIS trip's trip_travelers is the check — never the
+            # global users.role, which may say 'staff' for someone who is only
+            # staff on a different trip but a plain participant here.
             traveler_rows = await conn.fetch(
                 """
                 SELECT tt.id
                 FROM users u
                 JOIN trip_travelers tt ON tt.user_id = u.id
                 WHERE u.phone = $1
-                  AND u.role = 'traveler'
                   AND tt.wetravel_trip_uuid = $2
                 """,
                 participant["traveler_phone"],
@@ -430,7 +445,7 @@ def parse_staff_tab(rows: list[list[str]]) -> list[dict]:
     for row in rows[1:]:
         if not row or not row[0].strip():
             continue
-        phone = col(row, "phone")
+        phone = normalize_phone(col(row, "phone"))
         if not phone:
             continue
         members.append({
@@ -450,7 +465,11 @@ async def write_staff(conn: asyncpg.Connection, trip_uuid: str, members: list[di
 
     async with conn.transaction():
         for m in members:
-            phone = m["phone"]
+            # Normalize here too (not only at parse time): `write_staff` is also
+            # called directly by other scripts/tests, and a raw sheet cell without
+            # a leading "+" must still resolve to the same `users` row as the
+            # traveler importer's normalized phone, never create a duplicate user.
+            phone = normalize_phone(m["phone"])
             name = m["nome"]
 
             # Upsert user — create with role=staff if not exists, update name/role if exists

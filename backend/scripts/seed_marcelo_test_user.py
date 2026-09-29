@@ -19,14 +19,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import asyncpg
 from dotenv import load_dotenv
-from jose import jwt
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+from app.services.auth_service import _create_session_token
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 PG_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
-JWT_SECRET = os.environ.get("JWT_SECRET", "")
-JWT_ALGORITHM = "HS256"
 
 MARCELO_USER_ID = "e3dae095-7520-4afc-8b67-542e1783ff7d"
 MARCELO_PHONE = "+5512991296651"
@@ -41,9 +40,18 @@ FRONTEND_DEV_USERS_PATH = (
 
 
 def _create_jwt(user_id: str, phone: str, role: str = "traveler") -> str:
-    expire = datetime.now(UTC) + timedelta(days=90)
-    payload = {"sub": user_id, "phone": phone, "role": role, "exp": expire}
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    """A real trip-scoped session token (token_type="session", trip_id=TRIP_UUID,
+    role) — the JWTAuthMiddleware rejects anything else. Reuses the app's own
+    token helper, with a longer 90-day expiry since this is a long-lived local
+    test fixture rather than a real login.
+    """
+    return _create_session_token(
+        user_id,
+        phone,
+        TRIP_UUID,
+        role,
+        expires_at=datetime.now(UTC) + timedelta(days=90),
+    )
 
 
 async def seed(conn: asyncpg.Connection) -> None:
@@ -210,6 +218,7 @@ async def seed(conn: asyncpg.Connection) -> None:
     print(f"    role: 'traveler' as const,")
     print(f"    label: 'Marcelo — TEST-2026-FULL',")
     print(f"    hasData: true,")
+    print(f"    tripId: '{TRIP_UUID}',")
     print("  },")
 
     # ── 6. Append Marcelo entry to devUsers.ts if it exists ──────────────────
@@ -226,6 +235,7 @@ async def seed(conn: asyncpg.Connection) -> None:
                 f"    role: 'traveler' as const,\n"
                 f"    label: 'Marcelo — TEST-2026-FULL',\n"
                 f"    hasData: true,\n"
+                f"    tripId: '{TRIP_UUID}',\n"
                 "  },"
             )
             updated = content.replace("] as const;", f"{marcelo_entry}\n] as const;")

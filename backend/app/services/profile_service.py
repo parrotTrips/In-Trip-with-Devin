@@ -9,9 +9,11 @@ from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models.staff import TripStaff
 from app.db.models.traveler import TravelerProfile
 from app.db.models.trip import TripTraveler
 from app.db.models.user import User
+from app.services.trip_membership_service import require_trip_membership
 
 PROFILE_FIELD_DEFAULTS = {
     "preferred_name": None,
@@ -162,7 +164,7 @@ async def _validate_trip_roommate(
 async def _resolve_trip_traveler(
     user_id: str,
     session: AsyncSession,
-    wetravel_trip_uuid: str | None = None,
+    wetravel_trip_uuid: str,
 ) -> tuple[User, TripTraveler]:
     parsed_user_id = _parse_uuid(user_id, "User not found")
 
@@ -170,42 +172,9 @@ async def _resolve_trip_traveler(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    if wetravel_trip_uuid:
-        result = await session.execute(
-            text("""
-                SELECT tt.id
-                FROM trip_travelers tt
-                JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-                WHERE tt.user_id = CAST(:user_id AS uuid)
-                  AND tt.wetravel_trip_uuid = :trip_uuid
-                  AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-                LIMIT 1
-            """),
-            {"user_id": user_id, "trip_uuid": wetravel_trip_uuid},
-        )
-    else:
-        result = await session.execute(
-            text("""
-                SELECT tt.id
-                FROM trip_travelers tt
-                JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-                WHERE tt.user_id = CAST(:user_id AS uuid)
-                  AND (wt.end_date IS NULL OR wt.end_date::date >= CURRENT_DATE)
-                ORDER BY wt.start_date ASC
-                LIMIT 1
-            """),
-            {"user_id": user_id},
-        )
-
-    row = result.mappings().first()
-    trip_traveler = (
-        await session.get(TripTraveler, row["id"])
-        if row
-        else None
+    trip_traveler = await require_trip_membership(
+        user_id, wetravel_trip_uuid, session
     )
-
-    if not trip_traveler:
-        raise HTTPException(status_code=404, detail="Traveler not found for trip")
 
     return user, trip_traveler
 
@@ -249,7 +218,7 @@ def _decode_yes_no(value: str | None, field_name: str) -> bool | None:
 
 async def get_profile(
     user_id: str,
-    trip_id: str | None,
+    trip_id: str,
     session: AsyncSession,
 ) -> dict:
     """Return one traveler profile together with the linked basic user data."""
@@ -340,7 +309,7 @@ async def get_profile(
         "user_id": user_id,
         "wetravel_trip_uuid": wetravel_uuid,
         "phone": user.phone,
-        "name": user.full_name,
+        "name": profile.preferred_name if profile and profile.preferred_name else user.full_name,
         "profile": profile_dict if (profile or wetravel_row) else None,
         "roommate": None,
     }
@@ -348,7 +317,7 @@ async def get_profile(
 
 async def update_profile(
     user_id: str,
-    trip_id: str | None,
+    trip_id: str,
     update: dict,
     session: AsyncSession,
 ) -> dict:
@@ -378,7 +347,6 @@ async def update_profile(
 
     if "preferred_name" in update_data:
         profile.preferred_name = update_data["preferred_name"]
-        user.full_name = update_data["preferred_name"]
         updated_fields.append("preferred_name")
     if "dob" in update_data:
         profile.date_of_birth = _parse_optional_date(update_data["dob"], "dob")
@@ -464,23 +432,50 @@ async def update_profile(
     return {"message": "Profile updated", "updated_fields": updated_fields}
 
 
-async def get_trip_travelers(trip_id: str, session: AsyncSession) -> dict:
-    """List all travelers available for roommate selection in a trip."""
+async def get_trip_travelers(
+    user_id: str,
+    trip_id: str,
+    session: AsyncSession,
+) -> dict:
+    """List all travelers available for roommate selection in a trip.
+
+    Excludes people who are staff on THIS trip specifically (a `trip_staff` row for
+    `trip_id`), not by global `User.role` — a person can be staff on one trip and a
+    traveler on another, and `users.role` no longer decides authorization or display.
+    """
+    await _resolve_trip_traveler(user_id, session, trip_id)
+
+    not_staff_on_this_trip = ~(
+        select(TripStaff.id)
+        .where(
+            TripStaff.wetravel_trip_uuid == trip_id,
+            TripStaff.user_id == TripTraveler.user_id,
+        )
+        .exists()
+    )
     rows = await session.execute(
-        select(User)
+        select(User, TravelerProfile.preferred_name)
         .join(TripTraveler, TripTraveler.user_id == User.id)
+        .outerjoin(
+            TravelerProfile,
+            TravelerProfile.trip_traveler_id == TripTraveler.id,
+        )
         .where(
             TripTraveler.wetravel_trip_uuid == trip_id,
-            User.role == "traveler",
+            not_staff_on_this_trip,
         )
         .order_by(User.phone)
     )
-    users = rows.scalars().all()
+    users = rows.all()
 
     return {
         "trip_id": trip_id,
         "travelers": [
-            {"id": str(user.id), "name": user.full_name, "phone": user.phone}
-            for user in users
+            {
+                "id": str(user.id),
+                "name": preferred_name or user.full_name,
+                "phone": user.phone,
+            }
+            for user, preferred_name in users
         ],
     }
