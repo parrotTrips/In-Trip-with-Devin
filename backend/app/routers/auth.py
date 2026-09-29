@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import JWT_ALGORITHM, JWT_EXPIRY_DAYS, JWT_SECRET
+from app.core.config import (
+    JWT_ALGORITHM,
+    JWT_EXPIRY_DAYS,
+    JWT_SELECTION_EXPIRY_MINUTES,
+    JWT_SECRET,
+)
 from app.db.models.user import User
 from app.db.session import get_db_session
 from app.schemas.auth import OTPRequest, OTPVerify, TripSelectionRequest
@@ -56,9 +61,8 @@ def _decode_trip_choice_identity(request: Request) -> dict:
 
     # `auth_time` marks when OTP verification actually happened — the start of
     # this identity's 14-day lifetime. Tokens minted before this claim existed
-    # don't carry it; `exp` (this token's own, already-committed expiry) is
-    # kept as a fallback cap so a legacy token can't be used to grant a fresh
-    # 14-day lifetime through `/auth/select-trip`.
+    # don't carry it; their `exp` lets `select_trip` recover the approximate
+    # issuance time from the configured selection-token lifetime.
     auth_time_claim = payload.get("auth_time")
     auth_time = (
         datetime.fromtimestamp(auth_time_claim, UTC)
@@ -71,7 +75,13 @@ def _decode_trip_choice_identity(request: Request) -> dict:
         if isinstance(exp_claim, (int, float))
         else None
     )
-    return {"user_id": user_id, "phone": phone, "auth_time": auth_time, "exp": exp}
+    return {
+        "user_id": user_id,
+        "phone": phone,
+        "token_type": token_type,
+        "auth_time": auth_time,
+        "exp": exp,
+    }
 
 
 @router.post("/request-otp")
@@ -125,13 +135,18 @@ async def select_trip(
     auth_time = identity["auth_time"]
     expires_at = None
     if auth_time is None:
-        # Legacy token minted before `auth_time` existed: never grant a fresh
-        # 14-day lifetime. Cap the new session at the incoming token's own
-        # expiry, and back-derive an auth_time so later exchanges of *this*
-        # new token are capped the normal way.
         if identity["exp"] is not None:
-            expires_at = identity["exp"]
-            auth_time = identity["exp"] - timedelta(days=JWT_EXPIRY_DAYS)
+            if identity["token_type"] == "trip_selection":
+                # Legacy selection tokens predate `auth_time`, but their short
+                # expiry recovers the approximate issuance/OTP time.
+                auth_time = identity["exp"] - timedelta(
+                    minutes=JWT_SELECTION_EXPIRY_MINUTES
+                )
+            else:
+                # A legacy session may already be near its long-lived expiry.
+                # Exchanging it must never extend that committed deadline.
+                expires_at = identity["exp"]
+                auth_time = identity["exp"] - timedelta(days=JWT_EXPIRY_DAYS)
 
     return create_trip_session_payload(
         identity["user_id"],

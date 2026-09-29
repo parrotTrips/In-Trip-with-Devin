@@ -170,14 +170,15 @@ async def find_users_with_multiple_eligible_trips(conn: asyncpg.Connection) -> l
 async def find_users_with_role_staff_missing_trip_staff(
     conn: asyncpg.Connection,
 ) -> list[dict[str, Any]]:
-    """Deploy-time staff loss: `users.role = 'staff'` accounts that hold at
-    least one eligible (current/future) trip membership but no matching
-    `trip_staff` row on those trips.
+    """Potential deploy-time staff loss: `users.role = 'staff'` accounts that
+    hold at least one eligible trip membership but have no `trip_staff` row in
+    any trip.
 
     Before this rollout, staff access came from `users.role` alone; now it
-    requires a `trip_staff` row per trip. An account reported here lost staff
-    capabilities on the listed trips and needs `trip_staff` backfilled before
-    the new flow is enabled for them.
+    requires a per-trip `trip_staff` row. Accounts that already have any such
+    row are excluded because a missing row on another trip can intentionally
+    mean "traveler here, staff elsewhere". Every reported account still needs
+    case-by-case review before any backfill.
     """
     rows = await conn.fetch(
         """
@@ -185,11 +186,11 @@ async def find_users_with_role_staff_missing_trip_staff(
         FROM users u
         JOIN trip_travelers tt ON tt.user_id = u.id
         JOIN wetravel_trips wt ON wt.trip_uuid = tt.wetravel_trip_uuid
-        LEFT JOIN trip_staff ts
-          ON ts.wetravel_trip_uuid = tt.wetravel_trip_uuid AND ts.user_id = tt.user_id
         WHERE u.role = 'staff'
           AND (wt.end_date IS NULL OR wt.end_date >= CURRENT_DATE)
-          AND ts.id IS NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM trip_staff ts WHERE ts.user_id = u.id
+          )
         ORDER BY u.phone, tt.wetravel_trip_uuid
         """
     )
@@ -281,7 +282,7 @@ def format_report(report: dict[str, Any]) -> str:
 
     role_staff_missing = report["users_role_staff_missing_trip_staff"]
     lines.append(
-        "\nusers.role='staff' with an eligible trip but no trip_staff row: "
+        "\nusers.role='staff' with an eligible trip and no trip_staff row anywhere: "
         f"{len(role_staff_missing)}"
     )
     for u in role_staff_missing:

@@ -75,6 +75,7 @@ function Probe() {
       <button onClick={auth.logout}>logout</button>
       <button onClick={() => void request('/me/trip').catch(() => {})}>protected-request</button>
       <button onClick={() => void request('/profile/user-1').catch(() => {})}>profile-request</button>
+      <button onClick={() => void request('/trip/trip-a/travelers').catch(() => {})}>trip-travelers-request</button>
       <button onClick={() => void request('/auth/select-trip').catch(() => {})}>select-request</button>
     </div>
   );
@@ -339,6 +340,38 @@ describe('AuthProvider trip-scoped session state', () => {
     renderProbe();
     await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
     await user.click(screen.getByRole('button', { name: 'profile-request' }));
+
+    await waitFor(() => expect(screen.getByTestId('switcher-open')).toHaveTextContent('true'));
+    expect(screen.getByTestId('logged-in')).toHaveTextContent('true');
+  });
+
+  test('logs out when a protected /trip/{id}/travelers request returns 401', async () => {
+    server.use(
+      http.get('http://localhost:8000/trip/trip-a/travelers', () =>
+        HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 })
+      )
+    );
+    const user = userEvent.setup();
+    renderProbe();
+    await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
+    await user.click(screen.getByRole('button', { name: 'trip-travelers-request' }));
+
+    await waitFor(() => expect(screen.getByTestId('logged-in')).toHaveTextContent('false'));
+  });
+
+  test('recovers revoked membership from a protected /trip/{id}/travelers request', async () => {
+    server.use(
+      http.get('http://localhost:8000/trip/trip-a/travelers', () =>
+        HttpResponse.json({ detail: 'Trip membership required' }, { status: 403 })
+      ),
+      http.get('http://localhost:8000/auth/trips', () =>
+        HttpResponse.json({ trips: [TRIP_B] })
+      )
+    );
+    const user = userEvent.setup();
+    renderProbe();
+    await user.click(screen.getByRole('button', { name: 'select-trip-a' }));
+    await user.click(screen.getByRole('button', { name: 'trip-travelers-request' }));
 
     await waitFor(() => expect(screen.getByTestId('switcher-open')).toHaveTextContent('true'));
     expect(screen.getByTestId('logged-in')).toHaveTextContent('true');

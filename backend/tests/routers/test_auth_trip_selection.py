@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 
 JWT_SECRET = "test-secret-key-for-testing-only"
+JWT_SELECTION_EXPIRY_MINUTES = 15
 
 
 async def _seed_trip_choices(session_factory):
@@ -168,15 +169,14 @@ def test_select_trip_caps_new_session_at_original_identity_expiry(client, sessio
 def test_select_trip_legacy_token_without_auth_time_does_not_extend_lifetime(
     client, session_factory
 ):
-    """A token minted before the auth_time claim existed has no identity
-    lifetime to preserve. Deliberate choice: cap the new session at the
-    incoming token's own expiry (never grant a fresh 14-day lifetime), and
-    stamp an auth_time on the new token so later exchanges of *it* are capped
-    normally.
+    """A token minted before the auth_time claim existed has no explicit
+    identity lifetime to preserve. The old selection token's issuance time can be
+    recovered from its short expiry: exp - selection lifetime. Preserve that
+    approximate OTP time, while still allowing the normal session lifetime.
     """
     user_id = asyncio.run(_seed_trip_choices(session_factory))
     now = datetime.now(timezone.utc)
-    legacy_exp = now + timedelta(days=2)
+    legacy_exp = now + timedelta(minutes=10)
     token = _token(user_id, exp=legacy_exp)
 
     response = client.post(
@@ -189,9 +189,40 @@ def test_select_trip_legacy_token_without_auth_time_does_not_extend_lifetime(
     claims = jwt.decode(
         response.json()["access_token"], JWT_SECRET, algorithms=["HS256"]
     )
+    expected_auth_time = legacy_exp - timedelta(minutes=JWT_SELECTION_EXPIRY_MINUTES)
+    actual_auth_time = datetime.fromtimestamp(claims["auth_time"], timezone.utc)
     new_exp = datetime.fromtimestamp(claims["exp"], timezone.utc)
-    assert abs((new_exp - legacy_exp).total_seconds()) < 5
-    assert "auth_time" in claims
+    assert abs((actual_auth_time - expected_auth_time).total_seconds()) < 2
+    assert abs(
+        (new_exp - (expected_auth_time + timedelta(days=14))).total_seconds()
+    ) < 2
+
+
+def test_select_trip_legacy_session_without_auth_time_preserves_its_expiry(
+    client, session_factory
+):
+    user_id = asyncio.run(_seed_trip_choices(session_factory))
+    legacy_exp = datetime.now(timezone.utc) + timedelta(minutes=10)
+    token = _token(
+        user_id,
+        token_type="session",
+        trip_id="trip-traveler",
+        role="traveler",
+        exp=legacy_exp,
+    )
+
+    response = client.post(
+        "/auth/select-trip",
+        json={"trip_id": "trip-staff"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    claims = jwt.decode(
+        response.json()["access_token"], JWT_SECRET, algorithms=["HS256"]
+    )
+    new_exp = datetime.fromtimestamp(claims["exp"], timezone.utc)
+    assert abs((new_exp - legacy_exp).total_seconds()) < 2
 
 
 def test_trip_choice_routes_reject_missing_expired_or_wrong_type_tokens(client, session_factory):

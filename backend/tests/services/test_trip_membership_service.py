@@ -167,3 +167,80 @@ def test_get_eligible_trip_membership_reuses_eligibility_and_association_rules(s
     assert current["is_current"] is True
     assert ended is None
     assert unrelated is None
+
+
+def test_eligibility_uses_sao_paulo_date_regardless_of_database_timezone(session_factory):
+    from app.services.trip_membership_service import (
+        list_eligible_trips,
+        require_trip_membership,
+    )
+
+    async def run():
+        async with session_factory() as session:
+            user = User(phone="+5511999999912", status="active", role="traveler")
+            session.add(user)
+            await session.flush()
+            sao_paulo_today = await session.scalar(
+                text(
+                    "SELECT (CURRENT_TIMESTAMP AT TIME ZONE "
+                    "'America/Sao_Paulo')::date"
+                )
+            )
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO wetravel_trips
+                        (trip_uuid, title, destination, start_date, end_date)
+                    VALUES
+                        ('trip-timezone-boundary', 'Último dia', 'São Paulo',
+                         :today, :today)
+                    """
+                ),
+                {"today": sao_paulo_today},
+            )
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO trip_travelers (id, wetravel_trip_uuid, user_id)
+                    VALUES (gen_random_uuid(), 'trip-timezone-boundary', :user_id)
+                    """
+                ),
+                {"user_id": user.id},
+            )
+            await session.commit()
+
+            # Pick a session timezone whose calendar date differs right now, so
+            # replacing the explicit São Paulo expression with CURRENT_DATE
+            # would make this test fail at every hour of the day.
+            timezone_dates = (
+                await session.execute(
+                    text(
+                        """
+                        SELECT
+                          (CURRENT_TIMESTAMP AT TIME ZONE 'Pacific/Kiritimati')::date
+                            AS kiritimati,
+                          (CURRENT_TIMESTAMP AT TIME ZONE 'Pacific/Honolulu')::date
+                            AS honolulu
+                        """
+                    )
+                )
+            ).mappings().one()
+            session_timezone = next(
+                zone
+                for zone, zone_date in (
+                    ("Pacific/Kiritimati", timezone_dates["kiritimati"]),
+                    ("Pacific/Honolulu", timezone_dates["honolulu"]),
+                )
+                if zone_date != sao_paulo_today
+            )
+            await session.execute(text(f"SET TIME ZONE '{session_timezone}'"))
+            assert await session.scalar(text("SELECT CURRENT_DATE")) != sao_paulo_today
+            trips = await list_eligible_trips(str(user.id), session)
+            membership = await require_trip_membership(
+                str(user.id), "trip-timezone-boundary", session
+            )
+            return trips, membership
+
+    trips, membership = asyncio.run(run())
+    assert [trip["trip_id"] for trip in trips] == ["trip-timezone-boundary"]
+    assert membership.wetravel_trip_uuid == "trip-timezone-boundary"

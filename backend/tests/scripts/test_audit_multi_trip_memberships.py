@@ -216,10 +216,10 @@ async def test_find_users_with_multiple_eligible_trips_derives_role_per_trip(dat
 async def test_find_users_with_role_staff_missing_trip_staff_reports_deploy_time_loss(
     database_url,
 ):
-    """A `users.role = 'staff'` account with an eligible trip membership but no
-    matching `trip_staff` row for that trip lost staff access when the old
-    global-role model was retired — this must be flagged so it can be backfilled
-    before enabling the new flow.
+    """Flag a legacy staff account only when it has no `trip_staff` anywhere.
+
+    A missing row on one trip can be intentional when the person is staff on
+    another trip, so every reported account still requires manual review.
     """
     conn = await asyncpg.connect(_pg_url(database_url))
     try:
@@ -240,6 +240,14 @@ async def test_find_users_with_role_staff_missing_trip_staff_reports_deploy_time
         backfilled_user = await _insert_user(conn, "+5511990022222", role="staff")
         await _insert_trip_traveler(conn, trip_b, backfilled_user)
         await _insert_trip_staff(conn, trip_b, backfilled_user)
+
+        # Mixed role: staff on trip_b and traveler on trip_a. The legacy global
+        # role is necessarily "staff", but the missing trip_staff row on trip_a
+        # is intentional and must not be diagnosed as lost staff access.
+        mixed_user = await _insert_user(conn, "+5511990023333", role="staff")
+        await _insert_trip_traveler(conn, trip_a, mixed_user)
+        await _insert_trip_traveler(conn, trip_b, mixed_user)
+        await _insert_trip_staff(conn, trip_b, mixed_user)
 
         # Plain traveler: users.role != 'staff', must never be reported.
         traveler_user = await _insert_user(conn, "+5511990033333", role="traveler")
@@ -297,7 +305,10 @@ async def test_run_audit_and_format_report_end_to_end(database_url):
     assert "Multi-trip membership audit" in text
     assert "trip_staff rows missing a trip_travelers row: 1" in text
     assert trip_uuid in text
-    assert "users.role='staff' with an eligible trip but no trip_staff row" in text
+    assert (
+        "users.role='staff' with an eligible trip and no trip_staff row anywhere"
+        in text
+    )
     assert "Phones that do not match normalize_phone" in text
 
 

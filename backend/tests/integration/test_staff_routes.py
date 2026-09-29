@@ -234,6 +234,51 @@ async def _seed_inconsistent_controlled_participant(session_factory, seed):
         await session.commit()
 
 
+async def _seed_controlled_participants_with_per_trip_roles(session_factory, seed):
+    async with session_factory() as session:
+        cross_role_user = User(
+            phone="+5511888000788",
+            full_name="Staff Only Elsewhere",
+            status="active",
+            role="staff",
+        )
+        session.add(cross_role_user)
+        await session.flush()
+        cross_role_traveler = TripTraveler(
+            wetravel_trip_uuid="staff-route-test",
+            user_id=cross_role_user.id,
+        )
+        session.add(cross_role_traveler)
+        session.add(
+            TripStaff(
+                wetravel_trip_uuid="staff-route-other-trip-test",
+                user_id=cross_role_user.id,
+            )
+        )
+        await session.flush()
+        session.add_all(
+            [
+                ActivityParticipant(
+                    trip_activity_id=seed["activity_id"],
+                    trip_traveler_id=seed["trip_traveler_id"],
+                    status="allowed",
+                ),
+                ActivityParticipant(
+                    trip_activity_id=seed["activity_id"],
+                    trip_traveler_id=seed["staff_trip_traveler_id"],
+                    status="allowed",
+                ),
+                ActivityParticipant(
+                    trip_activity_id=seed["activity_id"],
+                    trip_traveler_id=cross_role_traveler.id,
+                    status="allowed",
+                ),
+            ]
+        )
+        await session.commit()
+        return str(cross_role_traveler.id)
+
+
 async def _seed_other_trip_announcement(session_factory, seed):
     async with session_factory() as session:
         announcement = TripAnnouncement(
@@ -434,6 +479,37 @@ def test_staff_trip_summary_excludes_controlled_participant_from_other_trip(
     )
     assert activity["traveler_count"] == 1
     assert activity["absent_travelers"] == ["Traveler One"]
+
+
+def test_controlled_activity_excludes_same_trip_staff_but_keeps_staff_from_other_trip(
+    seeded_client,
+    session_factory,
+):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    cross_role_traveler_id = asyncio.run(
+        _seed_controlled_participants_with_per_trip_roles(session_factory, seed)
+    )
+    headers = _auth(seeded_client, "+5511888000001")
+
+    summary = seeded_client.get("/me/staff/trip", headers=headers)
+    eligible = seeded_client.get(
+        f"/me/staff/activities/{seed['activity_id']}/travelers",
+        headers=headers,
+    )
+
+    assert summary.status_code == 200
+    activity = next(
+        row
+        for row in summary.json()["days"][0]["activities"]
+        if row["id"] == seed["activity_id"]
+    )
+    assert activity["traveler_count"] == 2
+    assert activity["absent_travelers"] == ["Staff Only Elsewhere", "Traveler One"]
+
+    assert eligible.status_code == 200
+    eligible_ids = {row["id"] for row in eligible.json()["travelers"]}
+    assert eligible_ids == {seed["trip_traveler_id"], cross_role_traveler_id}
+    assert seed["staff_trip_traveler_id"] not in eligible_ids
 
 
 def test_staff_trip_summary_excludes_checkin_traveler_from_other_trip(

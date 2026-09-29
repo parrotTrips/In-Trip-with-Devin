@@ -211,6 +211,31 @@ def test_traveler_route_rejects_session_with_no_trip_travelers_row_for_trip_id(
     assert response.json() == {"detail": "Trip membership required"}
 
 
+def test_traveler_route_rejects_session_after_selected_trip_has_ended(
+    seeded_client, session_factory
+):
+    seed = asyncio.run(_seed_two_trips(session_factory))
+    headers = _scoped_auth(seed["user_id"], seed["phone"], seed["trip_a"])
+
+    async def _end_selected_trip():
+        async with session_factory() as session:
+            await session.execute(
+                text(
+                    "UPDATE wetravel_trips SET end_date = CURRENT_DATE - 1 "
+                    "WHERE trip_uuid = :trip_id"
+                ),
+                {"trip_id": seed["trip_a"]},
+            )
+            await session.commit()
+
+    asyncio.run(_end_selected_trip())
+
+    response = seeded_client.get("/me/trip", headers=headers)
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Trip membership required"}
+
+
 def test_me_trip_returns_selected_trip_only(seeded_client, session_factory):
     seed = asyncio.run(_seed_two_trips(session_factory))
     headers = _scoped_auth(seed["user_id"], seed["phone"], seed["trip_b"])

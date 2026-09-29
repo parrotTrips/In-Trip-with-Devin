@@ -58,10 +58,12 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
       ? error.detail
       : 'Request failed';
     const hasSession = getToken() !== null;
+    const isTripTravelersPath = /^\/trip\/[^/]+\/travelers(?:\?.*)?$/.test(path);
     const isProtectedAppPath = path.startsWith('/me/')
       || path.startsWith('/profile/')
       || path.startsWith('/checklist/')
       || path.startsWith('/phases/')
+      || isTripTravelersPath
       || path === '/auth/trips'
       || path === '/auth/select-trip';
     const isStaffAccessRevoked = (path === '/me/staff' || path.startsWith('/me/staff/'))

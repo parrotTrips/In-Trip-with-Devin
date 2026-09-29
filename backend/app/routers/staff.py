@@ -379,6 +379,11 @@ async def get_staff_trip(
             WHERE ap.trip_activity_id = ANY(:ids)
               AND ap.status = 'allowed'
               AND tt.wetravel_trip_uuid = :trip_uuid
+              AND NOT EXISTS (
+                  SELECT 1 FROM trip_staff ts
+                  WHERE ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                    AND ts.user_id = tt.user_id
+              )
             GROUP BY ap.trip_activity_id
         """),
         {"ids": activity_ids, "trip_uuid": trip_uuid},
@@ -418,6 +423,11 @@ async def get_staff_trip(
             WHERE ap.trip_activity_id = ANY(:ids)
               AND ap.status = 'allowed'
               AND tt.wetravel_trip_uuid = :trip_uuid
+              AND NOT EXISTS (
+                  SELECT 1 FROM trip_staff ts
+                  WHERE ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                    AND ts.user_id = tt.user_id
+              )
             ORDER BY u.full_name
         """),
         {"ids": activity_ids, "trip_uuid": trip_uuid},
@@ -685,6 +695,11 @@ async def get_activity_travelers(
                 WHERE ap.trip_activity_id = :act_id
                   AND ap.status = 'allowed'
                   AND tt.wetravel_trip_uuid = :trip_uuid
+                  AND NOT EXISTS (
+                      SELECT 1 FROM trip_staff ts
+                      WHERE ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
+                        AND ts.user_id = tt.user_id
+                  )
                 ORDER BY u.full_name
             """),
             {"act_id": str(activity_id), "trip_uuid": staff_trip_uuid},
