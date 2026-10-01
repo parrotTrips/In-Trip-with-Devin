@@ -8,6 +8,7 @@ frontend/dist/
 # Environment variables (secrets)
 frontend/.env
 backend/.env
+backend/.env.homologation
 
 # GCP service account key (never commit)
 backend/secrets/
@@ -35,6 +36,10 @@ __pycache__/
 # Production environment variables (secrets — never commit)
 backend/.env.production
 frontend/.env.production
+frontend/.env.homologation
+
+# Supabase CLI local state
+supabase/.temp/
 
 # Local Netlify folder
 .netlify

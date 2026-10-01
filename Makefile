@@ -12,6 +12,103 @@ FRONTEND_URL     = https://$(NETLIFY_SITE_NAME).netlify.app
 IMAGE_TAG      ?= $(shell git rev-parse --short HEAD)
 IMAGE          = $(IMAGE_REPO):$(IMAGE_TAG)
 
+# Homologação always uses resources and secret files distinct from production.
+HOMOLOG_SERVICE_NAME      = parrot-trips-backend-homolog
+HOMOLOG_IMAGE             = $(IMAGE_REPO):$(IMAGE_TAG)-homolog
+HOMOLOG_NETLIFY_SITE      ?= bce4a7d3-2186-4bdf-b39e-ae21ea821b0e
+HOMOLOG_NETLIFY_SITE_NAME ?= parrot-trips-homolog
+HOMOLOG_FRONTEND_URL      = https://$(HOMOLOG_NETLIFY_SITE_NAME).netlify.app
+HOMOLOG_BACKEND_ENV_FILE  = backend/.env.homologation
+HOMOLOG_FRONTEND_ENV_FILE = frontend/.env.homologation
+HOMOLOG_DATABASE_SECRET   = parrot-trips-homolog-database-url
+HOMOLOG_JWT_SECRET        = parrot-trips-homolog-jwt-secret
+
+# ── Guardas de homologação ───────────────────────────────────────────────────
+.PHONY: check-homolog-config
+check-homolog-config:
+	@test -n "$(HOMOLOG_SERVICE_NAME)" || { echo "ERROR: HOMOLOG_SERVICE_NAME is required."; exit 1; }
+	@test "$(HOMOLOG_SERVICE_NAME)" != "$(SERVICE_NAME)" || { echo "ERROR: homologation must use a different Cloud Run service."; exit 1; }
+	@test -n "$(HOMOLOG_NETLIFY_SITE)" || { echo "ERROR: HOMOLOG_NETLIFY_SITE is required."; exit 1; }
+	@test "$(HOMOLOG_NETLIFY_SITE)" != "$(NETLIFY_SITE)" || { echo "ERROR: homologation must use a different Netlify site."; exit 1; }
+	@test "$(HOMOLOG_BACKEND_ENV_FILE)" != "backend/.env.production" || { echo "ERROR: homologation must not use the production backend env file."; exit 1; }
+	@test "$(HOMOLOG_FRONTEND_ENV_FILE)" != "frontend/.env.production" || { echo "ERROR: homologation must not use the production frontend env file."; exit 1; }
+
+# ── Deploy de homologação ────────────────────────────────────────────────────
+.PHONY: deploy-homolog
+deploy-homolog: deploy-backend-homolog deploy-frontend-homolog
+	@echo "Deploy de homologação completo."
+
+.PHONY: deploy-backend-homolog
+deploy-backend-homolog: check-homolog-config docker-build-homolog docker-push-homolog cloud-run-deploy-homolog
+
+.PHONY: docker-build-homolog
+docker-build-homolog:
+	@echo "Building homologation Docker image $(HOMOLOG_IMAGE)..."
+	docker build --platform linux/amd64 -t $(HOMOLOG_IMAGE) backend/
+
+.PHONY: docker-push-homolog
+docker-push-homolog:
+	@echo "Pushing homologation image to Artifact Registry..."
+	docker push $(HOMOLOG_IMAGE)
+
+.PHONY: cloud-run-deploy-homolog
+cloud-run-deploy-homolog:
+	@if [ ! -f $(HOMOLOG_BACKEND_ENV_FILE) ]; then \
+		echo "ERROR: $(HOMOLOG_BACKEND_ENV_FILE) not found."; \
+		exit 1; \
+	fi
+	gcloud run deploy $(HOMOLOG_SERVICE_NAME) \
+		--image=$(HOMOLOG_IMAGE) \
+		--region=$(GCP_REGION) \
+		--platform=managed \
+		--allow-unauthenticated \
+		--set-env-vars="^|^$(shell grep -v '^[[:space:]]*#' $(HOMOLOG_BACKEND_ENV_FILE) | grep -v '^[[:space:]]*$$' | tr '\n' '|' | sed 's/|$$//')" \
+		--set-secrets="DATABASE_URL=$(HOMOLOG_DATABASE_SECRET):latest,JWT_SECRET=$(HOMOLOG_JWT_SECRET):latest" \
+		--account=$(GCP_ACCOUNT) \
+		--project=$(GCP_PROJECT)
+
+.PHONY: deploy-frontend-homolog
+deploy-frontend-homolog: check-homolog-config frontend-build-homolog netlify-deploy-homolog
+
+.PHONY: frontend-build-homolog
+frontend-build-homolog:
+	@if [ ! -f $(HOMOLOG_FRONTEND_ENV_FILE) ]; then \
+		echo "ERROR: $(HOMOLOG_FRONTEND_ENV_FILE) not found."; \
+		exit 1; \
+	fi
+	cd frontend && npm run build -- --mode homologation
+
+.PHONY: netlify-deploy-homolog
+netlify-deploy-homolog:
+	cd frontend && netlify deploy --prod --dir=dist --site=$(HOMOLOG_NETLIFY_SITE)
+	@echo "Homologation frontend URL: $(HOMOLOG_FRONTEND_URL)"
+
+.PHONY: migrate-homolog
+migrate-homolog:
+	@if [ ! -f $(HOMOLOG_BACKEND_ENV_FILE) ]; then \
+		echo "ERROR: $(HOMOLOG_BACKEND_ENV_FILE) not found."; \
+		exit 1; \
+	fi
+	cd backend && set -a && . ../$(HOMOLOG_BACKEND_ENV_FILE) && set +a && poetry run alembic upgrade head
+
+.PHONY: homolog-backend-url
+homolog-backend-url:
+	@gcloud run services describe $(HOMOLOG_SERVICE_NAME) \
+		--region=$(GCP_REGION) \
+		--account=$(GCP_ACCOUNT) \
+		--project=$(GCP_PROJECT) \
+		--format="value(status.url)"
+
+.PHONY: logs-homolog
+logs-homolog:
+	gcloud logging read \
+		"resource.type=cloud_run_revision AND resource.labels.service_name=$(HOMOLOG_SERVICE_NAME)" \
+		--project=$(GCP_PROJECT) \
+		--account=$(GCP_ACCOUNT) \
+		--format="value(textPayload)" \
+		--freshness=1h \
+		--order=asc
+
 # ── Deploy completo ────────────────────────────────────────────────────────────
 .PHONY: deploy
 deploy: deploy-backend deploy-frontend
