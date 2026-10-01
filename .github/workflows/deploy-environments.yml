@@ -1,0 +1,115 @@
+name: Test and deploy environments
+
+on:
+  push:
+    branches:
+      - main
+      - homologacao
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install PostgreSQL tools
+        run: echo "POSTGRES_BIN_DIR=$(pg_config --bindir)" >> "$GITHUB_ENV"
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          pip install poetry==2.3.3
+          poetry install --no-interaction
+      - name: Run backend tests
+        working-directory: backend
+        run: poetry run pytest tests -q
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            console/package-lock.json
+      - name: Test traveler frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test -- --run
+      - name: Test content console
+        working-directory: console
+        run: |
+          npm ci
+          npm test
+
+  deploy:
+    if: vars.DEPLOY_AUTOMATION_ENABLED == 'true'
+    needs:
+      - backend-tests
+      - frontend-tests
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'homologation' }}
+    env:
+      GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      IMAGE_REPO: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/parrot-trips/backend
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+      VITE_API_URL: ${{ vars.VITE_API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Select immutable image tag
+        run: |
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            echo "IMAGE=$IMAGE_REPO:$GITHUB_SHA" >> "$GITHUB_ENV"
+          else
+            echo "IMAGE=$IMAGE_REPO:$GITHUB_SHA-homolog" >> "$GITHUB_ENV"
+          fi
+      - name: Build and push backend
+        run: |
+          gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+          docker build --platform linux/amd64 -t "$IMAGE" backend/
+          docker push "$IMAGE"
+      - name: Deploy backend
+        run: |
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --image="$IMAGE" \
+            --region="$GCP_REGION" \
+            --platform=managed \
+            --project="$GCP_PROJECT" \
+            --quiet
+      - name: Build frontend for selected environment
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Deploy frontend
+        working-directory: frontend
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: npx --yes netlify-cli deploy --prod --no-build --dir=dist --site="$NETLIFY_SITE_ID" --auth="$NETLIFY_AUTH_TOKEN"

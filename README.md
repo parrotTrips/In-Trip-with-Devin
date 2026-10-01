@@ -146,12 +146,39 @@ O backend local só aceita esse bypass quando as duas condições estiverem ativ
 
 Todos os comandos rodam da **raiz do repositório**.
 
+### Ambientes
+
+| Ambiente | Branch | Frontend | Backend | Banco |
+|---|---|---|---|---|
+| Produção | `main` | `parrot-trips.netlify.app` | `parrot-trips-backend` | Supabase `Parrot's DB` |
+| Homologação | `homologacao` | `parrot-trips-homolog.netlify.app` | `parrot-trips-backend-homolog` | Supabase `Parrot Trips Homolog` |
+
+Os bancos, JWTs, serviços Cloud Run e sites Netlify são independentes. Nunca use dados pessoais de produção em homologação.
+
+Fluxo normal:
+
+1. Envie a mudança para `homologacao` e valide o ambiente.
+2. Aplique migrations primeiro em homologação.
+3. Abra um pull request de `homologacao` para `main`.
+4. Aplique a mesma migration em produção antes de código que dependa dela.
+5. Faça o merge e valide produção.
+
+O workflow `.github/workflows/deploy-environments.yml` sempre executa os testes nas duas branches. O job de deploy só é habilitado quando a variável do repositório `DEPLOY_AUTOMATION_ENABLED` vale `true`; isso permite cadastrar e revisar credenciais antes da primeira execução automática.
+
 ```bash
 make deploy-backend    # Build Docker + push para Artifact Registry + deploy Cloud Run
 make deploy-frontend   # Build React + deploy Netlify
 make deploy            # Os dois juntos
 make logs              # Logs do Cloud Run em tempo real
 make backend-url       # Imprime a URL do backend
+
+# Homologação
+make deploy-homolog             # backend + frontend de homologação
+make deploy-backend-homolog     # somente Cloud Run de homologação
+make deploy-frontend-homolog    # somente Netlify de homologação
+make migrate-homolog            # migrations no banco de homologação
+make homolog-backend-url        # URL do backend de homologação
+make logs-homolog               # logs do backend de homologação
 ```
 
 **Pré-requisitos para deploy do backend:**

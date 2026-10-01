@@ -131,7 +131,11 @@ def test_activity_checkins_table_metadata():
         for constraint in activity_checkins.constraints
         if constraint.__class__.__name__ == "UniqueConstraint"
     }
-    assert ("trip_activity_id", "trip_traveler_id") in unique_constraints
+    assert (
+        "trip_activity_id",
+        "trip_traveler_id",
+        "scan_number",
+    ) in unique_constraints
 
     indexes = {index.name for index in activity_checkins.indexes}
     assert "ix_activity_checkins_trip_activity_id" in indexes
