@@ -80,7 +80,7 @@ frontend-build-homolog:
 
 .PHONY: netlify-deploy-homolog
 netlify-deploy-homolog:
-	cd frontend && netlify deploy --prod --dir=dist --site=$(HOMOLOG_NETLIFY_SITE)
+	cd frontend && netlify deploy --prod --no-build --dir=dist --site=$(HOMOLOG_NETLIFY_SITE)
 	@echo "Homologation frontend URL: $(HOMOLOG_FRONTEND_URL)"
 
 .PHONY: migrate-homolog
