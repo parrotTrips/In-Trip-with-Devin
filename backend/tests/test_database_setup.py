@@ -231,7 +231,7 @@ def temporary_postgres_database(tmp_path):
         "-l",
         str(log_file),
         "-o",
-        f"-F -p {port}",
+        f"-F -p {port} -k /tmp",
         "start",
         "-w",
     )
