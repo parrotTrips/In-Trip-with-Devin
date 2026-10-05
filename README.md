@@ -181,6 +181,30 @@ make homolog-backend-url        # URL do backend de homologação
 make logs-homolog               # logs do backend de homologação
 ```
 
+### Sincronizar o catálogo de produção para homologação
+
+A sincronização copia somente viagens e conteúdo editorial. Ela remove dados
+anteriores de homologação, não copia viajantes, pagamentos, reservas, progresso,
+check-ins, feedbacks, OTPs, webhooks, anúncios ou tarefas, e cria somente Marcelo
+Angelo, Vitor Sanches e Luiz Becker como `staff` de todas as viagens.
+
+Execute primeiro a simulação, que não altera nenhum banco:
+
+```bash
+make sync-homolog-catalog-dry-run
+```
+
+Revise as contagens e só então execute a transação:
+
+```bash
+make sync-homolog-catalog-execute
+```
+
+Produção é acessada somente para leitura. A escrita em homologação ocorre em uma
+única transação e é revertida integralmente se alguma validação falhar. A senha do
+banco de homologação vem do Chaves do macOS, serviço
+`parrot-trips-homolog-supabase-db`, e nunca é impressa ou versionada.
+
 **Pré-requisitos para deploy do backend:**
 - `gcloud` autenticado: `gcloud auth login angelo@parrottrips.com`
 - `backend/.env.production` preenchido (copiar de `backend/.env.production.example`)

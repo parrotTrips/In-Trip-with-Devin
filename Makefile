@@ -22,6 +22,9 @@ HOMOLOG_BACKEND_ENV_FILE  = backend/.env.homologation
 HOMOLOG_FRONTEND_ENV_FILE = frontend/.env.homologation
 HOMOLOG_DATABASE_SECRET   = parrot-trips-homolog-database-url
 HOMOLOG_JWT_SECRET        = parrot-trips-homolog-jwt-secret
+SYNC_PYTHON              ?= backend/.venv/bin/python
+HOMOLOG_SUPABASE_REF      = lgpniurbguguragmubui
+HOMOLOG_DB_KEYCHAIN       = parrot-trips-homolog-supabase-db
 
 # ── Guardas de homologação ───────────────────────────────────────────────────
 .PHONY: check-homolog-config
@@ -108,6 +111,24 @@ logs-homolog:
 		--format="value(textPayload)" \
 		--freshness=1h \
 		--order=asc
+
+# ── Sincronização segura do catálogo para homologação ───────────────────────
+.PHONY: sync-homolog-catalog-dry-run
+sync-homolog-catalog-dry-run:
+	@set -a; . backend/.env.production; set +a; \
+	HOMOLOG_DB_PASSWORD=$$(security find-generic-password -s $(HOMOLOG_DB_KEYCHAIN) -a postgres -w); \
+	$(SYNC_PYTHON) backend/scripts/sync_production_catalog_to_homolog.py \
+		--production-database-url "$$DATABASE_URL" \
+		--homologation-database-url "postgresql://postgres:$$HOMOLOG_DB_PASSWORD@db.$(HOMOLOG_SUPABASE_REF).supabase.co:5432/postgres"
+
+.PHONY: sync-homolog-catalog-execute
+sync-homolog-catalog-execute:
+	@set -a; . backend/.env.production; set +a; \
+	HOMOLOG_DB_PASSWORD=$$(security find-generic-password -s $(HOMOLOG_DB_KEYCHAIN) -a postgres -w); \
+	$(SYNC_PYTHON) backend/scripts/sync_production_catalog_to_homolog.py \
+		--production-database-url "$$DATABASE_URL" \
+		--homologation-database-url "postgresql://postgres:$$HOMOLOG_DB_PASSWORD@db.$(HOMOLOG_SUPABASE_REF).supabase.co:5432/postgres" \
+		--execute
 
 # ── Deploy completo ────────────────────────────────────────────────────────────
 .PHONY: deploy
