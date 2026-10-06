@@ -163,6 +163,30 @@ Fluxo normal:
 4. Aplique a mesma migration em produção antes de código que dependa dela.
 5. Faça o merge e valide produção.
 
+### Fluxo de branches no desenvolvimento
+
+`main` representa o código aprovado para produção. `homologacao` parte da mesma
+base, mas normalmente fica à frente enquanto as mudanças ainda estão sendo
+testadas. Portanto, as duas branches não precisam apontar para o mesmo commit
+durante o desenvolvimento.
+
+Para o trabalho cotidiano:
+
+1. Faça as alterações na branch `homologacao`.
+2. Publique e valide nos serviços e no banco de homologação.
+3. Quando o conjunto estiver aprovado, faça merge de `homologacao` em `main`.
+4. Aplique em produção as migrations necessárias e execute o deploy de produção.
+
+O merge transfere código e arquivos versionados; ele não transfere dados entre
+os projetos Supabase e, sozinho, não publica uma nova versão. Variáveis de
+ambiente, secrets, migrations e deploys continuam específicos de cada ambiente.
+
+Este repositório pode usar Git worktrees. Uma branch só pode estar aberta em um
+worktree por vez. Se o Git informar que `homologacao` já está checked out em
+`.worktrees/homologacao`, trabalhe naquela pasta ou remova o worktree limpo antes
+de abrir a branch na pasta principal. Nunca force a remoção de um worktree com
+alterações não commitadas.
+
 O workflow `.github/workflows/deploy-environments.yml` sempre executa os testes nas duas branches. O job de deploy só é habilitado quando a variável do repositório `DEPLOY_AUTOMATION_ENABLED` vale `true`; isso permite cadastrar e revisar credenciais antes da primeira execução automática.
 
 ```bash
