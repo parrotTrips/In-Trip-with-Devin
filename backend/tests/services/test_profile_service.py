@@ -385,3 +385,47 @@ async def test_update_profile_success_response_includes_updated_fields(session_f
         )
     assert result["message"] == "Profile updated"
     assert set(result["updated_fields"]) == {"preferred_name", "gender"}
+
+
+@pytest.mark.asyncio
+async def test_update_profile_derives_dietary_flag_from_free_text(session_factory):
+    """The health/dietary answer is free text; the flag follows whether it has content."""
+    ctx = await seed_profile_context(session_factory, phone="+5511000000013")
+    async with session_factory() as session:
+        await update_profile(
+            str(ctx["user"].id),
+            ctx["trip_uuid"],
+            {"dietary_restrictions_desc": "Vegetarian\nPeanut allergy"},
+            session,
+        )
+        response = await get_profile(str(ctx["user"].id), ctx["trip_uuid"], session)
+    assert response["profile"]["dietary_restrictions_desc"] == "Vegetarian\nPeanut allergy"
+    assert response["profile"]["dietary_restrictions_yn"] == "yes"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_ignores_removed_plus_one_fields(session_factory):
+    """The +1 question was removed; stale clients sending it are ignored."""
+    ctx = await seed_profile_context(session_factory, phone="+5511000000014")
+    async with session_factory() as session:
+        result = await update_profile(
+            str(ctx["user"].id),
+            ctx["trip_uuid"],
+            {"plus_one_yn": "yes", "plus_one_name": "Bob", "preferred_name": "Lara"},
+            session,
+        )
+        response = await get_profile(str(ctx["user"].id), ctx["trip_uuid"], session)
+    assert result["updated_fields"] == ["preferred_name"]
+    assert "plus_one_yn" not in response["profile"]
+    assert "plus_one_name" not in response["profile"]
+    assert "plus_one_email" not in response["profile"]
+
+
+@pytest.mark.asyncio
+async def test_update_profile_round_trips_date_of_birth(session_factory):
+    """dob is stored as a plain date and comes back exactly as sent."""
+    ctx = await seed_profile_context(session_factory, phone="+5511000000015")
+    async with session_factory() as session:
+        await update_profile(str(ctx["user"].id), ctx["trip_uuid"], {"dob": "1990-03-15"}, session)
+        response = await get_profile(str(ctx["user"].id), ctx["trip_uuid"], session)
+    assert response["profile"]["dob"] == "1990-03-15"

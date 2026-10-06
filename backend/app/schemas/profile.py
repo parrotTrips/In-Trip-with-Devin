@@ -26,9 +26,6 @@ class ProfileUpdate(BaseModel):
     passport_number: Optional[str] = None
     passport_issue_date: Optional[str] = None
     passport_expiration_date: Optional[str] = None
-    plus_one_yn: Optional[str] = None
-    plus_one_name: Optional[str] = None
-    plus_one_email: Optional[str] = None
     intl_flights_help_yn: Optional[str] = None
     intl_flights_help_details: Optional[str] = None
     travel_insurance_help_yn: Optional[str] = None

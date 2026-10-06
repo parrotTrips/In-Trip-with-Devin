@@ -34,9 +34,6 @@ PROFILE_FIELD_DEFAULTS = {
     "passport_number": None,
     "passport_issue_date": None,
     "passport_expiration_date": None,
-    "plus_one_yn": None,
-    "plus_one_name": None,
-    "plus_one_email": None,
     "intl_flights_help_yn": None,
     "intl_flights_help_details": None,
     "travel_insurance_help_yn": None,
@@ -125,9 +122,6 @@ SUPPORTED_UPDATE_FIELDS = {
     "passport_number",
     "passport_issue_date",
     "passport_expiration_date",
-    "plus_one_yn",
-    "plus_one_name",
-    "plus_one_email",
     "intl_flights_help_yn",
     "intl_flights_help_details",
     "travel_insurance_help_yn",
@@ -289,9 +283,6 @@ async def get_profile(
         profile_dict["passport_number"] = profile.passport_number
         profile_dict["passport_issue_date"] = _encode_optional_date(profile.passport_issue_date)
         profile_dict["passport_expiration_date"] = _encode_optional_date(profile.passport_expiration_date)
-        profile_dict["plus_one_yn"] = _encode_yes_no(profile.plus_one_flag)
-        profile_dict["plus_one_name"] = profile.plus_one_name
-        profile_dict["plus_one_email"] = profile.plus_one_email
         profile_dict["intl_flights_help_yn"] = _encode_yes_no(profile.needs_flight_help_flag)
         profile_dict["intl_flights_help_details"] = profile.flight_help_details
         profile_dict["travel_insurance_help_yn"] = _encode_yes_no(profile.needs_travel_insurance_help_flag)
@@ -359,6 +350,8 @@ async def update_profile(
         updated_fields.append("dietary_restrictions_yn")
     if "dietary_restrictions_desc" in update_data:
         profile.dietary_restrictions_details = update_data["dietary_restrictions_desc"]
+        # The form now asks a single free-text question, so the flag follows the text.
+        profile.dietary_restrictions_flag = bool(update_data["dietary_restrictions_desc"].strip())
         updated_fields.append("dietary_restrictions_desc")
     if "seasickness_yn" in update_data:
         profile.seasickness_flag = _decode_yes_no(update_data["seasickness_yn"], "seasickness_yn")
@@ -381,15 +374,6 @@ async def update_profile(
     if "passport_expiration_date" in update_data:
         profile.passport_expiration_date = _parse_optional_date(update_data["passport_expiration_date"], "passport_expiration_date")
         updated_fields.append("passport_expiration_date")
-    if "plus_one_yn" in update_data:
-        profile.plus_one_flag = _decode_yes_no(update_data["plus_one_yn"], "plus_one_yn")
-        updated_fields.append("plus_one_yn")
-    if "plus_one_name" in update_data:
-        profile.plus_one_name = update_data["plus_one_name"]
-        updated_fields.append("plus_one_name")
-    if "plus_one_email" in update_data:
-        profile.plus_one_email = update_data["plus_one_email"]
-        updated_fields.append("plus_one_email")
     if "intl_flights_help_yn" in update_data:
         profile.needs_flight_help_flag = _decode_yes_no(update_data["intl_flights_help_yn"], "intl_flights_help_yn")
         updated_fields.append("intl_flights_help_yn")

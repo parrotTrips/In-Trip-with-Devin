@@ -291,6 +291,8 @@ const PRE_DEPARTURE_REMOVED_FIELDS = new Set([
   'social_topic',
   'always_up_for',
   'roommate_email',
+  // Derived by the API from dietary_restrictions_desc since the yes/no question was removed.
+  'dietary_restrictions_yn',
 ]);
 
 const PRE_DEPARTURE_REQUIRED_LABELS: Record<string, string> = {
@@ -319,6 +321,11 @@ function getLinkedProfileSection(search: string) {
   return section && PROFILE_SECTION_IDS.has(section) ? section : null;
 }
 
+function splitIsoDate(value: string): [string, string, string] {
+  const [year = '', month = '', day = ''] = value ? value.split('-') : [];
+  return [year, month, day];
+}
+
 function DateSelectField({ label, value, onChange }: {
   label: string;
   value: string;
@@ -327,10 +334,13 @@ function DateSelectField({ label, value, onChange }: {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 1929 }, (_, i) => currentYear - i);
 
-  const parts = value ? value.split('-') : ['', '', ''];
-  const selectedYear = parts[0] ?? '';
-  const selectedMonth = parts[1] ?? '';
-  const selectedDay = parts[2] ?? '';
+  // Partial picks (e.g. only the day) live here until all three parts are chosen;
+  // deriving them from `value` alone would discard each pick while the date is incomplete.
+  const [parts, setParts] = useState(() => splitIsoDate(value));
+  useEffect(() => {
+    if (value) setParts(splitIsoDate(value));
+  }, [value]);
+  const [selectedYear, selectedMonth, selectedDay] = parts;
 
   const daysInMonth = selectedYear && selectedMonth
     ? new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate()
@@ -338,11 +348,16 @@ function DateSelectField({ label, value, onChange }: {
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
   const handleChange = (year: string, month: string, day: string) => {
-    if (!year || !month || !day) { onChange(''); return; }
+    if (!year || !month || !day) {
+      setParts([year, month, day]);
+      if (value) onChange('');
+      return;
+    }
     // Clamp day if the new month/year has fewer days (e.g. switching from Jan 31 to Feb)
     const maxDays = new Date(parseInt(year), parseInt(month), 0).getDate();
-    const clampedDay = Math.min(parseInt(day), maxDays);
-    onChange(`${year}-${month}-${String(clampedDay).padStart(2, '0')}`);
+    const clampedDay = String(Math.min(parseInt(day), maxDays)).padStart(2, '0');
+    setParts([year, month, clampedDay]);
+    onChange(`${year}-${month}-${clampedDay}`);
   };
 
   const selectClass = "px-2 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all bg-white";
@@ -687,7 +702,6 @@ export default function ProfileScreen() {
     num_people: '',
     usd_amount: '',
     proof_of_transfer: '',
-    dietary_restrictions_yn: '',
     dietary_restrictions_desc: '',
     seasickness_yn: '',
     first_name_passport: '',
@@ -696,9 +710,6 @@ export default function ProfileScreen() {
     passport_number: '',
     passport_issue_date: '',
     passport_expiration_date: '',
-    plus_one_yn: '',
-    plus_one_name: '',
-    plus_one_email: '',
     intl_flights_help_yn: '',
     intl_flights_help_details: '',
     travel_insurance_help_yn: '',
@@ -1019,33 +1030,16 @@ export default function ProfileScreen() {
             <div className="border-t border-gray-100 pt-3">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Health & Dietary</p>
               <div className="space-y-3">
-                <SelectField label="Dietary Restrictions?" value={form.dietary_restrictions_yn} onChange={v => setField('dietary_restrictions_yn', v)} options={[
-                  { value: 'yes', label: 'Yes' },
-                  { value: 'no', label: 'No' },
-                ]} />
-                {form.dietary_restrictions_yn === 'yes' && (
-                  <TextAreaField label="Describe your dietary restrictions" value={form.dietary_restrictions_desc} onChange={v => setField('dietary_restrictions_desc', v)} placeholder="e.g. Vegetarian, gluten-free..." />
-                )}
+                <TextAreaField
+                  label="Do you have any dietary restrictions or other health conditions we should know about?"
+                  value={form.dietary_restrictions_desc}
+                  onChange={v => setField('dietary_restrictions_desc', v)}
+                  placeholder="List as many as you need, e.g. vegetarian, peanut allergy, diabetes..."
+                />
                 <SelectField label="Prone to Seasickness?" value={form.seasickness_yn} onChange={v => setField('seasickness_yn', v)} options={[
                   { value: 'yes', label: 'Yes' },
                   { value: 'no', label: 'No' },
                 ]} />
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-3">
-              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Plus One</p>
-              <div className="space-y-3">
-                <SelectField label="Bringing a Plus One?" value={form.plus_one_yn} onChange={v => setField('plus_one_yn', v)} options={[
-                  { value: 'yes', label: 'Yes' },
-                  { value: 'no', label: 'No' },
-                ]} />
-                {form.plus_one_yn === 'yes' && (
-                  <>
-                    <InputField label="Plus One Name" value={form.plus_one_name} onChange={v => setField('plus_one_name', v)} />
-                    <InputField label="Plus One Email" value={form.plus_one_email} onChange={v => setField('plus_one_email', v)} type="email" />
-                  </>
-                )}
               </div>
             </div>
 

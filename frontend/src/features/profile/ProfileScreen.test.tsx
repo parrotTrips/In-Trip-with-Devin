@@ -178,6 +178,23 @@ describe('ProfileScreen', () => {
 
     await userEvent.clear(preferredNameInput);
     await userEvent.type(preferredNameInput, 'Bea');
+
+    // Date of birth can be filled from an empty value, one part at a time.
+    await userEvent.selectOptions(screen.getByLabelText('Day'), '15');
+    await userEvent.selectOptions(screen.getByLabelText('Month'), 'March');
+    expect(screen.getByLabelText('Day')).toHaveValue('15');
+    await userEvent.selectOptions(screen.getByLabelText('Year'), '1990');
+
+    // Health and dietary info is a single free-text question, no yes/no gate.
+    expect(screen.queryByLabelText(/^dietary restrictions\?$/i)).not.toBeInTheDocument();
+    const healthField = screen.getByLabelText(
+      'Do you have any dietary restrictions or other health conditions we should know about?'
+    );
+    expect(healthField.tagName).toBe('TEXTAREA');
+    await userEvent.type(healthField, 'Vegetarian{enter}Peanut allergy');
+
+    expect(screen.queryByText(/plus one/i)).not.toBeInTheDocument();
+
     expect(screen.queryByRole('button', { name: /save profile/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -185,8 +202,62 @@ describe('ProfileScreen', () => {
       expect(savedPayload).toMatchObject({
         preferred_name: 'Bea',
         email: 'alice@example.com',
+        dob: '1990-03-15',
+        dietary_restrictions_desc: 'Vegetarian\nPeanut allergy',
       });
     });
+    expect(savedPayload).not.toHaveProperty('dietary_restrictions_yn');
+    expect(savedPayload).not.toHaveProperty('plus_one_yn');
+    expect(savedPayload).not.toHaveProperty('plus_one_name');
+    expect(savedPayload).not.toHaveProperty('plus_one_email');
+  });
+
+  test('shows the saved date of birth and health info when returning to the profile', async () => {
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
+    );
+
+    server.use(
+      http.get('http://localhost:8000/profile/1', () =>
+        HttpResponse.json({
+          user_id: 1,
+          phone: '+15550000001',
+          name: 'Alice',
+          profile: {
+            preferred_name: 'Alice',
+            dob: '1985-07-04',
+            dietary_restrictions_desc: 'Lactose intolerant',
+          },
+          roommate: null,
+        })
+      ),
+      http.get('http://localhost:8000/me/qr-code', () =>
+        HttpResponse.json({
+          trip_uuid: 'test-trip-001',
+          trip_traveler_id: 'trip-traveler-001',
+          qr_payload: 'parrot-trip-checkin:test-trip-001:trip-traveler-001',
+        })
+      ),
+    );
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <ProfileScreen />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('My Profile');
+    await userEvent.click(screen.getByRole('button', { name: /registration details/i }));
+
+    expect(await screen.findByLabelText('Day')).toHaveValue('04');
+    expect(screen.getByLabelText('Month')).toHaveValue('07');
+    expect(screen.getByLabelText('Year')).toHaveValue('1985');
+    expect(
+      screen.getByLabelText('Do you have any dietary restrictions or other health conditions we should know about?')
+    ).toHaveValue('Lactose intolerant');
   });
 
   test('saves pre departure information without duplicating registration fields', async () => {

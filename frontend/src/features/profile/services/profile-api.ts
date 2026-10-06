@@ -19,9 +19,6 @@ export interface ProfileData {
   passport_number: string | null;
   passport_issue_date: string | null;
   passport_expiration_date: string | null;
-  plus_one_yn: string | null;
-  plus_one_name: string | null;
-  plus_one_email: string | null;
   intl_flights_help_yn: string | null;
   intl_flights_help_details: string | null;
   travel_insurance_help_yn: string | null;
