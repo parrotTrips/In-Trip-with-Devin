@@ -186,6 +186,7 @@ describe('ProfileScreen', () => {
             email: 'alice@example.com',
             visa_status: 'Not yet, I already started my visa process but don\'t have one yet',
             arrival_time: '14:32',
+            departure_time: '25:61',
           },
           roommate: null,
         })
@@ -241,6 +242,7 @@ describe('ProfileScreen', () => {
     expect(within(arrivalTime).queryByRole('option', { name: '2:31 PM' })).not.toBeInTheDocument();
     expect(within(departureTime).getByRole('option', { name: '12:00 AM' })).toHaveValue('00:00');
     expect(within(departureTime).getByRole('option', { name: '11:55 PM' })).toHaveValue('23:55');
+    expect(within(departureTime).getByRole('option', { name: 'Existing value: 25:61' })).toHaveValue('25:61');
 
     const helpCases = [
       {
@@ -265,11 +267,11 @@ describe('ProfileScreen', () => {
       const button = within(preDepartureContainer).getByRole('button', { name: helpCase.button });
       expect(button).toHaveAttribute('aria-expanded', 'false');
       expect(within(preDepartureContainer).queryByText(helpCase.text)).not.toBeInTheDocument();
-      expect(field.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(field.parentElement?.nextElementSibling).toBe(button.parentElement);
       await userEvent.click(button);
       expect(button).toHaveAttribute('aria-expanded', 'true');
-      expect(button).toHaveAttribute('aria-controls');
-      expect(within(preDepartureContainer).getByText(helpCase.text)).toBeInTheDocument();
+      const helpText = within(preDepartureContainer).getByText(helpCase.text);
+      expect(button.getAttribute('aria-controls')).toBe(helpText.parentElement?.parentElement?.id);
     }
 
     await userEvent.clear(arrivalDate);
@@ -338,6 +340,76 @@ describe('ProfileScreen', () => {
         room_configuration: 'One double bed (for two people)',
         emergency_contact: 'Maria +5511999999999',
       });
+    });
+  });
+
+  test('preserves an existing off-grid arrival time when saving without changing it', async () => {
+    let savedPayload: Record<string, unknown> | null = null;
+
+    localStorage.setItem(
+      'parrot_user',
+      JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
+    );
+
+    server.use(
+      http.get('http://localhost:8000/profile/1', () =>
+        HttpResponse.json({
+          user_id: 1,
+          phone: '+15550000001',
+          name: 'Alice',
+          profile: {
+            preferred_name: 'Alice',
+            email: 'alice@example.com',
+            visa_status: 'Yes, I already have a visa / I can enter Brazil without a visa',
+            arrival_date: '2026-10-03',
+            arrival_time: '14:32',
+            arrival_flight: 'GRU, AA 1234',
+            checked_bags: 'No checked bags, I travel light',
+            extended_stay_help: 'No, thanks',
+            early_check_in_preference: 'I’ll arrive after the check-in time.',
+            departure_date: '2026-10-12',
+            departure_flight: 'GIG, LA 4567',
+            travel_insurance_status: 'Already hired one',
+            travel_insurance_brazil_medical_coverage: 'Yes',
+            travel_insurance_provider: 'SafetyWing',
+            travel_insurance_policy_number: 'POL-123',
+            roommate_status: 'I am staying in an individual room',
+            room_configuration: 'One double bed (for two people)',
+            emergency_contact: 'Maria +5511999999999',
+          },
+          roommate: null,
+        })
+      ),
+      http.get('http://localhost:8000/me/qr-code', () =>
+        HttpResponse.json({
+          trip_uuid: 'test-trip-001',
+          trip_traveler_id: 'trip-traveler-001',
+          qr_payload: 'parrot-trip-checkin:test-trip-001:trip-traveler-001',
+        })
+      ),
+      http.put('http://localhost:8000/profile/1', async ({ request }) => {
+        savedPayload = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ message: 'Profile updated' });
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <ProfileScreen />
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('My Profile');
+    await userEvent.click(screen.getByRole('button', { name: /pre departure information/i }));
+    const arrivalTime = screen.getByLabelText(/arrival time/i);
+    expect(arrivalTime).toHaveValue('14:32');
+
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => {
+      expect(savedPayload).toMatchObject({ arrival_time: '14:32' });
     });
   });
 

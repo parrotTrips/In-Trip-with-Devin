@@ -391,8 +391,10 @@ function DateSelectField({ label, value, onChange }: {
 
 function formatTimeForUS(value: string) {
   const match = value.match(/^(\d{2}):(\d{2})$/);
-  if (!match) return value;
+  if (!match) return `Existing value: ${value}`;
   const hour24 = Number(match[1]);
+  const minuteNumber = Number(match[2]);
+  if (hour24 > 23 || minuteNumber > 59) return `Existing value: ${value}`;
   const minute = match[2];
   const period = hour24 >= 12 ? 'PM' : 'AM';
   const hour12 = hour24 % 12 || 12;
