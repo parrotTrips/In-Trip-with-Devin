@@ -15,5 +15,8 @@ codex resume 01a06420-1bc1-71e3-9885-747cabe5b24b <- Pre Departure Form no app e
 codex resume 01a06cb2-a14e-7330-bf03-427e32026263 <- Link direcionando para cada uma das secoes por exemplo (Pre Departure Information)
 codex resume 01a08354-dc6a-73c2-b058-161c51eaf800 <- Correção Scan infinito
 codex resume 01a088ab-8204-73e2-9f95-cbec90de2261 <- Dash do Pre Departure 
-claude --resume 59ee133b-9919-4ad0-a7b8-c02eab6145ef <- Inicio da interface do jogo da vida/melhorias sugeridas
+claude --resume 59ee133b-9919-4ad0-a7b8-c02eab6145ef <- Inicio da interface do jogo da vida/melhorias sugeridas/v0 da interface
 codex resume 01a0c924-8b33-78a3-9918-348591ebada3 <- Angelo, Becker e Sanches em KLatam
+codex resume 01a0e854-623b-75d3-a472-5c10fa02f87a <- Começando o gerenciamento de viagens no jogo da vida
+claude --resume 9ef35d8b-785d-47ec-b04b-b8e79c6b818c <- Revisando o gerenciamento de viagens do jogo da vida
+codex resume 01a0f464-566c-7cf3-ac3d-10a19a2f649f <- Inicio Ambiente de Homologação
