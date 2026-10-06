@@ -17,6 +17,7 @@ import {
   type Activity,
   type TripPhaseDetail,
 } from '../services/trip-api';
+import { formatDayDate } from '../format-day-date';
 
 function ActivityCard({ activity, index }: { activity: Activity; index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -180,6 +181,8 @@ export default function DayDetails() {
     );
   }
 
+  const dayDate = formatDayDate(phase.starts_at);
+
   return (
     <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
       <div className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 text-white">
@@ -194,6 +197,9 @@ export default function DayDetails() {
             <h1 className="text-xl font-bold font-[Fredoka]">
               {phase.subtitle ? `${phase.title} — ${phase.subtitle}` : phase.title}
             </h1>
+            {dayDate && (
+              <p className="text-emerald-50 text-sm font-semibold mt-0.5">{dayDate}</p>
+            )}
             <p className="text-emerald-100 text-sm mt-0.5">{phase.short_description}</p>
           </div>
         </div>

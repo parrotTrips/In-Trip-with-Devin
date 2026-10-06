@@ -4,6 +4,7 @@ import { useTripContext } from '../../../app/providers/trip-context';
 import { useAuth } from '../../../app/providers/auth-context';
 import { useStaffView } from '../../../app/providers/staff-view-context';
 import { type TripPhase } from '../services/trip-api';
+import { formatDayDate } from '../format-day-date';
 import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
 import ProgressBar from '../../../shared/components/ProgressBar';
 import AppHeader from '../../../shared/components/AppHeader';
@@ -197,6 +198,7 @@ export default function HomeScreen() {
                 : (phaseProgressIdx >= 0 && currentUserPhaseId !== null && phaseProgressIdx < completedCount);
               const isCurrent = phase.id === currentUserPhaseId;
               const isPreTrip = phase.phase_type === 'pre-trip';
+              const dayDate = formatDayDate(phase.starts_at);
               const travelersHere = travelers.filter(t => t.current_phase_id === phase.id);
 
               return (
@@ -287,6 +289,15 @@ export default function HomeScreen() {
                       >
                         {phase.title}
                       </h3>
+                      {!isPreTrip && dayDate && (
+                        <p
+                          className={`text-[11px] font-semibold mt-0.5 ${
+                            isCurrent && !isPast ? 'text-white/90' : 'text-emerald-600'
+                          }`}
+                        >
+                          {dayDate}
+                        </p>
+                      )}
                       {phase.subtitle && (
                         <p
                           className={`text-xs mt-0.5 ${

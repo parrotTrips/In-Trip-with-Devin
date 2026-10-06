@@ -27,13 +27,13 @@ function setupHandlers() {
       HttpResponse.json({
         id: DAY_ID,
         phase_type: 'in-trip',
-        title: 'Day 1 — Feb 27',
+        title: 'Day 1',
         subtitle: 'Arrival in Rio',
         icon: 'plane-landing',
         short_description: 'Airport pickup, Hotel Check-in',
         detailed_description: null,
         sort_order: 4,
-        starts_at: '2026-02-27T00:00:00Z',
+        starts_at: '2026-02-27T03:00:00Z',
         is_locked_by_default: false,
         checklist_items: [],
         links: [],
@@ -95,6 +95,22 @@ describe('DayDetails', () => {
     });
     expect(screen.getByText('Airport Pickup')).toBeInTheDocument();
     expect(screen.getByText('Hotel lobby, Rio de Janeiro')).toBeInTheDocument();
+  });
+
+  test('shows the day date in the header in the trip timezone', async () => {
+    render(
+      <MemoryRouter initialEntries={[`/day/${DAY_ID}`]}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/day/:dayId" element={<DayDetails />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Fri • Feb 27')).toBeInTheDocument();
   });
 
   test('shows a Google Maps link for activities with an address', async () => {

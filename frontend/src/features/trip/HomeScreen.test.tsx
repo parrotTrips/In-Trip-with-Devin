@@ -16,22 +16,26 @@ function makePhase({
   title,
   sortOrder,
   icon = 'passport',
+  phaseType = 'pre-trip',
+  startsAt = null,
 }: {
   id: string;
   title: string;
   sortOrder: number;
   icon?: string;
+  phaseType?: 'pre-trip' | 'in-trip';
+  startsAt?: string | null;
 }) {
   return {
     id,
-    phase_type: 'pre-trip',
+    phase_type: phaseType,
     title,
     subtitle: null,
     icon,
     short_description: `${title} details`,
     detailed_description: null,
     sort_order: sortOrder,
-    starts_at: null,
+    starts_at: startsAt,
     is_locked_by_default: false,
     checklist_items: [],
     links: [],
@@ -134,6 +138,36 @@ describe('HomeScreen', () => {
 
     expect(await screen.findAllByText('Peru Adventure')).toHaveLength(1);
     expect(screen.queryByRole('heading', { name: 'My QR Code' })).not.toBeInTheDocument();
+  });
+
+  test('shows the date on in-trip day cards only', async () => {
+    setupHandlers({
+      phases: [
+        makePhase({ id: 'phase-001', title: 'Passport', sortOrder: 0 }),
+        makePhase({
+          id: 'day-001',
+          title: 'Day 1',
+          sortOrder: 1,
+          phaseType: 'in-trip',
+          startsAt: '2026-09-08T03:00:00Z',
+        }),
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/" element={<HomeScreen />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('Tue • Sep 08')).toBeInTheDocument();
+    expect(screen.queryAllByText(/•/)).toHaveLength(1);
   });
 
   test('keeps the journey summary sticky below the app header', async () => {
