@@ -185,6 +185,7 @@ describe('ProfileScreen', () => {
             preferred_name: 'Alice',
             email: 'alice@example.com',
             visa_status: 'Not yet, I already started my visa process but don\'t have one yet',
+            arrival_time: '14:32',
           },
           roommate: null,
         })
@@ -227,11 +228,56 @@ describe('ProfileScreen', () => {
     expect(within(preDepartureContainer).getByTestId('arrival-date-time-grid')).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
     expect(within(preDepartureContainer).getByTestId('departure-date-time-grid')).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
 
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '10/03/2026');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival time/i), '2:30 PM');
+    const arrivalDate = within(preDepartureContainer).getByLabelText(/arrival date/i);
+    const arrivalTime = within(preDepartureContainer).getByLabelText(/arrival time/i);
+    const departureDate = within(preDepartureContainer).getByLabelText(/departure date/i);
+    const departureTime = within(preDepartureContainer).getByLabelText(/departure time/i);
+
+    expect(arrivalDate).toHaveAttribute('type', 'date');
+    expect(departureDate).toHaveAttribute('type', 'date');
+    expect(arrivalTime).toHaveValue('14:32');
+    expect(within(arrivalTime).getByRole('option', { name: '2:32 PM' })).toHaveValue('14:32');
+    expect(within(arrivalTime).getByRole('option', { name: '2:30 PM' })).toHaveValue('14:30');
+    expect(within(arrivalTime).queryByRole('option', { name: '2:31 PM' })).not.toBeInTheDocument();
+    expect(within(departureTime).getByRole('option', { name: '12:00 AM' })).toHaveValue('00:00');
+    expect(within(departureTime).getByRole('option', { name: '11:55 PM' })).toHaveValue('23:55');
+
+    const helpCases = [
+      {
+        field: /Early Check-in Preference/i,
+        button: /more information about check-in times/i,
+        text: /Hotels usually have a 2 PM check-in time/i,
+      },
+      {
+        field: /Instagram Handle/i,
+        button: /more information about social media/i,
+        text: /We will be posting moments of the trip in our Instagram account/i,
+      },
+      {
+        field: /Home Address/i,
+        button: /more information about hotel registration/i,
+        text: /Some hotels ask for this info on the check in/i,
+      },
+    ];
+
+    for (const helpCase of helpCases) {
+      const field = within(preDepartureContainer).getByLabelText(helpCase.field);
+      const button = within(preDepartureContainer).getByRole('button', { name: helpCase.button });
+      expect(button).toHaveAttribute('aria-expanded', 'false');
+      expect(within(preDepartureContainer).queryByText(helpCase.text)).not.toBeInTheDocument();
+      expect(field.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      await userEvent.click(button);
+      expect(button).toHaveAttribute('aria-expanded', 'true');
+      expect(button).toHaveAttribute('aria-controls');
+      expect(within(preDepartureContainer).getByText(helpCase.text)).toBeInTheDocument();
+    }
+
+    await userEvent.clear(arrivalDate);
+    await userEvent.type(arrivalDate, '2026-10-03');
+    await userEvent.selectOptions(arrivalTime, '14:30');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), 'GRU, AA 1234');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '10/12/2026');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure time/i), '9:45 PM');
+    await userEvent.type(departureDate, '2026-10-12');
+    await userEvent.selectOptions(departureTime, '21:45');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), 'GIG, LA 4567');
     await userEvent.selectOptions(
       within(preDepartureContainer).getByLabelText(/checked bags/i),
@@ -265,9 +311,6 @@ describe('ProfileScreen', () => {
     );
     await userEvent.type(within(preDepartureContainer).getByLabelText(/emergency contact/i), 'Maria +5511999999999');
 
-    expect(within(preDepartureContainer).getByText(/Hotels usually have a 2 PM check-in time/i)).toBeInTheDocument();
-    expect(within(preDepartureContainer).getByText(/We will be posting moments of the trip in our Instagram account/i)).toBeInTheDocument();
-    expect(within(preDepartureContainer).getByText(/Some hotels ask for this info on the check in/i)).toBeInTheDocument();
     expect(within(preDepartureContainer).queryByLabelText(/Trip Mood/i)).not.toBeInTheDocument();
     expect(within(preDepartureContainer).queryByLabelText(/Social Topic/i)).not.toBeInTheDocument();
     expect(within(preDepartureContainer).queryByLabelText(/Always Up For/i)).not.toBeInTheDocument();
@@ -415,9 +458,9 @@ describe('ProfileScreen', () => {
       within(preDepartureContainer).getByLabelText(/visa status/i),
       'Yes, I already have a visa / I can enter Brazil without a visa'
     );
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '10/03/2026');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '2026-10-03');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), 'GRU, AA 1234');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '10/12/2026');
+    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '2026-10-12');
     await userEvent.type(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), 'GIG, LA 4567');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/checked bags/i), 'No checked bags, I travel light');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/travel insurance status/i), 'Already hired one');

@@ -72,6 +72,33 @@ function InfoCallout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function FieldHelp({ accessibleName, children }: { accessibleName: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const contentId = useId();
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        aria-label={accessibleName}
+        aria-expanded={open}
+        aria-controls={contentId}
+        onClick={() => setOpen(current => !current)}
+        className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"
+      >
+        <Info size={14} aria-hidden="true" />
+        More information
+        {open ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+      </button>
+      {open && (
+        <div id={contentId}>
+          <InfoCallout>{children}</InfoCallout>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InputField({ label, value, onChange, type = 'text', placeholder, disabled = false, required = false, error, inputMode }: {
   label: string;
   value: string;
@@ -362,24 +389,6 @@ function DateSelectField({ label, value, onChange }: {
   );
 }
 
-function formatIsoDateForUS(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return value;
-  return `${match[2]}/${match[3]}/${match[1]}`;
-}
-
-function parseUSDateInput(value: string) {
-  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-  const month = Number(match[1]);
-  const day = Number(match[2]);
-  const year = Number(match[3]);
-  if (month < 1 || month > 12) return null;
-  const maxDay = new Date(year, month, 0).getDate();
-  if (day < 1 || day > maxDay) return null;
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
 function formatTimeForUS(value: string) {
   const match = value.match(/^(\d{2}):(\d{2})$/);
   if (!match) return value;
@@ -390,16 +399,12 @@ function formatTimeForUS(value: string) {
   return `${hour12}:${minute} ${period}`;
 }
 
-function parseUSTimeInput(value: string) {
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
-  if (!match) return null;
-  const hour12 = Number(match[1]);
-  const minute = Number(match[2]);
-  if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) return null;
-  const period = match[3].toUpperCase();
-  const hour24 = period === 'PM' ? (hour12 % 12) + 12 : hour12 % 12;
-  return `${String(hour24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-}
+const FIVE_MINUTE_TIME_OPTIONS = Array.from({ length: 24 * 12 }, (_, index) => {
+  const hour = Math.floor(index / 12);
+  const minute = (index % 12) * 5;
+  const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return { value, label: formatTimeForUS(value) };
+});
 
 function USDateField({ label, value, onChange, required = false, error }: {
   label: string;
@@ -408,22 +413,12 @@ function USDateField({ label, value, onChange, required = false, error }: {
   required?: boolean;
   error?: string;
 }) {
-  const [displayValue, setDisplayValue] = useState(formatIsoDateForUS(value));
-
-  useEffect(() => {
-    setDisplayValue(formatIsoDateForUS(value));
-  }, [value]);
-
   return (
     <InputField
       label={label}
-      value={displayValue}
-      onChange={v => {
-        setDisplayValue(v);
-        onChange(v.trim() ? parseUSDateInput(v) ?? '' : '');
-      }}
-      placeholder="MM/DD/YYYY"
-      inputMode="numeric"
+      type="date"
+      value={value}
+      onChange={onChange}
       required={required}
       error={error}
     />
@@ -435,21 +430,16 @@ function USTimeField({ label, value, onChange }: {
   value: string;
   onChange: (v: string) => void;
 }) {
-  const [displayValue, setDisplayValue] = useState(formatTimeForUS(value));
-
-  useEffect(() => {
-    setDisplayValue(formatTimeForUS(value));
-  }, [value]);
+  const isLegacyValue = Boolean(value) && !FIVE_MINUTE_TIME_OPTIONS.some(option => option.value === value);
 
   return (
-    <InputField
+    <SelectField
       label={label}
-      value={displayValue}
-      onChange={v => {
-        setDisplayValue(v);
-        onChange(v.trim() ? parseUSTimeInput(v) ?? '' : '');
-      }}
-      placeholder="h:mm AM"
+      value={value}
+      onChange={onChange}
+      options={isLegacyValue
+        ? [{ value, label: formatTimeForUS(value) }, ...FIVE_MINUTE_TIME_OPTIONS]
+        : FIVE_MINUTE_TIME_OPTIONS}
     />
   );
 }
@@ -1007,10 +997,10 @@ export default function ProfileScreen() {
                 {form.extended_stay_help === 'Yes, please' && (
                   <TextAreaField label="How can we help?" value={form.extended_stay_help_details} onChange={v => setField('extended_stay_help_details', v)} required error={validationErrors.extended_stay_help_details} />
                 )}
-                <InfoCallout>
-                  Hotels usually have a 2 PM check-in time. While we always strive to have your room ready upon arrival for the trek, it’s not guaranteed. While bag drop and common areas are okay, early check-in may involve a fee
-                </InfoCallout>
                 <SelectField label="Early Check-in Preference" value={form.early_check_in_preference} onChange={v => setField('early_check_in_preference', v)} options={EARLY_CHECK_IN_OPTIONS} required error={validationErrors.early_check_in_preference} />
+                <FieldHelp accessibleName="More information about check-in times">
+                  Hotels usually have a 2 PM check-in time. While we always strive to have your room ready upon arrival for the trek, it’s not guaranteed. While bag drop and common areas are okay, early check-in may involve a fee
+                </FieldHelp>
               </div>
             </div>
 
@@ -1070,14 +1060,14 @@ export default function ProfileScreen() {
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Contact & Social</p>
               <div className="space-y-3">
                 <InputField label="Emergency Contact" value={form.emergency_contact} onChange={v => setField('emergency_contact', v)} placeholder="Name and phone number" required error={validationErrors.emergency_contact} />
-                <InfoCallout>
-                  We will be posting moments of the trip in our Instagram account. If want to be tagged and followed by us, put your @ here :)
-                </InfoCallout>
                 <InputField label="Instagram Handle" value={form.instagram_handle} onChange={v => setField('instagram_handle', v)} placeholder="@yourhandle" />
-                <InfoCallout>
-                  Some hotels ask for this info on the check in and if you want to speed it up, please inform here. Totally optional :)
-                </InfoCallout>
+                <FieldHelp accessibleName="More information about social media">
+                  We will be posting moments of the trip in our Instagram account. If want to be tagged and followed by us, put your @ here :)
+                </FieldHelp>
                 <InputField label="Home Address" value={form.home_address} onChange={v => setField('home_address', v)} />
+                <FieldHelp accessibleName="More information about hotel registration">
+                  Some hotels ask for this info on the check in and if you want to speed it up, please inform here. Totally optional :)
+                </FieldHelp>
                 <TextAreaField label="Final Considerations" value={form.final_considerations} onChange={v => setField('final_considerations', v)} />
               </div>
             </div>
