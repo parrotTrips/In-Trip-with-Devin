@@ -100,3 +100,65 @@ def test_trip_switches_to_in_trip_on_start_date(session_factory):
         assert phases["completed_phase_ids"] == []
 
     asyncio.run(run())
+
+
+def test_staff_sees_each_traveler_position_pending_items_and_last_checkin(session_factory):
+    from datetime import UTC, datetime
+
+    from app.db.models.staff import ActivityCheckin
+    from app.db.models.trip import TripActivity
+    from app.services.trip_service import get_traveler_locations
+
+    async def run():
+        seeded = await _seed(session_factory, start_date=date(2020, 1, 1))
+        async with session_factory() as session:
+            day = TripPhase(
+                wetravel_trip_uuid=seeded["trip_uuid"],
+                phase_type="in-trip",
+                title="Day 1",
+                subtitle="Rio",
+                short_description="",
+                sort_order=10,
+                starts_at=datetime(2020, 1, 1, 3, tzinfo=UTC),
+                is_locked_by_default=False,
+                is_visible=True,
+            )
+            session.add(day)
+            await session.flush()
+            activity = TripActivity(
+                trip_phase_id=day.id,
+                name="Boat tour",
+                activity_type="included",
+                short_description="",
+                sort_order=0,
+            )
+            session.add(activity)
+            await session.flush()
+            session.add(TravelerPhaseProgress(
+                trip_traveler_id=seeded["tt_id"],
+                trip_phase_id=seeded["phases"][0].id,
+                is_completed=True,
+            ))
+            session.add(ActivityCheckin(
+                trip_activity_id=activity.id,
+                trip_traveler_id=seeded["tt_id"],
+                scanned_by_user_id=uuid.UUID(seeded["user_id"]),
+                scan_number=1,
+                checked_in_at=datetime(2020, 1, 1, 15, tzinfo=UTC),
+            ))
+            await session.commit()
+
+            result = await get_traveler_locations(seeded["trip_uuid"], session)
+
+        assert result["trip_mode"] == "in-trip"
+        [traveler] = result["travelers"]
+        assert traveler["name"] == "Ana"
+        assert traveler["current_phase"] == {
+            "id": str(day.id), "title": "Day 1", "subtitle": "Rio", "phase_type": "in-trip",
+        }
+        # Phases 2 and 3 of the pre-trip are still open.
+        assert traveler["pending_pre_trip"] == 2
+        assert traveler["last_checkin"]["activity_name"] == "Boat tour"
+        assert traveler["last_checkin"]["day_title"] == "Day 1"
+
+    asyncio.run(run())

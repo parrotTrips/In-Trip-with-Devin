@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye, Bell, Send, Loader2, CheckCircle, MapPin, Pencil, Trash2, X, Check, ArrowRightLeft } from 'lucide-react';
+import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye, Bell, Send, Loader2, CheckCircle, MapPin, Pencil, Trash2, X, Check, ArrowRightLeft, Users, Search } from 'lucide-react';
 import { useAuth } from '../../../app/providers/auth-context';
 import {
   getActivityTravelers,
   getStaffAnnouncements,
   getStaffContacts,
+  getStaffTravelers,
   getStaffTrip,
   previewActivityTravelerScan,
   scanActivityTraveler,
@@ -20,6 +21,7 @@ import {
   type CheckinStep,
   type StaffActivity,
   type StaffContactGroup,
+  type StaffTravelerLocation,
   type StaffDay,
   type StaffTrip,
 } from '../services/staff-api';
@@ -534,6 +536,97 @@ function ItineraryTab({
   );
 }
 
+function TravelersTab() {
+  const [travelers, setTravelers] = useState<StaffTravelerLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    getStaffTravelers()
+      .then(r => setTravelers(r.travelers))
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load travelers'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48 gap-3">
+        <div className="w-7 h-7 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400 text-sm">Loading travelers...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 px-6 gap-3">
+        <p className="text-red-500 text-sm text-center">{error}</p>
+      </div>
+    );
+  }
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visible = travelers.filter(t => !normalizedQuery || (t.name ?? t.phone).toLowerCase().includes(normalizedQuery));
+
+  return (
+    <div className="px-4 py-5 pb-24 space-y-3">
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="search"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search traveler"
+          className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+        />
+      </div>
+      {visible.length === 0 ? (
+        <p className="text-gray-400 text-sm text-center py-8">No travelers found.</p>
+      ) : (
+        <ul className="bg-white rounded-2xl shadow-sm divide-y divide-gray-50 overflow-hidden">
+          {visible.map(t => (
+            <li key={t.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-gray-800">{t.name ?? t.phone}</p>
+                {t.pending_pre_trip > 0 && (
+                  <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                    {t.pending_pre_trip} pending pre-trip
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-emerald-700">
+                <MapPin size={12} className="shrink-0" />
+                {t.current_phase
+                  ? (t.current_phase.subtitle ? `${t.current_phase.title} — ${t.current_phase.subtitle}` : t.current_phase.title)
+                  : 'Not started'}
+              </p>
+              <p className="mt-0.5 text-xs text-gray-400">
+                {t.last_checkin
+                  ? `Last check-in: ${t.last_checkin.activity_name} · ${t.last_checkin.day_title}${
+                      t.last_checkin.checked_in_at ? ` · ${formatCheckinTime(t.last_checkin.checked_in_at)}` : ''
+                    }`
+                  : 'No check-ins yet'}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function formatCheckinTime(iso: string) {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 function ContactsTab({ groups, loading, error }: { groups: StaffContactGroup[]; loading: boolean; error: string | null }) {
   if (loading) {
     return (
@@ -775,7 +868,7 @@ function AnnounceTab({ currentUserId }: { currentUserId: string }) {
 
 // ── Main screen ────────────────────────────────────────────────────────────────
 
-type Tab = 'itinerary' | 'contacts' | 'announce';
+type Tab = 'itinerary' | 'travelers' | 'contacts' | 'announce';
 
 interface Props {
   onSwitchToTravelerView: () => void;
@@ -846,6 +939,7 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
         {activeTab === 'itinerary' && (
           <ItineraryTab days={trip?.days ?? []} loading={loading} error={error} onActivityCheckedIn={handleActivityCheckedIn} />
         )}
+        {activeTab === 'travelers' && <TravelersTab />}
         {activeTab === 'contacts' && <ContactsTab groups={contactGroups} loading={contactsLoading} error={contactsError} />}
         {activeTab === 'announce' && <AnnounceTab currentUserId={user?.userId ?? ''} />}
       </div>
@@ -855,6 +949,7 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
         <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
           {[
             { id: 'itinerary', icon: Map, label: 'Itinerary' },
+            { id: 'travelers', icon: Users, label: 'Travelers' },
             { id: 'contacts', icon: Headphones, label: 'Contacts' },
             { id: 'announce', icon: Bell, label: 'Announce' },
           ].map(({ id, icon: Icon, label }) => {

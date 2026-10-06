@@ -382,6 +382,54 @@ describe('StaffScreen', () => {
     expect(screen.queryByText(/scan 1 of 1/i)).not.toBeInTheDocument();
   });
 
+  test('lists where each traveler is in the journey with their last check-in', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get('http://localhost:8000/me/staff/travelers', () =>
+        HttpResponse.json({
+          trip_mode: 'in-trip',
+          travelers: [
+            {
+              id: 'tt-1',
+              name: 'Ana Silva',
+              phone: '+5511999000001',
+              current_phase: { id: 'day-2', title: 'Day 2', subtitle: 'Paraty', phase_type: 'in-trip' },
+              pending_pre_trip: 2,
+              last_checkin: { activity_name: 'Boat tour', day_title: 'Day 2', checked_in_at: '2026-07-02T13:00:00Z' },
+            },
+            {
+              id: 'tt-2',
+              name: 'Bruno Costa',
+              phone: '+5511999000002',
+              current_phase: { id: 'day-2', title: 'Day 2', subtitle: 'Paraty', phase_type: 'in-trip' },
+              pending_pre_trip: 0,
+              last_checkin: null,
+            },
+          ],
+        })
+      )
+    );
+    render(
+      <AuthProvider>
+        <StaffScreen onSwitchToTravelerView={() => {}} />
+      </AuthProvider>
+    );
+
+    await user.click(screen.getByRole('button', { name: /travelers/i }));
+
+    const ana = (await screen.findByText('Ana Silva')).closest('li') as HTMLElement;
+    expect(ana).toHaveTextContent('Day 2 — Paraty');
+    expect(ana).toHaveTextContent('2 pending pre-trip');
+    expect(ana).toHaveTextContent(/Last check-in: Boat tour · Day 2/);
+    const bruno = screen.getByText('Bruno Costa').closest('li') as HTMLElement;
+    expect(bruno).toHaveTextContent('No check-ins yet');
+    expect(bruno).not.toHaveTextContent(/pending/i);
+
+    await user.type(screen.getByPlaceholderText(/search traveler/i), 'bru');
+    expect(screen.queryByText('Ana Silva')).not.toBeInTheDocument();
+    expect(screen.getByText('Bruno Costa')).toBeInTheDocument();
+  });
+
   test('does not show a global QR Scan tab', async () => {
     render(
       <AuthProvider>

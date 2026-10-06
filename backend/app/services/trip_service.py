@@ -345,10 +345,8 @@ async def get_trip_phase_detail(
     }
 
 
-async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) -> dict:
-    await require_trip_membership(user_id, trip_id, session)
-    trip_uuid = trip_id
-
+async def _traveler_positions(trip_uuid: str, session: AsyncSession) -> dict:
+    """Travelers (staff excluded) with their completed phases and current phase."""
     not_staff_on_this_trip = ~(
         select(TripStaff.id)
         .where(
@@ -370,9 +368,9 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
         )
     )
     rows = tt_result.all()
-
+    settings = await _get_trip_settings(trip_uuid, session)
     if not rows:
-        return {"travelers": []}
+        return {"trip_mode": settings["mode"], "phases": [], "travelers": []}
 
     tt_ids = [tt.id for tt, _, _ in rows]
 
@@ -387,6 +385,8 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
         {
             "id": str(p.id),
             "phase_type": p.phase_type,
+            "title": p.title,
+            "subtitle": p.subtitle,
             "starts_at": p.starts_at,
             "sort_order": p.sort_order,
         }
@@ -394,7 +394,6 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
     ]
     now = _datetime.now(UTC)
     date_completions = compute_in_trip_phase_completions(phase_dicts, now)
-    settings = await _get_trip_settings(trip_uuid, session)
 
     db_completed_ids = await _completed_phase_ids_by_traveler(
         tt_ids, [p.id for p in all_phases], session
@@ -406,9 +405,11 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
             pid for pid, is_completed in date_completions.items() if is_completed
         }
         travelers.append({
-            "id": str(user.id),
+            "trip_traveler_id": tt.id,
+            "user_id": str(user.id),
             "name": preferred_name or user.full_name,
             "phone": user.phone,
+            "completed_phase_ids": completed_phase_ids,
             "current_phase_id": compute_current_phase_id(
                 phases=phase_dicts,
                 completed_phase_ids=completed_phase_ids,
@@ -417,4 +418,78 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
             ),
         })
 
-    return {"travelers": travelers}
+    return {"trip_mode": settings["mode"], "phases": phase_dicts, "travelers": travelers}
+
+
+async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) -> dict:
+    await require_trip_membership(user_id, trip_id, session)
+    positions = await _traveler_positions(trip_id, session)
+    return {
+        "travelers": [
+            {
+                "id": t["user_id"],
+                "name": t["name"],
+                "phone": t["phone"],
+                "current_phase_id": t["current_phase_id"],
+            }
+            for t in positions["travelers"]
+        ]
+    }
+
+
+async def get_traveler_locations(trip_uuid: str, session: AsyncSession) -> dict:
+    """Staff view: each traveler's current phase/day, open pre-trip phases and last check-in.
+
+    Callers must check staff access to the trip first.
+    """
+    from sqlalchemy import text as _text
+
+    positions = await _traveler_positions(trip_uuid, session)
+    phases_by_id = {p["id"]: p for p in positions["phases"]}
+    pre_trip_ids = {p["id"] for p in positions["phases"] if p["phase_type"] == "pre-trip"}
+
+    last_checkins: dict = {}
+    tt_ids = [t["trip_traveler_id"] for t in positions["travelers"]]
+    if tt_ids:
+        result = await session.execute(
+            _text("""
+                SELECT DISTINCT ON (ac.trip_traveler_id)
+                       ac.trip_traveler_id, ta.name AS activity_name,
+                       tp.title AS day_title, ac.checked_in_at
+                FROM activity_checkins ac
+                JOIN trip_activities ta ON ta.id = ac.trip_activity_id
+                JOIN trip_phases tp ON tp.id = ta.trip_phase_id
+                WHERE ac.trip_traveler_id = ANY(:ids)
+                  AND tp.wetravel_trip_uuid = :trip_uuid
+                ORDER BY ac.trip_traveler_id, ac.checked_in_at DESC
+            """),
+            {"ids": tt_ids, "trip_uuid": trip_uuid},
+        )
+        for row in result.mappings():
+            last_checkins[row["trip_traveler_id"]] = {
+                "activity_name": row["activity_name"],
+                "day_title": row["day_title"],
+                "checked_in_at": row["checked_in_at"].isoformat() if row["checked_in_at"] else None,
+            }
+
+    travelers = []
+    for t in positions["travelers"]:
+        phase = phases_by_id.get(t["current_phase_id"])
+        travelers.append({
+            "id": str(t["trip_traveler_id"]),
+            "name": t["name"],
+            "phone": t["phone"],
+            "current_phase": {
+                "id": phase["id"],
+                "title": phase["title"],
+                "subtitle": phase["subtitle"],
+                "phase_type": phase["phase_type"],
+            } if phase else None,
+            "pending_pre_trip": (
+                len(pre_trip_ids - t["completed_phase_ids"])
+                if positions["trip_mode"] == "in-trip" else 0
+            ),
+            "last_checkin": last_checkins.get(t["trip_traveler_id"]),
+        })
+    travelers.sort(key=lambda t: (t["name"] or "").lower())
+    return {"trip_mode": positions["trip_mode"], "travelers": travelers}

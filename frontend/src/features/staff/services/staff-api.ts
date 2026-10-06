@@ -115,6 +115,19 @@ export async function getStaffContacts() {
   return request<StaffContactsResponse>('/me/staff/trip/contacts');
 }
 
+export interface StaffTravelerLocation {
+  id: string;
+  name: string | null;
+  phone: string;
+  current_phase: { id: string; title: string; subtitle: string | null; phase_type: string } | null;
+  pending_pre_trip: number;
+  last_checkin: { activity_name: string; day_title: string; checked_in_at: string | null } | null;
+}
+
+export async function getStaffTravelers() {
+  return request<{ trip_mode: string; travelers: StaffTravelerLocation[] }>('/me/staff/travelers');
+}
+
 export interface StaffAnnouncement {
   id: string;
   title: string;

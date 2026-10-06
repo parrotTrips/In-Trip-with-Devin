@@ -490,6 +490,18 @@ async def get_staff_trip(
     }
 
 
+@router.get("/travelers")
+async def get_staff_travelers(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Where each traveler is in the journey, for the staff's active trip."""
+    from app.services.trip_service import get_traveler_locations
+
+    trip_uuid = await _require_staff_membership(request.state.user_id, request.state.trip_id, session)
+    return await get_traveler_locations(trip_uuid, session)
+
+
 @router.get("/trip/contacts")
 async def get_staff_contacts(
     request: Request,
