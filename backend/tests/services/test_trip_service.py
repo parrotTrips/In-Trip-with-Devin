@@ -1,7 +1,14 @@
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from app.services.trip_service import compute_current_phase_id, compute_in_trip_phase_completions
+from datetime import date
+
+from app.services.trip_service import (
+    compute_checklist_completed_phase_ids,
+    compute_current_phase_id,
+    compute_in_trip_phase_completions,
+    resolve_trip_mode,
+)
 
 
 def _phase(id: str, phase_type: str, starts_at: datetime | None) -> dict:
@@ -140,3 +147,36 @@ def test_current_phase_pre_trip_keeps_first_incomplete_phase():
     )
 
     assert result == "pre2"
+
+
+def test_trip_mode_switches_to_in_trip_on_start_date_in_sao_paulo():
+    start = date(2026, 10, 10)
+    # 2026-10-10 02:59 UTC is still Oct 9 in São Paulo.
+    assert resolve_trip_mode("pre-trip", start, datetime(2026, 10, 10, 2, 59, tzinfo=UTC)) == "pre-trip"
+    assert resolve_trip_mode("pre-trip", start, datetime(2026, 10, 10, 3, 0, tzinfo=UTC)) == "in-trip"
+
+
+def test_trip_mode_keeps_manual_in_trip_before_start_date():
+    assert resolve_trip_mode("in-trip", date(2026, 12, 1), datetime(2026, 10, 1, tzinfo=UTC)) == "in-trip"
+
+
+def test_trip_mode_without_start_date_keeps_stored_mode():
+    assert resolve_trip_mode("pre-trip", None, datetime(2026, 10, 1, tzinfo=UTC)) == "pre-trip"
+
+
+def test_checklist_completes_phase_when_all_required_items_are_done():
+    items_by_phase = {
+        "p1": [{"id": "a", "is_required": True}, {"id": "b", "is_required": False}],
+        "p2": [{"id": "c", "is_required": True}, {"id": "d", "is_required": True}],
+        "p3": [],
+    }
+    done = {"a", "c"}
+    assert compute_checklist_completed_phase_ids(items_by_phase, done) == {"p1"}
+
+
+def test_checklist_without_required_items_needs_every_item():
+    items_by_phase = {
+        "p1": [{"id": "a", "is_required": False}, {"id": "b", "is_required": False}],
+        "p2": [{"id": "c", "is_required": False}],
+    }
+    assert compute_checklist_completed_phase_ids(items_by_phase, {"a", "c"}) == {"p2"}

@@ -13,6 +13,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [phases, setPhases] = useState<TripPhase[]>([]);
   const [travelers, setTravelers] = useState<TripTraveler[]>([]);
   const [idealPacePhaseId, setIdealPacePhaseId] = useState<string | null>(null);
+  const [completedPhaseIds, setCompletedPhaseIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(false);
@@ -32,6 +33,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
       setTripInfo(tripResult.trip);
       setPhases(phasesResult.phases);
       setIdealPacePhaseId(phasesResult.ideal_pace_phase_id ?? null);
+      setCompletedPhaseIds(phasesResult.completed_phase_ids ?? []);
       setTravelers(travelersResult.travelers);
       clearTripAnalyticsContext();
       if (tripResult.trip) {
@@ -58,7 +60,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
   }, [fetchAll]);
 
   return (
-    <TripContext.Provider value={{ tripInfo, phases, travelers, idealPacePhaseId, loading, error, refetch: fetchAll }}>
+    <TripContext.Provider value={{ tripInfo, phases, travelers, idealPacePhaseId, completedPhaseIds, loading, error, refetch: fetchAll }}>
       {children}
     </TripContext.Provider>
   );

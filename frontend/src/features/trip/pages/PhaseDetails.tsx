@@ -83,6 +83,8 @@ export default function PhaseDetails() {
     });
     try {
       await apiUpdateChecklist(user.userId, tripInfo.wetravel_trip_uuid, phaseId, itemId, newCompleted);
+      // The checklist can complete the phase, so the journey map needs fresh data.
+      refetch();
     } catch {
       setChecklist(prev => prev.map(i => i.id === itemId ? { ...i, completed: !newCompleted } : i));
     }
@@ -121,6 +123,16 @@ export default function PhaseDetails() {
   }
 
   const travelersHere = travelers.filter(t => t.current_phase_id === phaseId);
+  // Same rule as the API: every required item, or every item when none is required.
+  const requiredIds = new Set(
+    (phase.checklist_items.some(i => i.is_required)
+      ? phase.checklist_items.filter(i => i.is_required)
+      : phase.checklist_items
+    ).map(i => i.id)
+  );
+  const checklistDone = requiredIds.size > 0
+    && checklist.filter(c => requiredIds.has(c.id)).every(c => c.completed);
+  const phaseDone = isCompleted || checklistDone;
   const completedCount = checklist.filter(c => c.completed).length;
   const checklistProgress = checklist.length > 0 ? Math.round((completedCount / checklist.length) * 100) : 0;
 
@@ -165,13 +177,14 @@ export default function PhaseDetails() {
         <div className="px-4 pb-5">
           <button
             onClick={handleToggleCompleted}
+            disabled={checklistDone}
             className={`w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-              isCompleted
+              phaseDone
                 ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                 : 'bg-white/15 text-white border border-white/30 hover:bg-white/25'
             }`}
           >
-            {isCompleted ? (
+            {phaseDone ? (
               <><CheckCircle2 size={18} /> Completed!</>
             ) : (
               <><Circle size={18} /> Mark as Completed</>

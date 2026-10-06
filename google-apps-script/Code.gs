@@ -204,7 +204,7 @@ function startTrip() {
   var ui = SpreadsheetApp.getUi();
   var confirm = ui.alert(
     "🚀 Iniciar Viagem → In-Trip",
-    "This will:\n• Clear phase progress (barra zera)\n• Preserve checklist completions\n• Switch trip mode to IN-TRIP\n\nUse this on the real trip start day.\n\nContinue?",
+    "This will:\n• Switch trip mode to IN-TRIP now\n• Keep all traveler progress (unfinished pre-trip phases show as pending)\n\nTrips also switch automatically on their start date; use this only to start earlier.\n\nContinue?",
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;

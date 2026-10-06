@@ -93,7 +93,13 @@ export async function getMyTrip() {
 }
 
 export async function getMyTripPhases() {
-  return request<{ wetravel_trip_uuid: string; phases: TripPhase[]; ideal_pace_phase_id: string | null }>('/me/trip/phases');
+  return request<{
+    wetravel_trip_uuid: string;
+    phases: TripPhase[];
+    ideal_pace_phase_id: string | null;
+    // Phases this traveler finished (button or checklist), in any order.
+    completed_phase_ids?: string[];
+  }>('/me/trip/phases');
 }
 
 export async function getMyTripPhaseDetail(phaseId: string) {

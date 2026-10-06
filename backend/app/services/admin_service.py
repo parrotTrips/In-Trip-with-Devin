@@ -534,42 +534,25 @@ async def admin_reset_content(trip_uuid: str) -> dict:
 
 
 async def admin_start_trip(trip_uuid: str) -> dict:
-    """Start the trip: clear phase progress, preserve checklist, switch to in-trip.
+    """Start the trip early: switch to in-trip, keeping all traveler progress.
 
-    Use this on the real trip start day. Travelers keep their pre-trip checklist
-    completions; the progress bar resets to 0% and begins advancing by date.
+    Trips also switch automatically on their start date. Pre-trip progress is
+    preserved so unfinished pre-trip phases can be shown as pending during the trip.
     """
     conn = await _get_connection()
     try:
-        tt_rows = await conn.fetch(
-            "SELECT id FROM trip_travelers WHERE wetravel_trip_uuid = $1", trip_uuid
+        await conn.execute(
+            """
+            INSERT INTO trip_settings (trip_uuid, mode)
+            VALUES ($1, 'in-trip')
+            ON CONFLICT (trip_uuid) DO UPDATE SET mode = 'in-trip', updated_at = now()
+            """,
+            trip_uuid,
         )
-        if not tt_rows:
-            return {"status": "ok", "message": "No travelers found", "deleted_rows": 0}
-
-        tt_ids = [str(r["id"]) for r in tt_rows]
-        async with conn.transaction():
-            deleted_phase = await conn.fetchval(
-                "WITH d AS (DELETE FROM traveler_phase_progress WHERE trip_traveler_id = ANY($1::uuid[]) RETURNING 1) SELECT COUNT(*) FROM d",
-                tt_ids,
-            )
-            await conn.execute(
-                """
-                INSERT INTO trip_settings (trip_uuid, mode)
-                VALUES ($1, 'in-trip')
-                ON CONFLICT (trip_uuid) DO UPDATE SET mode = 'in-trip', updated_at = now()
-                """,
-                trip_uuid,
-            )
     finally:
         await conn.close()
 
-    return {
-        "status": "ok",
-        "trip_uuid": trip_uuid,
-        "mode": "in-trip",
-        "deleted_phase_progress": deleted_phase,
-    }
+    return {"status": "ok", "trip_uuid": trip_uuid, "mode": "in-trip"}
 
 
 async def admin_reset_trip(trip_uuid: str) -> dict:

@@ -592,6 +592,7 @@ describe('ProfileScreen', () => {
                 { id: 'traveler-4', name: 'Ana Baker', phone: '+15550000004', current_phase_id: null },
               ],
               idealPacePhaseId: null,
+              completedPhaseIds: [],
               loading: false,
               error: null,
               refetch: () => {},

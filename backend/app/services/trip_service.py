@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid as _uuid
-from datetime import UTC, datetime as _datetime
+from datetime import UTC, date as _date, datetime as _datetime
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -17,7 +17,7 @@ from app.db.models.trip import (
     TripPhaseLink,
     TripTraveler,
 )
-from app.db.models.progress import TravelerPhaseProgress
+from app.db.models.progress import TravelerChecklistProgress, TravelerPhaseProgress
 from app.db.models.staff import TripStaff
 from app.db.models.traveler import TravelerProfile
 from app.db.models.user import User
@@ -26,17 +26,42 @@ from app.services.trip_membership_service import require_trip_membership
 SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
 
+def resolve_trip_mode(
+    stored_mode: str,
+    start_date: _date | None,
+    now: _datetime,
+    timezone: ZoneInfo = SAO_PAULO_TZ,
+) -> str:
+    """The trip becomes in-trip on its start date (São Paulo time).
+
+    A manual "Start Trip" can still switch it earlier; the stored mode wins then.
+    """
+    if stored_mode != "pre-trip" or start_date is None:
+        return stored_mode
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    return "in-trip" if now.astimezone(timezone).date() >= start_date else stored_mode
+
+
 async def _get_trip_settings(trip_uuid: str, session: AsyncSession) -> dict:
-    """Return mode and ideal_pace_phase_id for a trip. Defaults to pre-trip/None."""
+    """Return the effective mode and ideal_pace_phase_id for a trip. Defaults to pre-trip/None."""
     from sqlalchemy import text as _text
     result = await session.execute(
-        _text("SELECT mode, ideal_pace_phase_id FROM trip_settings WHERE trip_uuid = :uuid"),
+        _text(
+            "SELECT s.mode, s.ideal_pace_phase_id, w.start_date"
+            " FROM wetravel_trips w"
+            " LEFT JOIN trip_settings s ON s.trip_uuid = w.trip_uuid"
+            " WHERE w.trip_uuid = :uuid"
+        ),
         {"uuid": trip_uuid},
     )
     row = result.mappings().first()
-    if row:
-        return {"mode": row["mode"], "ideal_pace_phase_id": row["ideal_pace_phase_id"]}
-    return {"mode": "pre-trip", "ideal_pace_phase_id": None}
+    stored_mode = (row["mode"] if row else None) or "pre-trip"
+    start_date = row["start_date"] if row else None
+    return {
+        "mode": resolve_trip_mode(stored_mode, start_date, _datetime.now(UTC)),
+        "ideal_pace_phase_id": row["ideal_pace_phase_id"] if row else None,
+    }
 
 
 async def _get_trip_mode(trip_uuid: str, session: AsyncSession) -> str:
@@ -66,6 +91,64 @@ def compute_in_trip_phase_completions(
                 starts_at = starts_at.replace(tzinfo=UTC)
             result[phase["id"]] = starts_at <= now
     return result
+
+
+def compute_checklist_completed_phase_ids(
+    items_by_phase: dict[str, list[dict]],
+    done_item_ids: set[str],
+) -> set[str]:
+    """Phases whose checklist is done: every required item, or every item when none is required."""
+    completed: set[str] = set()
+    for phase_id, items in items_by_phase.items():
+        if not items:
+            continue
+        needed = [i for i in items if i["is_required"]] or items
+        if all(i["id"] in done_item_ids for i in needed):
+            completed.add(phase_id)
+    return completed
+
+
+async def _completed_phase_ids_by_traveler(
+    trip_traveler_ids: list[_uuid.UUID],
+    phase_ids: list[_uuid.UUID],
+    session: AsyncSession,
+) -> dict[_uuid.UUID, set[str]]:
+    """Phases each traveler finished, via "Mark as Completed" or a completed checklist."""
+    completed: dict[_uuid.UUID, set[str]] = {tt_id: set() for tt_id in trip_traveler_ids}
+    if not trip_traveler_ids or not phase_ids:
+        return completed
+
+    manual = await session.scalars(
+        select(TravelerPhaseProgress).where(
+            TravelerPhaseProgress.trip_traveler_id.in_(trip_traveler_ids),
+            TravelerPhaseProgress.trip_phase_id.in_(phase_ids),
+            TravelerPhaseProgress.is_completed.is_(True),
+        )
+    )
+    for row in manual:
+        completed[row.trip_traveler_id].add(str(row.trip_phase_id))
+
+    items_by_phase: dict[str, list[dict]] = {}
+    for item in await session.scalars(
+        select(TripPhaseChecklistItem).where(TripPhaseChecklistItem.trip_phase_id.in_(phase_ids))
+    ):
+        items_by_phase.setdefault(str(item.trip_phase_id), []).append(
+            {"id": str(item.id), "is_required": item.is_required}
+        )
+    if not items_by_phase:
+        return completed
+
+    done_items: dict[_uuid.UUID, set[str]] = {}
+    for row in await session.scalars(
+        select(TravelerChecklistProgress).where(
+            TravelerChecklistProgress.trip_traveler_id.in_(trip_traveler_ids),
+            TravelerChecklistProgress.is_completed.is_(True),
+        )
+    ):
+        done_items.setdefault(row.trip_traveler_id, set()).add(str(row.trip_phase_checklist_item_id))
+    for tt_id, item_ids in done_items.items():
+        completed[tt_id] |= compute_checklist_completed_phase_ids(items_by_phase, item_ids)
+    return completed
 
 
 def _phase_local_date(phase: dict, timezone: ZoneInfo):
@@ -113,7 +196,7 @@ def compute_current_phase_id(
 
 
 async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> dict:
-    await require_trip_membership(user_id, trip_id, session)
+    trip_traveler = await require_trip_membership(user_id, trip_id, session)
     trip_uuid = trip_id
 
     phases_result = await session.execute(
@@ -125,7 +208,12 @@ async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> 
 
     if not phases:
         trip_mode = await _get_trip_mode(trip_uuid, session)
-        return {"wetravel_trip_uuid": trip_uuid, "trip_mode": trip_mode, "phases": []}
+        return {
+            "wetravel_trip_uuid": trip_uuid,
+            "trip_mode": trip_mode,
+            "phases": [],
+            "completed_phase_ids": [],
+        }
 
     phase_ids = [p.id for p in phases]
 
@@ -158,10 +246,12 @@ async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> 
         })
 
     settings = await _get_trip_settings(trip_uuid, session)
+    completed = await _completed_phase_ids_by_traveler([trip_traveler.id], phase_ids, session)
     return {
         "wetravel_trip_uuid": trip_uuid,
         "trip_mode": settings["mode"],
         "ideal_pace_phase_id": settings["ideal_pace_phase_id"],
+        "completed_phase_ids": sorted(completed[trip_traveler.id]),
         "phases": [
             {
                 "id": str(p.id),
@@ -306,16 +396,9 @@ async def get_trip_travelers(user_id: str, trip_id: str, session: AsyncSession) 
     date_completions = compute_in_trip_phase_completions(phase_dicts, now)
     settings = await _get_trip_settings(trip_uuid, session)
 
-    progress_result = await session.execute(
-        select(TravelerPhaseProgress)
-        .where(
-            TravelerPhaseProgress.trip_traveler_id.in_(tt_ids),
-            TravelerPhaseProgress.is_completed.is_(True),
-        )
+    db_completed_ids = await _completed_phase_ids_by_traveler(
+        tt_ids, [p.id for p in all_phases], session
     )
-    db_completed_ids: dict[_uuid.UUID, set[str]] = {}
-    for prog in progress_result.scalars():
-        db_completed_ids.setdefault(prog.trip_traveler_id, set()).add(str(prog.trip_phase_id))
 
     travelers = []
     for tt, user, preferred_name in rows:

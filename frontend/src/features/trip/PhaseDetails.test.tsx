@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
@@ -42,8 +43,28 @@ function setupHandlers() {
       })
     ),
     http.get(`http://localhost:8000/checklist/${TRIP_UUID}/${USER_ID}`, () =>
-      HttpResponse.json({ trip_id: TRIP_UUID, user_id: USER_ID, progress: { [PHASE_ID]: { 'item-1': true } } })
+      HttpResponse.json({ trip_id: TRIP_UUID, user_id: USER_ID, progress: { [PHASE_ID]: checklistProgress } })
     ),
+    http.get(`http://localhost:8000/phases/${TRIP_UUID}/${USER_ID}`, () =>
+      HttpResponse.json({ trip_id: TRIP_UUID, user_id: USER_ID, completions: {} })
+    ),
+    http.post('http://localhost:8000/checklist/update', () => HttpResponse.json({ message: 'ok' })),
+  );
+}
+
+let checklistProgress: Record<string, boolean> = { 'item-1': true };
+
+function renderPhase() {
+  render(
+    <MemoryRouter initialEntries={[`/phase/${PHASE_ID}`]}>
+      <AuthProvider>
+        <TripProvider>
+          <Routes>
+            <Route path="/phase/:phaseId" element={<PhaseDetails />} />
+          </Routes>
+        </TripProvider>
+      </AuthProvider>
+    </MemoryRouter>
   );
 }
 
@@ -51,8 +72,9 @@ describe('PhaseDetails', () => {
   beforeEach(() => {
     localStorage.setItem(
       'parrot_user',
-      JSON.stringify({ userId: USER_ID, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler' })
+      JSON.stringify({ userId: USER_ID, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: TRIP_UUID, activeTrip: null })
     );
+    checklistProgress = { 'item-1': true };
     setupHandlers();
   });
 
@@ -73,5 +95,20 @@ describe('PhaseDetails', () => {
       expect(screen.getByText('Checklist')).toBeInTheDocument();
     });
     expect(screen.getByText('Check visa requirements')).toBeInTheDocument();
+  });
+
+  test('treats the phase as completed once every required checklist item is done', async () => {
+    checklistProgress = {};
+    renderPhase();
+
+    const item = await screen.findByText('Check visa requirements');
+    // Wait for the trip context, which the checklist update needs.
+    await screen.findByText(/1 traveler on this phase/i);
+    expect(screen.getByRole('button', { name: /mark as completed/i })).toBeInTheDocument();
+
+    await userEvent.click(item);
+
+    expect(await screen.findByText(/completed!/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /mark as completed/i })).not.toBeInTheDocument();
   });
 });

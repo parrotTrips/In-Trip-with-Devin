@@ -31,6 +31,7 @@ function renderInformationScreen(tripUuid: string) {
           phases: [],
           travelers: [],
           idealPacePhaseId: null,
+          completedPhaseIds: [],
           loading: false,
           error: null,
           refetch: () => {},

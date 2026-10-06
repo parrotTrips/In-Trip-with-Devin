@@ -55,7 +55,7 @@ export default function HomeScreen() {
   const currentPhaseRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const { onSwitchToStaffView } = useStaffView();
-  const { tripInfo, phases, travelers, idealPacePhaseId, loading, error } = useTripContext();
+  const { tripInfo, phases, travelers, idealPacePhaseId, completedPhaseIds, loading, error } = useTripContext();
 
   const currentUserPhaseId = travelers.find(t => t.id === user?.userId)?.current_phase_id ?? null;
 
@@ -67,21 +67,16 @@ export default function HomeScreen() {
 
   const totalPhases = progressPhases.length;
 
-  // completedCount = number of phases completed before the current one.
-  // findIndex returns the index of the FIRST incomplete phase (= count of completed phases).
-  // null → user has no phase assigned yet → 0 completed.
-  // -1  → currentUserPhaseId not in progressPhases (e.g. all pre-trip done, pointer is an
-  //        in-trip day) OR all in-trip phases started (backend returns last phase) → all complete.
-  const rawUserIdx = currentUserPhaseId === null
-    ? 0
-    : progressPhases.findIndex(p => p.id === currentUserPhaseId);
-  const completedCount = rawUserIdx === -1 ? totalPhases : rawUserIdx;
-
+  // Pre-trip phases are done per phase (button or checklist), in any order.
+  // In-trip days count as done once their date has started.
+  const completedPhaseSet = new Set(completedPhaseIds);
   const now = new Date();
   const dateBasedCount = isInTrip
     ? progressPhases.filter(p => p.starts_at && new Date(p.starts_at) <= now).length
     : 0;
-  const userCompletedCount = isInTrip ? Math.min(dateBasedCount, totalPhases) : completedCount;
+  const userCompletedCount = isInTrip
+    ? Math.min(dateBasedCount, totalPhases)
+    : progressPhases.filter(p => completedPhaseSet.has(p.id)).length;
 
   const displayTitle = tripInfo?.title ?? 'Sua Viagem';
   const displayDates = tripInfo
@@ -192,12 +187,13 @@ export default function HomeScreen() {
               const isLeft = index % 2 === 0;
               const isCurrentUser = phase.id === currentUserPhaseId;
               const isParrotHere = !isInTrip && !!idealPacePhaseId && phase.id === idealPacePhaseId;
-              const phaseProgressIdx = progressPhases.findIndex(p => p.id === phase.id);
-              const isPast = isInTrip
-                ? (phaseProgressIdx >= 0 && phaseProgressIdx < userCompletedCount)
-                : (phaseProgressIdx >= 0 && currentUserPhaseId !== null && phaseProgressIdx < completedCount);
-              const isCurrent = phase.id === currentUserPhaseId;
               const isPreTrip = phase.phase_type === 'pre-trip';
+              const phaseProgressIdx = progressPhases.findIndex(p => p.id === phase.id);
+              const isPast = isPreTrip
+                ? completedPhaseSet.has(phase.id)
+                : isInTrip && phaseProgressIdx >= 0 && phaseProgressIdx < userCompletedCount;
+              const isPending = isInTrip && isPreTrip && !isPast;
+              const isCurrent = phase.id === currentUserPhaseId;
               const dayDate = formatDayDate(phase.starts_at);
               const travelersHere = travelers.filter(t => t.current_phase_id === phase.id);
 
@@ -237,7 +233,7 @@ export default function HomeScreen() {
                           : 'bg-white border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      {(isParrotHere || isPast) && (
+                      {(isParrotHere || isPast || isPending) && (
                         <div
                           data-testid="phase-card-badges"
                           className="pointer-events-none absolute -top-4 -right-2 z-20 flex items-center gap-1.5"
@@ -249,6 +245,14 @@ export default function HomeScreen() {
                                 showSpeech
                                 speechText="You should be here!"
                               />
+                            </div>
+                          )}
+                          {isPending && (
+                            <div
+                              data-testid="phase-pending-badge"
+                              className="rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm"
+                            >
+                              Pending
                             </div>
                           )}
                           {isPast && (
