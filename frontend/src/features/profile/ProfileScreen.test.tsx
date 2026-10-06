@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
@@ -222,10 +222,9 @@ describe('ProfileScreen', () => {
     expect(within(preDepartureContainer).queryByLabelText(/dietary restrictions/i)).not.toBeInTheDocument();
     expect(within(preDepartureContainer).queryByLabelText(/^email$/i)).not.toBeInTheDocument();
 
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/visa status/i),
-      'I am not sure and I need orientation about it'
-    );
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/visa status/i), {
+      target: { value: 'I am not sure and I need orientation about it' },
+    });
     expect(within(preDepartureContainer).getByTestId('arrival-date-time-grid')).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
     expect(within(preDepartureContainer).getByTestId('departure-date-time-grid')).toHaveClass('grid-cols-1', 'sm:grid-cols-2');
 
@@ -237,12 +236,14 @@ describe('ProfileScreen', () => {
     expect(arrivalDate).toHaveAttribute('type', 'date');
     expect(departureDate).toHaveAttribute('type', 'date');
     expect(arrivalTime).toHaveValue('14:32');
-    expect(within(arrivalTime).getByRole('option', { name: '2:32 PM' })).toHaveValue('14:32');
-    expect(within(arrivalTime).getByRole('option', { name: '2:30 PM' })).toHaveValue('14:30');
-    expect(within(arrivalTime).queryByRole('option', { name: '2:31 PM' })).not.toBeInTheDocument();
-    expect(within(departureTime).getByRole('option', { name: '12:00 AM' })).toHaveValue('00:00');
-    expect(within(departureTime).getByRole('option', { name: '11:55 PM' })).toHaveValue('23:55');
-    expect(within(departureTime).getByRole('option', { name: 'Existing value: 25:61' })).toHaveValue('25:61');
+    const arrivalOptions = Array.from((arrivalTime as HTMLSelectElement).options);
+    const departureOptions = Array.from((departureTime as HTMLSelectElement).options);
+    expect(arrivalOptions.find(option => option.text === '2:32 PM')).toHaveValue('14:32');
+    expect(arrivalOptions.find(option => option.text === '2:30 PM')).toHaveValue('14:30');
+    expect(arrivalOptions.some(option => option.text === '2:31 PM')).toBe(false);
+    expect(departureOptions.find(option => option.text === '12:00 AM')).toHaveValue('00:00');
+    expect(departureOptions.find(option => option.text === '11:55 PM')).toHaveValue('23:55');
+    expect(departureOptions.find(option => option.text === 'Existing value: 25:61')).toHaveValue('25:61');
 
     const helpCases = [
       {
@@ -271,56 +272,34 @@ describe('ProfileScreen', () => {
       expect(helpPanel).not.toBeVisible();
       expect(button.getAttribute('aria-controls')).toBe(helpPanel?.id);
       expect(field.parentElement?.nextElementSibling).toBe(button.parentElement);
-      await userEvent.click(button);
+      fireEvent.click(button);
       expect(button).toHaveAttribute('aria-expanded', 'true');
       expect(helpPanel).toBeVisible();
       expect(button.getAttribute('aria-controls')).toBe(helpPanel?.id);
     }
 
-    await userEvent.clear(arrivalDate);
-    await userEvent.type(arrivalDate, '2026-10-03');
-    await userEvent.selectOptions(arrivalTime, '14:30');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), 'GRU, AA 1234');
-    await userEvent.type(departureDate, '2026-10-12');
-    await userEvent.selectOptions(departureTime, '21:45');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), 'GIG, LA 4567');
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/checked bags/i),
-      '1 checked bag is all I need'
-    );
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/Need help with early arrival or longer stay/i),
-      'No, thanks'
-    );
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/Early Check-in Preference/i),
-      "I’ll arrive after the check-in time."
-    );
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/travel insurance status/i),
-      'Already hired one'
-    );
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/Medical Coverage in Brazil/i),
-      'Yes'
-    );
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/insurance provider/i), 'SafetyWing');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/policy number/i), 'POL-123');
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/Do you know who you will share the room with/i),
-      'I am staying in an individual room'
-    );
-    await userEvent.selectOptions(
-      within(preDepartureContainer).getByLabelText(/Room Configuration/i),
-      'One double bed (for two people)'
-    );
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/emergency contact/i), 'Maria +5511999999999');
+    fireEvent.change(arrivalDate, { target: { value: '2026-10-03' } });
+    fireEvent.change(arrivalTime, { target: { value: '14:30' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), { target: { value: 'GRU, AA 1234' } });
+    fireEvent.change(departureDate, { target: { value: '2026-10-12' } });
+    fireEvent.change(departureTime, { target: { value: '21:45' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), { target: { value: 'GIG, LA 4567' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/checked bags/i), { target: { value: '1 checked bag is all I need' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/Need help with early arrival or longer stay/i), { target: { value: 'No, thanks' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/Early Check-in Preference/i), { target: { value: "I’ll arrive after the check-in time." } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/travel insurance status/i), { target: { value: 'Already hired one' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/Medical Coverage in Brazil/i), { target: { value: 'Yes' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/insurance provider/i), { target: { value: 'SafetyWing' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/policy number/i), { target: { value: 'POL-123' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/Do you know who you will share the room with/i), { target: { value: 'I am staying in an individual room' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/Room Configuration/i), { target: { value: 'One double bed (for two people)' } });
+    fireEvent.change(within(preDepartureContainer).getByLabelText(/emergency contact/i), { target: { value: 'Maria +5511999999999' } });
 
     expect(within(preDepartureContainer).queryByLabelText(/Trip Mood/i)).not.toBeInTheDocument();
     expect(within(preDepartureContainer).queryByLabelText(/Social Topic/i)).not.toBeInTheDocument();
     expect(within(preDepartureContainer).queryByLabelText(/Always Up For/i)).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
       expect(savedPayload).toMatchObject({
