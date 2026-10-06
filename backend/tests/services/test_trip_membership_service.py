@@ -169,6 +169,48 @@ def test_get_eligible_trip_membership_reuses_eligibility_and_association_rules(s
     assert unrelated is None
 
 
+def test_staff_can_list_and_select_an_ended_trip(session_factory):
+    from app.services.trip_membership_service import (
+        get_eligible_trip_membership,
+        list_eligible_trips,
+        require_trip_membership,
+    )
+
+    user_id, _ = asyncio.run(_seed_memberships(session_factory))
+
+    async def run():
+        async with session_factory() as session:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO trip_staff
+                        (id, wetravel_trip_uuid, user_id, function, created_at, updated_at)
+                    VALUES
+                        (gen_random_uuid(), 'trip-ended', CAST(:user_id AS uuid),
+                         'Guia', now(), now())
+                    """
+                ),
+                {"user_id": user_id},
+            )
+            await session.commit()
+            trips = await list_eligible_trips(user_id, session)
+            selected = await get_eligible_trip_membership(
+                user_id, "trip-ended", session
+            )
+            required = await require_trip_membership(
+                user_id, "trip-ended", session
+            )
+            return trips, selected, required
+
+    trips, selected, required = asyncio.run(run())
+    ended = next(trip for trip in trips if trip["trip_id"] == "trip-ended")
+    assert ended["role"] == "staff"
+    assert ended["is_current"] is False
+    assert selected is not None
+    assert selected["role"] == "staff"
+    assert required.wetravel_trip_uuid == "trip-ended"
+
+
 def test_list_eligible_trips_supports_legacy_text_date_columns(session_factory):
     """Production still stores WeTravel dates as ISO text."""
     from app.services.trip_membership_service import (

@@ -9,6 +9,7 @@ from sqlalchemy import Date, Text, column, func, or_, select, table, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.trip import TripTraveler
+from app.db.models.staff import TripStaff
 
 
 _SAO_PAULO_TODAY_SQL = (
@@ -38,7 +39,11 @@ _ELIGIBLE_TRIPS_SQL = f"""
       ON ts.wetravel_trip_uuid = tt.wetravel_trip_uuid
      AND ts.user_id = tt.user_id
     WHERE tt.user_id = CAST(:user_id AS uuid)
-      AND ({_END_DATE_SQL} IS NULL OR {_END_DATE_SQL} >= {_SAO_PAULO_TODAY_SQL})
+      AND (
+        ts.id IS NOT NULL
+        OR {_END_DATE_SQL} IS NULL
+        OR {_END_DATE_SQL} >= {_SAO_PAULO_TODAY_SQL}
+      )
       {{trip_filter}}
     ORDER BY
         CASE
@@ -92,6 +97,14 @@ async def require_trip_membership(
         "America/Sao_Paulo", func.current_timestamp()
     ).cast(Date)
     end_date = func.nullif(wetravel_trips.c.end_date.cast(Text), "").cast(Date)
+    staff_membership_exists = (
+        select(TripStaff.id)
+        .where(
+            TripStaff.user_id == parsed_user_id,
+            TripStaff.wetravel_trip_uuid == trip_id,
+        )
+        .exists()
+    )
     membership = await session.scalar(
         select(TripTraveler)
         .join(
@@ -100,9 +113,10 @@ async def require_trip_membership(
         )
         .where(
             TripTraveler.user_id == parsed_user_id,
-            TripTraveler.wetravel_trip_uuid == trip_id,
-            or_(
-                end_date.is_(None),
+                TripTraveler.wetravel_trip_uuid == trip_id,
+                or_(
+                    staff_membership_exists,
+                    end_date.is_(None),
                 end_date >= sao_paulo_today,
             ),
         )

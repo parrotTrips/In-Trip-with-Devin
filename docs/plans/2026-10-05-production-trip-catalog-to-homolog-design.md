@@ -24,7 +24,7 @@ Included data:
 
 Excluded data:
 
-- travelers, traveler profiles, documents, products, and memberships;
+- production travelers, traveler profiles, documents, products, and memberships;
 - bookings, payments, leads, transactions, order options, and imported phones;
 - progress, activity participation, check-ins, scan events, and feedback;
 - OTP codes;
@@ -59,8 +59,11 @@ address and copies only their identity fields required for login:
 - `becker@parrottrips.com` — Luiz Becker.
 
 It removes other homologation users and creates one `trip_staff` membership for
-each validator on every copied trip. Existing production staff memberships are
-not copied. All three users are active and have the `staff` role.
+each validator on every copied trip. Because trip eligibility is rooted in
+`trip_travelers`, it also generates the matching technical base membership for
+each validator/trip pair; no production traveler membership is copied. Existing
+production staff memberships are not copied. All three users are active and
+have the `staff` role.
 
 ## Data flow
 
@@ -73,7 +76,8 @@ not copied. All three users are active and have the `staff` role.
 6. In execute mode, open one homologation transaction.
 7. Clear dependent homologation data in foreign-key-safe order.
 8. Insert the allowlisted catalog in dependency order.
-9. Insert the three users and the complete trip-to-staff membership matrix.
+9. Insert the three users, their technical base memberships, and the complete
+   trip-to-staff membership matrix.
 10. Verify counts and invariants before committing.
 
 ## Failure handling
@@ -99,4 +103,3 @@ After execution, verify directly in homologation that:
 - `trip_staff` has exactly `trip count * 3` memberships;
 - excluded tables contain no production traveler or operational rows;
 - each validator can request an OTP and list all eligible trips.
-

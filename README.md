@@ -186,7 +186,10 @@ make logs-homolog               # logs do backend de homologação
 A sincronização copia somente viagens e conteúdo editorial. Ela remove dados
 anteriores de homologação, não copia viajantes, pagamentos, reservas, progresso,
 check-ins, feedbacks, OTPs, webhooks, anúncios ou tarefas, e cria somente Marcelo
-Angelo, Vitor Sanches e Luiz Becker como `staff` de todas as viagens.
+Angelo, Vitor Sanches e Luiz Becker como `staff` de todas as viagens. Para que a
+regra de elegibilidade do app funcione, o processo gera também os vínculos-base
+de `trip_travelers` apenas para esses mesmos três staffs; nenhum viajante de
+produção é copiado.
 
 Execute primeiro a simulação, que não altera nenhum banco:
 

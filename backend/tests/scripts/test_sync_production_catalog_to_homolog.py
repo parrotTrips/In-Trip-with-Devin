@@ -1,5 +1,7 @@
 import sys
 import uuid
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -32,13 +34,14 @@ def test_contract_allowlists_catalog_and_three_validators():
         "trip_cancellation_policies",
     )
     forbidden = {
-        "users", "trip_travelers", "traveler_profiles", "otp_codes",
+        "users", "traveler_profiles", "otp_codes",
         "webhook_events", "wetravel_payments", "trip_announcements",
         "staff_tasks",
     }
     assert forbidden.isdisjoint(script.CATALOG_TABLES)
     assert (forbidden - {"users"}).issubset(script.EXCLUDED_TABLES)
     assert "users" in script.TARGET_ONLY_TABLES
+    assert "trip_travelers" in script.TARGET_ONLY_TABLES
 
 
 def test_parse_args_is_dry_run_by_default():
@@ -112,6 +115,11 @@ def test_memberships_are_deterministic_and_complete():
     assert {(row["wetravel_trip_uuid"], row["user_id"]) for row in first} == {
         (trip, user["id"]) for trip in trips for user in users
     }
+    traveler_rows = script.build_base_memberships(users, trips)
+    assert len(traveler_rows) == 6
+    assert {(row["wetravel_trip_uuid"], row["user_id"]) for row in traveler_rows} == {
+        (trip, user["id"]) for trip in trips for user in users
+    }
 
 
 def test_wetravel_rows_drop_webhook_reference():
@@ -132,3 +140,66 @@ def test_makefile_exposes_separate_dry_run_and_execute_targets():
     execute_recipe = makefile.split("sync-homolog-catalog-execute:", 1)[1]
     assert "--execute" not in dry_run_recipe
     assert "--execute" in execute_recipe
+
+
+def test_target_schema_allows_known_optional_tables_to_differ():
+    actual = set(script.CATALOG_TABLES) | set(script.TARGET_ONLY_TABLES) | {
+        "alembic_version", "activity_media", "media_assets", "otp_codes"
+    }
+    assert script.validate_target_schema(actual) == actual - {"alembic_version"}
+
+
+def test_target_schema_rejects_missing_required_or_unknown_tables():
+    required = set(script.CATALOG_TABLES) | set(script.TARGET_ONLY_TABLES) | {
+        "alembic_version"
+    }
+    with pytest.raises(ValueError, match="missing required"):
+        script.validate_target_schema(required - {"users"})
+    with pytest.raises(ValueError, match="unknown"):
+        script.validate_target_schema(required | {"surprise_table"})
+
+
+def test_project_rows_uses_target_columns_and_rejects_missing_required_values():
+    columns = [
+        {"column_name": "trip_uuid", "is_nullable": "NO", "column_default": None},
+        {"column_name": "title", "is_nullable": "YES", "column_default": None},
+        {"column_name": "updated_at", "is_nullable": "YES", "column_default": None},
+    ]
+    assert script.project_rows_to_target(
+        "wetravel_trips",
+        [{"id": "production-only", "trip_uuid": "trip-1", "title": "Trip"}],
+        columns,
+    ) == [{"trip_uuid": "trip-1", "title": "Trip"}]
+
+    with pytest.raises(ValueError, match="required target column"):
+        script.project_rows_to_target(
+            "wetravel_trips", [{"title": "Missing UUID"}], columns
+        )
+
+
+@pytest.mark.parametrize(
+    ("value", "data_type", "expected"),
+    [
+        ("2026-09-04", "date", date(2026, 9, 4)),
+        ("2026-09-04T10:30:00+00:00", "timestamp with time zone", datetime(2026, 9, 4, 10, 30, tzinfo=timezone.utc)),
+        ("12.50", "numeric", Decimal("12.50")),
+        ("7", "integer", 7),
+        ("true", "boolean", True),
+        ("false", "boolean", False),
+    ],
+)
+def test_coerce_value_uses_target_postgres_type(value, data_type, expected):
+    assert script.coerce_value(value, data_type) == expected
+
+
+def test_project_rows_coerces_values_using_target_metadata():
+    columns = [
+        {"column_name": "trip_uuid", "is_nullable": "NO", "column_default": None, "data_type": "text"},
+        {"column_name": "start_date", "is_nullable": "YES", "column_default": None, "data_type": "date"},
+    ]
+    rows = script.project_rows_to_target(
+        "wetravel_trips",
+        [{"trip_uuid": "trip-1", "start_date": "2026-09-04"}],
+        columns,
+    )
+    assert rows == [{"trip_uuid": "trip-1", "start_date": date(2026, 9, 4)}]
