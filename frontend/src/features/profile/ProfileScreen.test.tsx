@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { MemoryRouter } from 'react-router-dom';
+import { afterEach, vi } from 'vitest';
 
 import App from '../../app/App';
 import { AuthProvider } from '../../app/providers/AuthProvider';
@@ -9,6 +10,27 @@ import { TripContext } from '../../app/providers/trip-context';
 import { server } from '../../test/server';
 import type { TripChoice } from '../auth/services/auth-api';
 import ProfileScreen from './pages/ProfileScreen';
+
+// Pin "today" so the calendar opens on a known month; only Date is faked.
+function freezeToday() {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-01T12:00:00'));
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+async function pickDate(field: HTMLElement, day: RegExp) {
+  await userEvent.click(field);
+  await userEvent.click(await screen.findByRole('button', { name: day }));
+}
+
+async function pickTime(field: HTMLElement, label: string) {
+  await userEvent.click(field);
+  const listbox = await screen.findByRole('listbox');
+  await userEvent.click(within(listbox).getByRole('option', { name: label }));
+}
 
 const SWITCH_TRIP_CURRENT: TripChoice = {
   trip_id: 'trip-001',
@@ -168,6 +190,7 @@ describe('ProfileScreen', () => {
   });
 
   test('saves pre departure information without duplicating registration fields', async () => {
+    freezeToday();
     let savedPayload: Record<string, unknown> | null = null;
 
     localStorage.setItem(
@@ -233,17 +256,25 @@ describe('ProfileScreen', () => {
     const departureDate = within(preDepartureContainer).getByLabelText(/departure date/i);
     const departureTime = within(preDepartureContainer).getByLabelText(/departure time/i);
 
-    expect(arrivalDate).toHaveAttribute('type', 'date');
-    expect(departureDate).toHaveAttribute('type', 'date');
-    expect(arrivalTime).toHaveValue('14:32');
-    const arrivalOptions = Array.from((arrivalTime as HTMLSelectElement).options);
-    const departureOptions = Array.from((departureTime as HTMLSelectElement).options);
-    expect(arrivalOptions.find(option => option.text === '2:32 PM')).toHaveValue('14:32');
-    expect(arrivalOptions.find(option => option.text === '2:30 PM')).toHaveValue('14:30');
-    expect(arrivalOptions.some(option => option.text === '2:31 PM')).toBe(false);
-    expect(departureOptions.find(option => option.text === '12:00 AM')).toHaveValue('00:00');
-    expect(departureOptions.find(option => option.text === '11:55 PM')).toHaveValue('23:55');
-    expect(departureOptions.find(option => option.text === 'Existing value: 25:61')).toHaveValue('25:61');
+    expect(arrivalDate).toHaveTextContent(/select date/i);
+    expect(arrivalTime).toHaveTextContent('2:32 PM');
+    expect(departureTime).toHaveTextContent('Existing value: 25:61');
+
+    await userEvent.click(arrivalTime);
+    const arrivalList = screen.getByRole('listbox', { name: /arrival time options/i });
+    expect(arrivalList).toHaveClass('max-h-60', 'overflow-y-auto');
+    expect(within(arrivalList).getByRole('option', { name: '2:32 PM' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(arrivalList).getByRole('option', { name: '2:30 PM' })).toHaveAttribute('aria-selected', 'false');
+    expect(within(arrivalList).queryByRole('option', { name: '2:31 PM' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox', { name: /arrival time options/i })).not.toBeInTheDocument();
+
+    await userEvent.click(departureTime);
+    const departureList = screen.getByRole('listbox', { name: /departure time options/i });
+    expect(within(departureList).getByRole('option', { name: '12:00 AM' })).toBeInTheDocument();
+    expect(within(departureList).getByRole('option', { name: '11:55 PM' })).toBeInTheDocument();
+    expect(within(departureList).getByRole('option', { name: 'Existing value: 25:61' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{Escape}');
 
     const helpCases = [
       {
@@ -278,11 +309,13 @@ describe('ProfileScreen', () => {
       expect(button.getAttribute('aria-controls')).toBe(helpPanel?.id);
     }
 
-    fireEvent.change(arrivalDate, { target: { value: '2026-10-03' } });
-    fireEvent.change(arrivalTime, { target: { value: '14:30' } });
+    await pickDate(arrivalDate, /October 3rd, 2026/);
+    expect(arrivalDate).toHaveTextContent('Oct 03, 2026');
+    await pickTime(arrivalTime, '2:30 PM');
+    expect(arrivalTime).toHaveTextContent('2:30 PM');
     fireEvent.change(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), { target: { value: 'GRU, AA 1234' } });
-    fireEvent.change(departureDate, { target: { value: '2026-10-12' } });
-    fireEvent.change(departureTime, { target: { value: '21:45' } });
+    await pickDate(departureDate, /October 12th, 2026/);
+    await pickTime(departureTime, '9:45 PM');
     fireEvent.change(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), { target: { value: 'GIG, LA 4567' } });
     fireEvent.change(within(preDepartureContainer).getByLabelText(/checked bags/i), { target: { value: '1 checked bag is all I need' } });
     fireEvent.change(within(preDepartureContainer).getByLabelText(/Need help with early arrival or longer stay/i), { target: { value: 'No, thanks' } });
@@ -386,7 +419,7 @@ describe('ProfileScreen', () => {
     await screen.findByText('My Profile');
     await userEvent.click(screen.getByRole('button', { name: /pre departure information/i }));
     const arrivalTime = screen.getByLabelText(/arrival time/i);
-    expect(arrivalTime).toHaveValue('14:32');
+    expect(arrivalTime).toHaveTextContent('2:32 PM');
 
     await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -440,6 +473,7 @@ describe('ProfileScreen', () => {
   });
 
   test('requires visible pre departure fields and selects roommate from trip travelers', async () => {
+    freezeToday();
     let savedPayload: Record<string, unknown> | null = null;
 
     localStorage.setItem(
@@ -512,9 +546,9 @@ describe('ProfileScreen', () => {
       within(preDepartureContainer).getByLabelText(/visa status/i),
       'Yes, I already have a visa / I can enter Brazil without a visa'
     );
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival date/i), '2026-10-03');
+    await pickDate(within(preDepartureContainer).getByLabelText(/arrival date/i), /October 3rd, 2026/);
     await userEvent.type(within(preDepartureContainer).getByLabelText(/arrival airport and flight/i), 'GRU, AA 1234');
-    await userEvent.type(within(preDepartureContainer).getByLabelText(/departure date/i), '2026-10-12');
+    await pickDate(within(preDepartureContainer).getByLabelText(/departure date/i), /October 12th, 2026/);
     await userEvent.type(within(preDepartureContainer).getByLabelText(/departure airport and flight/i), 'GIG, LA 4567');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/checked bags/i), 'No checked bags, I travel light');
     await userEvent.selectOptions(within(preDepartureContainer).getByLabelText(/travel insurance status/i), 'Already hired one');

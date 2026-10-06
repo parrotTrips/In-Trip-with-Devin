@@ -1,7 +1,9 @@
-import { User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut, QrCode, Camera, Info, ArrowRightLeft } from 'lucide-react';
+import { User, FileText, ChevronDown, ChevronUp, Save, Loader2, ShoppingCart, ExternalLink, LogOut, QrCode, Camera, Info, ArrowRightLeft, CalendarDays, Clock } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AppHeader from '../../../shared/components/AppHeader';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../../../app/providers/auth-context';
 import { useTripContext } from '../../../app/providers/trip-context';
@@ -406,41 +408,164 @@ const FIVE_MINUTE_TIME_OPTIONS = Array.from({ length: 24 * 12 }, (_, index) => {
   return { value, label: formatTimeForUS(value) };
 });
 
-function USDateField({ label, value, onChange, required = false, error }: {
+const PICKER_TRIGGER_CLASS = 'w-full min-w-0 flex items-center justify-between gap-2 px-3 py-2 text-left text-sm border rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all';
+
+function parseIsoDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return undefined;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function toIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function CalendarDateField({ label, value, onChange, required = false, error, defaultMonth, fromYear, toYear }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
   error?: string;
+  defaultMonth?: Date;
+  fromYear: number;
+  toYear: number;
 }) {
+  const fieldId = useId();
+  const errorId = `${fieldId}-error`;
+  const [open, setOpen] = useState(false);
+  const selected = parseIsoDate(value);
+  const display = selected
+    ? selected.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+    : value ? `Existing value: ${value}` : 'Select date';
+
   return (
-    <InputField
-      label={label}
-      type="date"
-      value={value}
-      onChange={onChange}
-      required={required}
-      error={error}
-    />
+    <div className="space-y-1">
+      <label htmlFor={fieldId} className="flex items-center gap-1 text-xs font-medium text-gray-500">
+        {label}
+        {required && <RequiredMark />}
+      </label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            id={fieldId}
+            type="button"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
+            className={`${PICKER_TRIGGER_CLASS} ${error ? 'border-red-300 bg-red-50/40' : 'border-gray-200 bg-white'}`}
+          >
+            <span className={value ? 'text-gray-900' : 'text-gray-400'}>{display}</span>
+            <CalendarDays size={16} className="shrink-0 text-emerald-600" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto overflow-hidden rounded-xl p-0">
+          <Calendar
+            mode="single"
+            selected={selected}
+            defaultMonth={selected ?? defaultMonth}
+            startMonth={new Date(fromYear, 0)}
+            endMonth={new Date(toYear, 11)}
+            captionLayout="dropdown"
+            onSelect={date => {
+              if (!date) return;
+              onChange(toIsoDate(date));
+              setOpen(false);
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      <FieldError id={errorId} error={error} />
+    </div>
   );
 }
 
-function USTimeField({ label, value, onChange }: {
+function ScrollTimeField({ label, value, onChange }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
 }) {
+  const fieldId = useId();
+  const [open, setOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
   const isLegacyValue = Boolean(value) && !FIVE_MINUTE_TIME_OPTIONS.some(option => option.value === value);
+  const options = isLegacyValue
+    ? [{ value, label: formatTimeForUS(value) }, ...FIVE_MINUTE_TIME_OPTIONS]
+    : FIVE_MINUTE_TIME_OPTIONS;
+
+  // Center the selected time (or 8:00 AM) in the list and focus it.
+  const focusInitialOption = (event: Event) => {
+    event.preventDefault();
+    const list = listRef.current;
+    const target = list?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?? list?.querySelector<HTMLElement>('[data-value="08:00"]');
+    if (!list || !target) return;
+    list.scrollTop = target.offsetTop - list.clientHeight / 2 + target.clientHeight / 2;
+    target.focus({ preventScroll: true });
+  };
+
+  const moveFocus = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const items = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    const next = items[Math.min(items.length - 1, Math.max(0, index + (event.key === 'ArrowDown' ? 1 : -1)))];
+    next?.focus();
+    next?.scrollIntoView?.({ block: 'nearest' });
+  };
 
   return (
-    <SelectField
-      label={label}
-      value={value}
-      onChange={onChange}
-      options={isLegacyValue
-        ? [{ value, label: formatTimeForUS(value) }, ...FIVE_MINUTE_TIME_OPTIONS]
-        : FIVE_MINUTE_TIME_OPTIONS}
-    />
+    <div className="space-y-1">
+      <label htmlFor={fieldId} className="flex items-center gap-1 text-xs font-medium text-gray-500">
+        {label}
+      </label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button id={fieldId} type="button" className={`${PICKER_TRIGGER_CLASS} border-gray-200 bg-white`}>
+            <span className={value ? 'text-gray-900' : 'text-gray-400'}>
+              {value ? formatTimeForUS(value) : 'Select time'}
+            </span>
+            <Clock size={16} className="shrink-0 text-emerald-600" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className="w-[--radix-popover-trigger-width] min-w-[10rem] rounded-xl p-1"
+          onOpenAutoFocus={focusInitialOption}
+        >
+          <div
+            ref={listRef}
+            role="listbox"
+            aria-label={`${label} options`}
+            onKeyDown={moveFocus}
+            className="relative max-h-60 overflow-y-auto overscroll-contain"
+          >
+            {options.map(option => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  data-value={option.value}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors ${
+                    isSelected
+                      ? 'bg-emerald-600 font-semibold text-white'
+                      : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-800 focus:bg-emerald-50 focus:text-emerald-800'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
@@ -541,6 +666,10 @@ export default function ProfileScreen() {
   const { user, logout, openTripSwitcher } = useAuth();
   const { setAvatarUrl } = useAvatar();
   const { tripInfo, travelers } = useTripContext();
+  const currentYear = new Date().getFullYear();
+  // Arrival/departure calendars open on the trip's month when nothing is picked yet.
+  const tripStartMonth = tripInfo ? parseIsoDate(tripInfo.start_date) : undefined;
+  const tripEndMonth = tripInfo ? parseIsoDate(tripInfo.end_date) : undefined;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -881,8 +1010,8 @@ export default function ProfileScreen() {
                 <InputField label="Passport Issuing Country" value={form.passport_country} onChange={v => setField('passport_country', v)} placeholder="e.g. United States" />
                 <InputField label="Passport Number" value={form.passport_number} onChange={v => setField('passport_number', v)} />
                 <div className="grid grid-cols-2 gap-3">
-                  <InputField label="Issue Date" value={form.passport_issue_date} onChange={v => setField('passport_issue_date', v)} type="date" />
-                  <InputField label="Expiration Date" value={form.passport_expiration_date} onChange={v => setField('passport_expiration_date', v)} type="date" />
+                  <CalendarDateField label="Issue Date" value={form.passport_issue_date} onChange={v => setField('passport_issue_date', v)} fromYear={currentYear - 15} toYear={currentYear} />
+                  <CalendarDateField label="Expiration Date" value={form.passport_expiration_date} onChange={v => setField('passport_expiration_date', v)} fromYear={currentYear - 2} toYear={currentYear + 12} />
                 </div>
               </div>
             </div>
@@ -985,8 +1114,8 @@ export default function ProfileScreen() {
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Arrival</p>
               <div className="space-y-3">
                 <div data-testid="arrival-date-time-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <USDateField label="Arrival Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} required error={validationErrors.arrival_date} />
-                  <USTimeField label="Arrival Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} />
+                  <CalendarDateField label="Arrival Date" value={form.arrival_date} onChange={v => setField('arrival_date', v)} required error={validationErrors.arrival_date} defaultMonth={tripStartMonth} fromYear={currentYear - 1} toYear={currentYear + 3} />
+                  <ScrollTimeField label="Arrival Time" value={form.arrival_time} onChange={v => setField('arrival_time', v)} />
                 </div>
                 <InputField label="Arrival Airport and Flight" value={form.arrival_flight} onChange={v => setField('arrival_flight', v)} placeholder="e.g. GRU, AA 1234" required error={validationErrors.arrival_flight} />
                 <SelectField label="Checked Bags" value={form.checked_bags} onChange={v => setField('checked_bags', v)} options={CHECKED_BAGS_OPTIONS} required error={validationErrors.checked_bags} />
@@ -1008,8 +1137,8 @@ export default function ProfileScreen() {
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">Departure</p>
               <div className="space-y-3">
                 <div data-testid="departure-date-time-grid" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <USDateField label="Departure Date" value={form.departure_date} onChange={v => setField('departure_date', v)} required error={validationErrors.departure_date} />
-                  <USTimeField label="Departure Time" value={form.departure_time} onChange={v => setField('departure_time', v)} />
+                  <CalendarDateField label="Departure Date" value={form.departure_date} onChange={v => setField('departure_date', v)} required error={validationErrors.departure_date} defaultMonth={tripEndMonth} fromYear={currentYear - 1} toYear={currentYear + 3} />
+                  <ScrollTimeField label="Departure Time" value={form.departure_time} onChange={v => setField('departure_time', v)} />
                 </div>
                 <InputField label="Departure Airport and Flight" value={form.departure_flight} onChange={v => setField('departure_flight', v)} placeholder="e.g. GIG, LA 4567" required error={validationErrors.departure_flight} />
               </div>
