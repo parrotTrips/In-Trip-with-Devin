@@ -90,11 +90,9 @@ function FieldHelp({ accessibleName, children }: { accessibleName: string; child
         More information
         {open ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
       </button>
-      {open && (
-        <div id={contentId}>
-          <InfoCallout>{children}</InfoCallout>
-        </div>
-      )}
+      <div id={contentId} hidden={!open}>
+        <InfoCallout>{children}</InfoCallout>
+      </div>
     </div>
   );
 }

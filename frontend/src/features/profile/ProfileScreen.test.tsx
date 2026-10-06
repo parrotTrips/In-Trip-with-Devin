@@ -266,12 +266,15 @@ describe('ProfileScreen', () => {
       const field = within(preDepartureContainer).getByLabelText(helpCase.field);
       const button = within(preDepartureContainer).getByRole('button', { name: helpCase.button });
       expect(button).toHaveAttribute('aria-expanded', 'false');
-      expect(within(preDepartureContainer).queryByText(helpCase.text)).not.toBeInTheDocument();
+      const helpText = within(preDepartureContainer).getByText(helpCase.text);
+      const helpPanel = helpText.parentElement?.parentElement;
+      expect(helpPanel).not.toBeVisible();
+      expect(button.getAttribute('aria-controls')).toBe(helpPanel?.id);
       expect(field.parentElement?.nextElementSibling).toBe(button.parentElement);
       await userEvent.click(button);
       expect(button).toHaveAttribute('aria-expanded', 'true');
-      const helpText = within(preDepartureContainer).getByText(helpCase.text);
-      expect(button.getAttribute('aria-controls')).toBe(helpText.parentElement?.parentElement?.id);
+      expect(helpPanel).toBeVisible();
+      expect(button.getAttribute('aria-controls')).toBe(helpPanel?.id);
     }
 
     await userEvent.clear(arrivalDate);
