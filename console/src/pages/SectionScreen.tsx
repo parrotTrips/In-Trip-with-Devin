@@ -5,6 +5,9 @@ import { getSection, replaceSection, type SectionColumn, type SectionRows } from
 import { formatCell } from '../lib/section-columns';
 import { moveUp } from '../lib/move-up';
 import SectionField from '../components/SectionField';
+import EmptyState from '../components/EmptyState';
+import PageHeader from '../components/PageHeader';
+import { ArrowUp, ChevronDown, ChevronUp, Inbox, Plus, Save, Trash2 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -86,9 +89,29 @@ export default function SectionScreen() {
     }
   };
 
+  const addRow = () => setRows([
+    ...rows,
+    Object.fromEntries(columns.map(c => [c.key, ''])),
+  ]);
+
   return (
     <div>
-      <h1 className="mb-2 text-xl font-bold tracking-tight">{section.label}</h1>
+      <PageHeader
+        title={section.label}
+        actions={section.editable && (
+          <>
+            {status && <span className="text-sm font-medium text-primary">{status}</span>}
+            <Button variant="outline" onClick={addRow}>
+              <Plus className="h-4 w-4" />
+              Adicionar
+            </Button>
+            <Button onClick={save} disabled={saving}>
+              <Save className="h-4 w-4" />
+              Salvar
+            </Button>
+          </>
+        )}
+      />
       <Alert variant={section.editable ? 'info' : 'warning'} className="mb-4">
         {section.editable ? IMMEDIATE_WARNING : section.readonly_note ?? EDITING_NOT_BUILT}
       </Alert>
@@ -97,54 +120,59 @@ export default function SectionScreen() {
 
       {!section.editable ? (
         rows.length === 0 ? (
-          <p className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-            Nada cadastrado ainda nesta seção.
-          </p>
+          <EmptyState icon={Inbox} title="Nada cadastrado ainda nesta seção." />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {columns.map(column => (
-                  <TableHead key={column.key}>{column.label}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row, index) => (
-                <TableRow key={index}>
+          <Card className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
                   {columns.map(column => (
-                    <TableCell key={column.key}>{formatCell(row[column.key])}</TableCell>
+                    <TableHead key={column.key}>{column.label}</TableHead>
                   ))}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row, index) => (
+                  <TableRow key={index}>
+                    {columns.map(column => (
+                      <TableCell key={column.key}>{formatCell(row[column.key])}</TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
         )
       ) : (
         <>
           {rows.length === 0 && (
-            <p className="mb-3 rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-              Nada cadastrado ainda. Use “Adicionar” para começar.
-            </p>
+            <EmptyState icon={Inbox} title="Nada cadastrado ainda.">
+              Use “Adicionar” para começar.
+            </EmptyState>
           )}
 
-          <ul className="mb-3 space-y-3">
+          <ul className="space-y-3">
             {rows.map((row, index) => (
               <li key={index}><Card><CardContent>
-                <div className="mb-2 flex gap-2">
-                  {primary.map(column => (
-                    <SectionField
-                      key={column.key} column={column} index={index}
-                      value={row[column.key]}
-                      onChange={value => setRows(rows.map(
-                        (r, i) => i === index ? { ...r, [column.key]: value } : r
-                      ))}
-                    />
-                  ))}
+                <div className="mb-3 flex items-start gap-3">
+                  <span className="mt-7 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="flex flex-1 flex-wrap gap-3">
+                    {primary.map(column => (
+                      <SectionField
+                        key={column.key} column={column} index={index}
+                        value={row[column.key]}
+                        onChange={value => setRows(rows.map(
+                          (r, i) => i === index ? { ...r, [column.key]: value } : r
+                        ))}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 {isCard && expanded.has(index) && (
-                  <div className="mb-2 grid grid-cols-2 gap-2">
+                  <div className="mb-3 grid gap-3 pl-9 sm:grid-cols-2">
                     {secondary.map(column => (
                       <SectionField
                         key={column.key} column={column} index={index}
@@ -157,41 +185,30 @@ export default function SectionScreen() {
                   </div>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-1 pl-9">
                   {isCard && (
                     <Button variant="ghost" size="sm"
                             onClick={() => setExpanded(toggle(expanded, index))}>
+                      {expanded.has(index) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       {expanded.has(index) ? 'Menos campos' : `Mais campos (${secondary.length})`}
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => setRows(moveUp(rows, index))}>
+                  <Button variant="ghost" size="sm" onClick={() => setRows(moveUp(rows, index))}>
+                    <ArrowUp className="h-4 w-4" />
                     Subir
                   </Button>
                   <Button
-                    variant="outline" size="sm"
-                    className="text-destructive hover:text-destructive"
+                    variant="ghost" size="sm"
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => setRows(rows.filter((_, i) => i !== index))}
                   >
+                    <Trash2 className="h-4 w-4" />
                     Remover
                   </Button>
                 </div>
               </CardContent></Card></li>
             ))}
           </ul>
-
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setRows([
-                ...rows,
-                Object.fromEntries(columns.map(c => [c.key, ''])),
-              ])}
-            >
-              Adicionar
-            </Button>
-            <Button onClick={save} disabled={saving}>Salvar</Button>
-            {status && <span className="text-sm font-medium text-primary">{status}</span>}
-          </div>
         </>
       )}
     </div>

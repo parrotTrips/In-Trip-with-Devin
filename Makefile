@@ -112,6 +112,11 @@ logs-homolog:
 		--freshness=1h \
 		--order=asc
 
+# ── Console de conteúdo local com dados de homologação ───────────────────────
+.PHONY: console-homolog
+console-homolog:
+	@scripts/console-homolog.sh
+
 # ── Sincronização segura do catálogo para homologação ───────────────────────
 .PHONY: sync-homolog-catalog-dry-run
 sync-homolog-catalog-dry-run:

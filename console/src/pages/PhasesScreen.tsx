@@ -1,17 +1,30 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ArrowUp, Eye, EyeOff, Heart, Link2, ListChecks, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 
 import {
   createPhase, createWrapUp, deletePhase, getPhases, publishPhase, reorderPhases, unpublishPhase,
   type EditablePhaseType, type Phase,
 } from '../api/console-api';
+import EmptyState from '../components/EmptyState';
+import PageHeader from '../components/PageHeader';
 import { moveUp } from '../lib/move-up';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function PhasesScreen({ phaseType = 'pre-trip' }: { phaseType?: EditablePhaseType }) {
   const { tripUuid = '' } = useParams();
   const isWrapUp = phaseType === 'post-trip';
   const editorQuery = isWrapUp ? '?type=post-trip' : '';
   const [phases, setPhases] = useState<Phase[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -23,6 +36,7 @@ export default function PhasesScreen({ phaseType = 'pre-trip' }: { phaseType?: E
   const reload = useCallback(async () => {
     const data = await getPhases(tripUuid, phaseType);
     setPhases(data.phases ?? []);
+    setLoaded(true);
   }, [tripUuid, phaseType]);
 
   useEffect(() => {
@@ -53,158 +67,203 @@ export default function PhasesScreen({ phaseType = 'pre-trip' }: { phaseType?: E
     setCreating(false);
   };
 
+  const closeDelete = () => {
+    setDeleteTarget(null);
+    setDeleteConfirmation('');
+  };
+
   const hasPublished = phases.some(phase => phase.is_visible);
+  const showTemplate = isWrapUp && loaded && phases.length === 0;
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <Link to="/" className="text-sm underline">← Viagens</Link>
-      <h1 className="text-xl font-bold my-4">{isWrapUp ? 'Trip Wrap-up' : 'Fases'}</h1>
-      {isWrapUp && (
-        <p className="text-sm text-gray-600 mb-4">
-          Fase pós-viagem: aparece no fim da jornada e vira a etapa atual no último dia da viagem.
-          Ajuste textos e links (feedback, playlist, fotos) antes de publicar.
-        </p>
+    <div>
+      <PageHeader
+        title={isWrapUp ? 'Trip Wrap-up' : 'Fases'}
+        description={isWrapUp
+          ? 'Fase pós-viagem: aparece no fim da jornada e vira a etapa atual no último dia da viagem. Ajuste textos e links (feedback, playlist, fotos) antes de publicar.'
+          : 'Etapas que o viajante completa antes da viagem. Só fases publicadas aparecem no app.'}
+        actions={
+          <>
+            {showTemplate && (
+              <Button disabled={busy} onClick={() => void act(() => createWrapUp(tripUuid))}>
+                <Sparkles className="h-4 w-4" />
+                Criar com modelo padrão
+              </Button>
+            )}
+            <Button variant={showTemplate ? 'outline' : 'default'} onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" />
+              Nova fase
+            </Button>
+          </>
+        }
+      />
+
+      {!isWrapUp && (
+        <Alert variant="warning" className="mb-4">
+          Não importe esta viagem pela planilha depois de editá-la aqui. O import legado pode
+          substituir fases, checklist e links.
+        </Alert>
       )}
-      <p className="border border-amber-300 bg-amber-50 text-amber-900 rounded p-3 text-sm mb-4">
-        Não importe esta viagem pela planilha depois de editá-la aqui. O import legado pode
-        substituir fases, checklist e links.
-      </p>
       {hasPublished && (
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="mb-3 text-sm text-muted-foreground">
           Despublique todas as fases antes de alterar a ordem.
         </p>
       )}
-      {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+      {error && <Alert variant="destructive" className="mb-4">{error}</Alert>}
 
-      <ul className="space-y-2 mb-6">
-        {phases.map((phase, index) => (
-          <li key={phase.id} className="border rounded p-3 flex items-center gap-3">
-            <div className="flex-1">
-              {phase.is_visible ? (
-                <span className="font-medium">{phase.title}</span>
-              ) : (
-                <Link
-                  to={`/trips/${tripUuid}/fases/${phase.id}${editorQuery}`}
-                  className="font-medium underline"
-                >
-                  {phase.title}
-                </Link>
-              )}
-              <p className="text-sm text-gray-600">
-                {phase.checklist.length} itens · {phase.links.length} links
-              </p>
+      {loaded && phases.length === 0 ? (
+        <EmptyState icon={isWrapUp ? Heart : ListChecks} title={isWrapUp ? 'Nenhum Trip Wrap-up ainda' : 'Nenhuma fase ainda'}>
+          {isWrapUp
+            ? 'Use “Criar com modelo padrão” para começar com as ações sugeridas e depois ajuste para esta viagem.'
+            : 'Crie a primeira fase com “Nova fase”.'}
+        </EmptyState>
+      ) : (
+        <ul className="space-y-2">
+          {phases.map((phase, index) => (
+            <li key={phase.id}>
+              <Card>
+                <CardContent className="flex flex-wrap items-center gap-3 p-4">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    {phase.is_visible ? (
+                      <span className="font-medium">{phase.title}</span>
+                    ) : (
+                      <Link
+                        to={`/trips/${tripUuid}/fases/${phase.id}${editorQuery}`}
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {phase.title}
+                      </Link>
+                    )}
+                    <p className="mt-0.5 flex items-center gap-3 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1"><ListChecks className="h-3.5 w-3.5" />{phase.checklist.length} itens</span>
+                      <span className="flex items-center gap-1"><Link2 className="h-3.5 w-3.5" />{phase.links.length} links</span>
+                    </p>
+                  </div>
+                  <Badge variant={phase.is_visible ? 'success' : 'warning'}>
+                    {phase.is_visible ? 'Publicada' : 'Rascunho'}
+                  </Badge>
+                  <div className="flex items-center gap-1">
+                    {!phase.is_visible && (
+                      <Link
+                        to={`/trips/${tripUuid}/fases/${phase.id}${editorQuery}`}
+                        aria-label={`Editar ${phase.title}`}
+                        className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Link>
+                    )}
+                    <Button
+                      variant="ghost" size="sm"
+                      disabled={busy || hasPublished || index === 0}
+                      onClick={() => {
+                        const reordered = moveUp(phases, index);
+                        setPhases(reordered);
+                        void act(() => reorderPhases(tripUuid, reordered.map(item => item.id)));
+                      }}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                      Subir
+                    </Button>
+                    <Button
+                      variant="outline" size="sm"
+                      disabled={busy}
+                      onClick={() => void act(() => (
+                        phase.is_visible ? unpublishPhase(phase.id) : publishPhase(phase.id)
+                      ))}
+                    >
+                      {phase.is_visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      {phase.is_visible ? 'Despublicar' : 'Publicar'}
+                    </Button>
+                    {!phase.is_visible && (
+                      <Button
+                        variant="ghost" size="sm"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={busy}
+                        onClick={() => {
+                          setDeleteTarget(phase);
+                          setDeleteConfirmation('');
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Excluir
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Dialog open={creating} onOpenChange={open => !busy && setCreating(open)}>
+        <DialogContent>
+          <form onSubmit={submitCreate} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>{isWrapUp ? 'Nova fase de Wrap-up' : 'Nova fase'}</DialogTitle>
+              <DialogDescription>
+                A fase é criada como rascunho. Depois você completa checklist e links e publica.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="new-phase-title">Título da fase</Label>
+              <Input
+                id="new-phase-title" value={newTitle} disabled={busy}
+                onChange={event => setNewTitle(event.target.value)}
+              />
             </div>
-            <span className={phase.is_visible ? 'text-green-700 text-sm' : 'text-amber-700 text-sm'}>
-              {phase.is_visible ? 'Publicada' : 'Rascunho'}
-            </span>
-            <button
-              className="border rounded px-2 py-1 text-sm disabled:opacity-50"
-              disabled={busy || hasPublished || index === 0}
+            <div className="space-y-2">
+              <Label htmlFor="new-phase-description">Descrição curta da fase</Label>
+              <Input
+                id="new-phase-description" value={newDescription} disabled={busy}
+                onChange={event => setNewDescription(event.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setCreating(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={busy || !newTitle.trim() || !newDescription.trim()}>
+                {busy ? 'Criando…' : 'Criar fase'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={open => !open && !busy && closeDelete()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir {deleteTarget?.title}?</DialogTitle>
+            <DialogDescription>
+              Isso apaga a fase, o checklist e os links. Digite o título da fase para confirmar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="delete-confirmation">Digite o título da fase</Label>
+            <Input
+              id="delete-confirmation" value={deleteConfirmation} disabled={busy}
+              onChange={event => setDeleteConfirmation(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={closeDelete}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={busy || deleteConfirmation !== deleteTarget?.title}
               onClick={() => {
-                const reordered = moveUp(phases, index);
-                setPhases(reordered);
-                void act(() => reorderPhases(tripUuid, reordered.map(item => item.id)));
+                if (!deleteTarget) return;
+                void act(() => deletePhase(deleteTarget.id)).then(closeDelete);
               }}
             >
-              Subir
-            </button>
-            <button
-              className="border rounded px-2 py-1 text-sm disabled:opacity-50"
-              disabled={busy}
-              onClick={() => void act(() => (
-                phase.is_visible ? unpublishPhase(phase.id) : publishPhase(phase.id)
-              ))}
-            >
-              {phase.is_visible ? 'Despublicar' : 'Publicar'}
-            </button>
-            {!phase.is_visible && (
-              <button
-                className="border rounded px-2 py-1 text-sm text-red-700 disabled:opacity-50"
-                disabled={busy}
-                onClick={() => {
-                  setDeleteTarget(phase);
-                  setDeleteConfirmation('');
-                }}
-              >
-                Excluir
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      {isWrapUp && phases.length === 0 && !creating && (
-        <button
-          className="bg-black text-white rounded px-3 py-2 mr-2 disabled:opacity-50"
-          disabled={busy}
-          onClick={() => void act(() => createWrapUp(tripUuid))}
-        >
-          Criar com modelo padrão
-        </button>
-      )}
-      {!creating ? (
-        <button className="border rounded px-3 py-2" onClick={() => setCreating(true)}>
-          Nova fase
-        </button>
-      ) : (
-        <form onSubmit={submitCreate} className="border rounded p-4 space-y-3">
-          <label htmlFor="new-phase-title" className="block text-sm">Título da fase</label>
-          <input
-            id="new-phase-title" value={newTitle} onChange={event => setNewTitle(event.target.value)}
-            disabled={busy} className="w-full border rounded px-3 py-2"
-          />
-          <label htmlFor="new-phase-description" className="block text-sm">
-            Descrição curta da fase
-          </label>
-          <input
-            id="new-phase-description" value={newDescription}
-            onChange={event => setNewDescription(event.target.value)} disabled={busy}
-            className="w-full border rounded px-3 py-2"
-          />
-          <div className="flex gap-2">
-            <button
-              type="submit" disabled={busy || !newTitle.trim() || !newDescription.trim()}
-              className="bg-black text-white rounded px-3 py-2 disabled:opacity-50"
-            >
-              {busy ? 'Criando…' : 'Criar fase'}
-            </button>
-            <button type="button" disabled={busy} onClick={() => setCreating(false)}>
-              Cancelar
-            </button>
-          </div>
-        </form>
-      )}
-
-      {deleteTarget && (
-        <div role="dialog" aria-modal="true" aria-labelledby="delete-title"
-             className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded p-5 max-w-md w-full">
-            <h2 id="delete-title" className="font-bold">Excluir {deleteTarget.title}?</h2>
-            <p className="text-sm my-3">Digite o título da fase para confirmar.</p>
-            <label htmlFor="delete-confirmation" className="block text-sm">
-              Digite o título da fase
-            </label>
-            <input
-              id="delete-confirmation" value={deleteConfirmation}
-              onChange={event => setDeleteConfirmation(event.target.value)}
-              disabled={busy} className="w-full border rounded px-3 py-2 my-2"
-            />
-            <div className="flex gap-2">
-              <button
-                disabled={busy || deleteConfirmation !== deleteTarget.title}
-                className="bg-red-700 text-white rounded px-3 py-2 disabled:opacity-50"
-                onClick={() => void act(() => deletePhase(deleteTarget.id)).then(() => {
-                  setDeleteTarget(null);
-                  setDeleteConfirmation('');
-                })}
-              >
-                Confirmar exclusão
-              </button>
-              <button disabled={busy} onClick={() => setDeleteTarget(null)}>Cancelar</button>
-            </div>
-          </div>
-        </div>
-      )}
+              Confirmar exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -18,11 +18,10 @@ function Routed() {
   return (
     <Routes>
       <Route path="/" element={<TripsScreen />} />
-      {/* O editor de fase fica fora do layout: é tela cheia de edição. */}
-      <Route path="/trips/:tripUuid/fases/:phaseId" element={<PhaseEditor />} />
       <Route path="/trips/:tripUuid" element={<TripLayout />}>
         <Route index element={<Navigate to="fases" replace />} />
         <Route path="fases" element={<PhasesScreen />} />
+        <Route path="fases/:phaseId" element={<PhaseEditor />} />
         <Route path="roteiro" element={<RoteiroScreen />} />
         <Route path="wrap-up" element={<PhasesScreen phaseType="post-trip" />} />
         <Route path=":sectionKey" element={<SectionScreen />} />
