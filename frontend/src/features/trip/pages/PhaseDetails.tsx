@@ -139,7 +139,11 @@ export default function PhaseDetails() {
   return (
     <div className="min-h-screen bg-gray-50" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom))' }}>
       {/* Header */}
-      <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-indigo-600 text-white">
+      <div className={`bg-gradient-to-br text-white ${
+        phase.phase_type === 'post-trip'
+          ? 'from-violet-600 via-violet-500 to-fuchsia-600'
+          : 'from-blue-600 via-blue-500 to-indigo-600'
+      }`}>
         <div className="flex items-center gap-3 px-4 pt-12 pb-4">
           <button
             onClick={() => navigate(-1)}

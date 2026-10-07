@@ -24,6 +24,7 @@ function Routed() {
         <Route index element={<Navigate to="fases" replace />} />
         <Route path="fases" element={<PhasesScreen />} />
         <Route path="roteiro" element={<RoteiroScreen />} />
+        <Route path="wrap-up" element={<PhasesScreen phaseType="post-trip" />} />
         <Route path=":sectionKey" element={<SectionScreen />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

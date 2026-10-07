@@ -23,6 +23,7 @@ import {
   Bus,
   Plane,
   Sailboat,
+  Heart,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -40,6 +41,35 @@ const iconMap: Record<string, React.ReactNode> = {
   palmtree: <Palmtree size={20} />,
   bus: <Bus size={20} />,
   plane: <Plane size={20} />,
+  heart: <Heart size={20} />,
+};
+
+// Card colors per phase type: pre-trip blue, trip days emerald, Trip Wrap-up violet.
+const PHASE_TONES = {
+  'pre-trip': {
+    past: 'bg-blue-50 border-blue-200',
+    current: 'bg-blue-500 border-blue-600 shadow-lg shadow-blue-200',
+    iconPast: 'bg-blue-100 text-blue-600',
+    iconIdle: 'bg-blue-50 text-blue-400',
+    titlePast: 'text-blue-700',
+    subtitlePast: 'text-blue-500',
+  },
+  'in-trip': {
+    past: 'bg-emerald-50 border-emerald-200',
+    current: 'bg-emerald-500 border-emerald-600 shadow-lg shadow-emerald-200',
+    iconPast: 'bg-emerald-100 text-emerald-600',
+    iconIdle: 'bg-emerald-50 text-emerald-400',
+    titlePast: 'text-emerald-700',
+    subtitlePast: 'text-emerald-500',
+  },
+  'post-trip': {
+    past: 'bg-violet-50 border-violet-200',
+    current: 'bg-violet-500 border-violet-600 shadow-lg shadow-violet-200',
+    iconPast: 'bg-violet-100 text-violet-600',
+    iconIdle: 'bg-violet-50 text-violet-400',
+    titlePast: 'text-violet-700',
+    subtitlePast: 'text-violet-500',
+  },
 };
 
 function formatDateRange(start: string, end: string): string {
@@ -188,8 +218,11 @@ export default function HomeScreen() {
               const isCurrentUser = phase.id === currentUserPhaseId;
               const isParrotHere = !isInTrip && !!idealPacePhaseId && phase.id === idealPacePhaseId;
               const isPreTrip = phase.phase_type === 'pre-trip';
+              const isTripDay = phase.phase_type === 'in-trip';
+              const tone = PHASE_TONES[phase.phase_type] ?? PHASE_TONES['pre-trip'];
               const phaseProgressIdx = progressPhases.findIndex(p => p.id === phase.id);
-              const isPast = isPreTrip
+              // Pre-trip and Wrap-up phases are done per phase; trip days by date.
+              const isPast = !isTripDay
                 ? completedPhaseSet.has(phase.id)
                 : isInTrip && phaseProgressIdx >= 0 && phaseProgressIdx < userCompletedCount;
               const isPending = isInTrip && isPreTrip && !isPast;
@@ -221,15 +254,12 @@ export default function HomeScreen() {
                   >
                     <button
                       onClick={() => handlePhaseClick(phase)}
+                      data-phase-type={phase.phase_type}
                       className={`relative w-full overflow-visible rounded-2xl border-2 p-3 transition-transform duration-300 transform-gpu hover:scale-[1.03] active:scale-[0.98] ${
                         isPast
-                          ? isPreTrip
-                            ? 'bg-blue-50 border-blue-200'
-                            : 'bg-emerald-50 border-emerald-200'
+                          ? tone.past
                           : isCurrent
-                            ? isPreTrip
-                              ? 'bg-blue-500 border-blue-600 shadow-lg shadow-blue-200'
-                              : 'bg-emerald-500 border-emerald-600 shadow-lg shadow-emerald-200'
+                            ? tone.current
                           : 'bg-white border-gray-200 hover:border-gray-300'
                       }`}
                     >
@@ -269,14 +299,10 @@ export default function HomeScreen() {
                       <div
                         className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 ${
                           isPast
-                            ? isPreTrip
-                              ? 'bg-blue-100 text-blue-600'
-                              : 'bg-emerald-100 text-emerald-600'
+                            ? tone.iconPast
                             : isCurrent
                               ? 'bg-white/20 text-white'
-                              : isPreTrip
-                                ? 'bg-blue-50 text-blue-400'
-                                : 'bg-emerald-50 text-emerald-400'
+                              : tone.iconIdle
                         }`}
                       >
                         {iconMap[phase.icon ?? ''] || <FileText size={20} />}
@@ -285,7 +311,7 @@ export default function HomeScreen() {
                       <h3
                         className={`font-semibold text-sm font-[Fredoka] ${
                           isPast
-                            ? isPreTrip ? 'text-blue-700' : 'text-emerald-700'
+                            ? tone.titlePast
                             : isCurrent
                               ? 'text-white'
                               : 'text-gray-700'
@@ -293,7 +319,7 @@ export default function HomeScreen() {
                       >
                         {phase.title}
                       </h3>
-                      {!isPreTrip && dayDate && (
+                      {isTripDay && dayDate && (
                         <p
                           className={`text-[11px] font-semibold mt-0.5 ${
                             isCurrent && !isPast ? 'text-white/90' : 'text-emerald-600'
@@ -306,7 +332,7 @@ export default function HomeScreen() {
                         <p
                           className={`text-xs mt-0.5 ${
                             isPast
-                              ? isPreTrip ? 'text-blue-500' : 'text-emerald-500'
+                              ? tone.subtitlePast
                               : isCurrent
                                 ? 'text-white/80'
                                 : 'text-gray-400'

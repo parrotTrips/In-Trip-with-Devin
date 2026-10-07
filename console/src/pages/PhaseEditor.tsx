@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import {
-  getPhases, savePhaseContent, type ChecklistItem, type Phase, type PhaseLink,
+  getPhases, savePhaseContent, type ChecklistItem, type EditablePhaseType, type Phase, type PhaseLink,
 } from '../api/console-api';
 import { moveUp } from '../lib/move-up';
 
@@ -26,6 +26,8 @@ function validHttpUrl(value: string): boolean {
 
 export default function PhaseEditor() {
   const { tripUuid = '', phaseId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const phaseType: EditablePhaseType = searchParams.get('type') === 'post-trip' ? 'post-trip' : 'pre-trip';
   const [phase, setPhase] = useState<Phase | null>(null);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [links, setLinks] = useState<PhaseLink[]>([]);
@@ -36,7 +38,7 @@ export default function PhaseEditor() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    getPhases(tripUuid)
+    getPhases(tripUuid, phaseType)
       .then(data => {
         const found = data.phases.find(item => item.id === phaseId) ?? null;
         setPhase(found);
@@ -46,7 +48,7 @@ export default function PhaseEditor() {
         setEndsAt(toLocalInput(found?.ends_at ?? null));
       })
       .catch(err => setError((err as Error).message));
-  }, [tripUuid, phaseId]);
+  }, [tripUuid, phaseId, phaseType]);
 
   if (!phase && error) return <p className="p-6 text-red-600">{error}</p>;
   if (!phase) return <p className="p-6">Carregando…</p>;
@@ -93,7 +95,12 @@ export default function PhaseEditor() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <Link to={`/trips/${tripUuid}/phases`} className="text-sm underline">← Fases</Link>
+      <Link
+        to={`/trips/${tripUuid}/${phaseType === 'post-trip' ? 'wrap-up' : 'fases'}`}
+        className="text-sm underline"
+      >
+        ← {phaseType === 'post-trip' ? 'Trip Wrap-up' : 'Fases'}
+      </Link>
       <h1 className="text-xl font-bold my-4">Editar fase</h1>
       {readOnly && (
         <p className="border border-amber-300 bg-amber-50 text-amber-900 rounded p-3 mb-4">

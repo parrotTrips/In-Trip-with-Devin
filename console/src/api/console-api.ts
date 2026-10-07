@@ -46,14 +46,32 @@ export interface Phase {
   links: PhaseLink[];
 }
 
-export function getPhases(tripUuid: string) {
-  return request<{ phases: Phase[] }>(`/console/trips/${tripUuid}/phases`);
+// Phases edited on the phases screens: pre-trip, or the post-trip Trip Wrap-up.
+export type EditablePhaseType = 'pre-trip' | 'post-trip';
+
+function phaseTypeQuery(phaseType: EditablePhaseType) {
+  return phaseType === 'pre-trip' ? '' : `?phase_type=${phaseType}`;
 }
 
-export function createPhase(tripUuid: string, body: { title: string; short_description: string }) {
+export function getPhases(tripUuid: string, phaseType: EditablePhaseType = 'pre-trip') {
+  return request<{ phases: Phase[] }>(`/console/trips/${tripUuid}/phases${phaseTypeQuery(phaseType)}`);
+}
+
+export function createPhase(
+  tripUuid: string,
+  body: { title: string; short_description: string },
+  phaseType: EditablePhaseType = 'pre-trip',
+) {
   return request<{ id: string; is_visible: boolean }>(
-    `/console/trips/${tripUuid}/phases`,
+    `/console/trips/${tripUuid}/phases${phaseTypeQuery(phaseType)}`,
     { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export function createWrapUp(tripUuid: string) {
+  return request<{ id: string; is_visible: boolean }>(
+    `/console/trips/${tripUuid}/wrap-up`,
+    { method: 'POST' }
   );
 }
 

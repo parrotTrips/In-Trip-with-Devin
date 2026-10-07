@@ -217,18 +217,22 @@ def test_traveler_route_rejects_session_after_selected_trip_has_ended(
     seed = asyncio.run(_seed_two_trips(session_factory))
     headers = _scoped_auth(seed["user_id"], seed["phone"], seed["trip_a"])
 
-    async def _end_selected_trip():
+    async def _end_selected_trip(days_ago: int):
         async with session_factory() as session:
             await session.execute(
                 text(
-                    "UPDATE wetravel_trips SET end_date = CURRENT_DATE - 1 "
+                    "UPDATE wetravel_trips SET end_date = CURRENT_DATE - CAST(:days AS integer) "
                     "WHERE trip_uuid = :trip_id"
                 ),
-                {"trip_id": seed["trip_a"]},
+                {"trip_id": seed["trip_a"], "days": days_ago},
             )
             await session.commit()
 
-    asyncio.run(_end_selected_trip())
+    # Travelers keep access for 14 days after the trip (Trip Wrap-up).
+    asyncio.run(_end_selected_trip(1))
+    assert seeded_client.get("/me/trip", headers=headers).status_code == 200
+
+    asyncio.run(_end_selected_trip(15))
 
     response = seeded_client.get("/me/trip", headers=headers)
 

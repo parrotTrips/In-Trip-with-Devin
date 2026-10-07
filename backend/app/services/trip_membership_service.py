@@ -17,6 +17,8 @@ _SAO_PAULO_TODAY_SQL = (
 )
 _START_DATE_SQL = "NULLIF(wt.start_date::text, '')::date"
 _END_DATE_SQL = "NULLIF(wt.end_date::text, '')::date"
+# Travelers keep using the app after the trip (Trip Wrap-up) for this many days.
+POST_TRIP_ACCESS_DAYS = 14
 
 _ELIGIBLE_TRIPS_SQL = f"""
     SELECT
@@ -42,7 +44,7 @@ _ELIGIBLE_TRIPS_SQL = f"""
       AND (
         ts.id IS NOT NULL
         OR {_END_DATE_SQL} IS NULL
-        OR {_END_DATE_SQL} >= {_SAO_PAULO_TODAY_SQL}
+        OR {_END_DATE_SQL} + {POST_TRIP_ACCESS_DAYS} >= {_SAO_PAULO_TODAY_SQL}
       )
       {{trip_filter}}
     ORDER BY
@@ -117,7 +119,7 @@ async def require_trip_membership(
                 or_(
                     staff_membership_exists,
                     end_date.is_(None),
-                end_date >= sao_paulo_today,
+                end_date >= sao_paulo_today - POST_TRIP_ACCESS_DAYS,
             ),
         )
     )

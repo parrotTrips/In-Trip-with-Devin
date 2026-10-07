@@ -1,5 +1,7 @@
 """Console HTTP routes protected by Google Workspace authentication."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +33,7 @@ from app.services.console_sections import (
 )
 from app.services.console_service import (
     create_phase,
+    create_wrap_up_phase,
     delete_phase,
     get_phases,
     list_trips,
@@ -57,23 +60,38 @@ async def list_trips_handler(
     return await list_trips(session)
 
 
+# Phases edited on the phases screens; in-trip days have their own Roteiro routes.
+EditablePhaseType = Literal["pre-trip", "post-trip"]
+
+
 @router.get("/trips/{trip_uuid}/phases")
 async def get_phases_handler(
     trip_uuid: str,
+    phase_type: EditablePhaseType = "pre-trip",
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Return pre-trip phases with checklist items and links."""
-    return await get_phases(session, trip_uuid)
+    """Return pre-trip (or Trip Wrap-up) phases with checklist items and links."""
+    return await get_phases(session, trip_uuid, phase_type)
 
 
 @router.post("/trips/{trip_uuid}/phases")
 async def create_phase_handler(
     trip_uuid: str,
     body: PhaseCreate,
+    phase_type: EditablePhaseType = "pre-trip",
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Create a pre-trip phase in draft state."""
-    return await create_phase(session, trip_uuid, body.model_dump())
+    """Create a pre-trip (or Trip Wrap-up) phase in draft state."""
+    return await create_phase(session, trip_uuid, body.model_dump(), phase_type)
+
+
+@router.post("/trips/{trip_uuid}/wrap-up")
+async def create_wrap_up_handler(
+    trip_uuid: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """Create the Trip Wrap-up phase from the default template, as a draft."""
+    return await create_wrap_up_phase(session, trip_uuid)
 
 
 @router.patch("/phases/{phase_id}")

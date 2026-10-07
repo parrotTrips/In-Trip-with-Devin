@@ -40,7 +40,7 @@ export interface Activity {
 
 export interface TripPhase {
   id: string;
-  phase_type: 'pre-trip' | 'in-trip';
+  phase_type: 'pre-trip' | 'in-trip' | 'post-trip';
   title: string;
   subtitle: string | null;
   icon: string | null;

@@ -162,3 +162,62 @@ def test_staff_sees_each_traveler_position_pending_items_and_last_checkin(sessio
         assert traveler["last_checkin"]["day_title"] == "Day 1"
 
     asyncio.run(run())
+
+
+def _shift_trip(session_factory, trip_uuid, *, start, end):
+    async def run():
+        async with session_factory() as session:
+            await session.execute(
+                text("UPDATE wetravel_trips SET start_date = :s, end_date = :e WHERE trip_uuid = :u"),
+                {"s": start, "e": end, "u": trip_uuid},
+            )
+            await session.commit()
+    return run()
+
+
+def test_travelers_keep_access_for_14_days_after_the_trip(session_factory):
+    from datetime import timedelta
+
+    import pytest
+    from fastapi import HTTPException
+
+    from app.services.trip_membership_service import list_eligible_trips
+
+    async def run():
+        today = date.today()
+        seeded = await _seed(session_factory)
+        await _shift_trip(session_factory, seeded["trip_uuid"], start=today - timedelta(days=20), end=today - timedelta(days=13))
+        async with session_factory() as session:
+            await get_trip_phases(seeded["user_id"], seeded["trip_uuid"], session)
+            trips = await list_eligible_trips(seeded["user_id"], session)
+        assert [t["trip_id"] for t in trips] == [seeded["trip_uuid"]]
+
+        await _shift_trip(session_factory, seeded["trip_uuid"], start=today - timedelta(days=25), end=today - timedelta(days=16))
+        async with session_factory() as session:
+            with pytest.raises(HTTPException) as exc:
+                await get_trip_phases(seeded["user_id"], seeded["trip_uuid"], session)
+            trips = await list_eligible_trips(seeded["user_id"], session)
+        assert exc.value.status_code == 403
+        assert trips == []
+
+    asyncio.run(run())
+
+
+def test_wrap_up_phase_is_listed_after_the_trip_days(session_factory):
+    async def run():
+        seeded = await _seed(session_factory)
+        async with session_factory() as session:
+            session.add(TripPhase(
+                wetravel_trip_uuid=seeded["trip_uuid"],
+                phase_type="post-trip",
+                title="Trip Wrap-up",
+                short_description="",
+                sort_order=0,
+                is_locked_by_default=False,
+                is_visible=True,
+            ))
+            await session.commit()
+            phases = await get_trip_phases(seeded["user_id"], seeded["trip_uuid"], session)
+        assert [p["phase_type"] for p in phases["phases"]][-1] == "post-trip"
+
+    asyncio.run(run())

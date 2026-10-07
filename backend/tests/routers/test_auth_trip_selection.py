@@ -29,7 +29,8 @@ async def _seed_trip_choices(session_factory):
         for trip_id, start_date, end_date in [
             ("trip-traveler", today, today + timedelta(days=2)),
             ("trip-staff", today + timedelta(days=3), today + timedelta(days=6)),
-            ("trip-ended", today - timedelta(days=5), today - timedelta(days=1)),
+            # Ended beyond the 14-day post-trip access window.
+            ("trip-ended", today - timedelta(days=25), today - timedelta(days=16)),
             ("trip-unrelated", today + timedelta(days=4), today + timedelta(days=7)),
         ]:
             await session.execute(

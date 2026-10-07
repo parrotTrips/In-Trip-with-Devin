@@ -13,8 +13,9 @@ async def _seed_memberships(session_factory):
             "trip-ended",
             "Viagem encerrada",
             "Recife",
-            today - timedelta(days=10),
-            today - timedelta(days=1),
+            # Ended beyond the 14-day post-trip access window.
+            today - timedelta(days=25),
+            today - timedelta(days=16),
         ),
         (
             "trip-current",

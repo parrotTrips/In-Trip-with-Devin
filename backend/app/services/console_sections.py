@@ -90,6 +90,13 @@ SECTIONS: dict[str, Section] = {
         count_sql=_PHASE_COUNT.replace(":phase_type", "'pre-trip'"),
         own_route="/console/trips/{trip_uuid}/phases",
     ),
+    "wrap-up": Section(
+        key="wrap-up",
+        label="Trip Wrap-up",
+        group=GROUP_RETURN,
+        count_sql=_PHASE_COUNT.replace(":phase_type", "'post-trip'"),
+        own_route="/console/trips/{trip_uuid}/phases?phase_type=post-trip",
+    ),
     "roteiro": Section(
         key="roteiro",
         columns=(Column("dia", "Dia"), Column("data", "Data"), Column("title", "Título"), Column("atividades", "Atividades"),),

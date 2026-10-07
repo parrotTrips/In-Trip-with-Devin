@@ -48,7 +48,7 @@ async def _get_trip_settings(trip_uuid: str, session: AsyncSession) -> dict:
     from sqlalchemy import text as _text
     result = await session.execute(
         _text(
-            "SELECT s.mode, s.ideal_pace_phase_id, w.start_date"
+            "SELECT s.mode, s.ideal_pace_phase_id, w.start_date, w.end_date"
             " FROM wetravel_trips w"
             " LEFT JOIN trip_settings s ON s.trip_uuid = w.trip_uuid"
             " WHERE w.trip_uuid = :uuid"
@@ -61,7 +61,23 @@ async def _get_trip_settings(trip_uuid: str, session: AsyncSession) -> dict:
     return {
         "mode": resolve_trip_mode(stored_mode, start_date, _datetime.now(UTC)),
         "ideal_pace_phase_id": row["ideal_pace_phase_id"] if row else None,
+        "end_date": _as_date(row["end_date"]) if row else None,
     }
+
+
+def _as_date(value) -> _date | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, _date):
+        return value
+    return _date.fromisoformat(str(value)[:10])
+
+
+def _phase_order_key(phase) -> tuple[int, int]:
+    """Trip Wrap-up (post-trip) phases always come last in the journey."""
+    phase_type = phase["phase_type"] if isinstance(phase, dict) else phase.phase_type
+    sort_order = phase["sort_order"] if isinstance(phase, dict) else phase.sort_order
+    return (1 if phase_type == "post-trip" else 0, sort_order)
 
 
 async def _get_trip_mode(trip_uuid: str, session: AsyncSession) -> str:
@@ -168,18 +184,28 @@ def compute_current_phase_id(
     trip_mode: str,
     now: _datetime,
     timezone: ZoneInfo = SAO_PAULO_TZ,
+    trip_end_date: _date | None = None,
 ) -> str | None:
     if not phases:
         return None
 
-    ordered_phases = sorted(phases, key=lambda p: p["sort_order"])
+    ordered_phases = sorted(phases, key=_phase_order_key)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    today = now.astimezone(timezone).date()
+
+    # From the last trip day on, the traveler is on the Trip Wrap-up.
+    wrap_up_phases = [p for p in ordered_phases if p["phase_type"] == "post-trip"]
+    if wrap_up_phases and trip_end_date is not None and today >= trip_end_date:
+        for phase in wrap_up_phases:
+            if phase["id"] not in completed_phase_ids:
+                return phase["id"]
+        return wrap_up_phases[-1]["id"]
+    journey_phases = [p for p in ordered_phases if p["phase_type"] != "post-trip"] or ordered_phases
 
     if trip_mode == "in-trip":
-        in_trip_phases = [p for p in ordered_phases if p["phase_type"] == "in-trip"]
+        in_trip_phases = [p for p in journey_phases if p["phase_type"] == "in-trip"]
         if in_trip_phases:
-            if now.tzinfo is None:
-                now = now.replace(tzinfo=UTC)
-            today = now.astimezone(timezone).date()
             current_phase = in_trip_phases[0]
 
             for phase in in_trip_phases:
@@ -189,10 +215,10 @@ def compute_current_phase_id(
 
             return current_phase["id"]
 
-    for phase in ordered_phases:
+    for phase in journey_phases:
         if phase["id"] not in completed_phase_ids:
             return phase["id"]
-    return ordered_phases[-1]["id"]
+    return journey_phases[-1]["id"]
 
 
 async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> dict:
@@ -204,7 +230,7 @@ async def get_trip_phases(user_id: str, trip_id: str, session: AsyncSession) -> 
         .where(TripPhase.wetravel_trip_uuid == trip_uuid, TripPhase.is_visible.is_(True))
         .order_by(TripPhase.sort_order)
     )
-    phases = phases_result.scalars().all()
+    phases = sorted(phases_result.scalars().all(), key=_phase_order_key)
 
     if not phases:
         trip_mode = await _get_trip_mode(trip_uuid, session)
@@ -379,7 +405,7 @@ async def _traveler_positions(trip_uuid: str, session: AsyncSession) -> dict:
         .where(TripPhase.wetravel_trip_uuid == trip_uuid, TripPhase.is_visible.is_(True))
         .order_by(TripPhase.sort_order)
     )
-    all_phases = all_phases_result.scalars().all()
+    all_phases = sorted(all_phases_result.scalars().all(), key=_phase_order_key)
 
     phase_dicts = [
         {
@@ -415,6 +441,7 @@ async def _traveler_positions(trip_uuid: str, session: AsyncSession) -> dict:
                 completed_phase_ids=completed_phase_ids,
                 trip_mode=settings["mode"],
                 now=now,
+                trip_end_date=settings["end_date"],
             ),
         })
 

@@ -180,3 +180,33 @@ def test_checklist_without_required_items_needs_every_item():
         "p2": [{"id": "c", "is_required": False}],
     }
     assert compute_checklist_completed_phase_ids(items_by_phase, {"a", "c"}) == {"p2"}
+
+
+def _post_trip_phases():
+    return [
+        {"id": "pre", "phase_type": "pre-trip", "starts_at": None, "sort_order": 0},
+        # Console numbers sort_order per phase type, so wrap-up can start at 0 too.
+        {"id": "wrap", "phase_type": "post-trip", "starts_at": None, "sort_order": 0},
+        {"id": "d1", "phase_type": "in-trip", "starts_at": datetime(2026, 10, 5, 3, tzinfo=UTC), "sort_order": 1},
+        {"id": "d2", "phase_type": "in-trip", "starts_at": datetime(2026, 10, 6, 3, tzinfo=UTC), "sort_order": 2},
+    ]
+
+
+def test_wrap_up_becomes_current_on_the_last_trip_day():
+    phases = _post_trip_phases()
+    before = compute_current_phase_id(
+        phases, set(), "in-trip", datetime(2026, 10, 5, 15, tzinfo=UTC), trip_end_date=date(2026, 10, 6)
+    )
+    last_day = compute_current_phase_id(
+        phases, set(), "in-trip", datetime(2026, 10, 6, 15, tzinfo=UTC), trip_end_date=date(2026, 10, 6)
+    )
+    assert before == "d1"
+    assert last_day == "wrap"
+
+
+def test_pre_trip_pointer_never_jumps_to_wrap_up_early():
+    phases = _post_trip_phases()
+    current = compute_current_phase_id(
+        phases, {"pre"}, "pre-trip", datetime(2026, 9, 1, tzinfo=UTC), trip_end_date=date(2026, 10, 6)
+    )
+    assert current == "d1"

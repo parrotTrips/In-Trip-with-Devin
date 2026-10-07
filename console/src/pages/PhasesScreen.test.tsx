@@ -139,3 +139,44 @@ test('cancelling deletion does not call the API', async () => {
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
+
+test('phase titles open the editor route', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true, json: async () => ({ phases: [phase()] }),
+  }));
+
+  renderAt('T1');
+
+  expect(await screen.findByRole('link', { name: 'Documentos' }))
+    .toHaveAttribute('href', '/trips/T1/fases/p1');
+});
+
+function renderWrapUp(tripUuid: string) {
+  return render(
+    <MemoryRouter initialEntries={[`/trips/${tripUuid}/wrap-up`]}>
+      <Routes>
+        <Route path="/trips/:tripUuid/wrap-up" element={<PhasesScreen phaseType="post-trip" />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+test('creates the Trip Wrap-up from the default template', async () => {
+  const wrapUp = phase({ id: 'w1', title: 'Trip Wrap-up' });
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ phases: [] }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'w1', is_visible: false }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ phases: [wrapUp] }) });
+  vi.stubGlobal('fetch', fetchMock);
+
+  renderWrapUp('T1');
+
+  expect(await screen.findByRole('heading', { name: 'Trip Wrap-up' })).toBeInTheDocument();
+  expect(fetchMock.mock.calls[0][0]).toContain('/console/trips/T1/phases?phase_type=post-trip');
+  await userEvent.click(screen.getByRole('button', { name: /criar com modelo padrão/i }));
+
+  expect(fetchMock.mock.calls[1][0]).toContain('/console/trips/T1/wrap-up');
+  expect(await screen.findByRole('link', { name: 'Trip Wrap-up' }))
+    .toHaveAttribute('href', '/trips/T1/fases/w1?type=post-trip');
+  expect(screen.queryByRole('button', { name: /criar com modelo padrão/i })).not.toBeInTheDocument();
+});

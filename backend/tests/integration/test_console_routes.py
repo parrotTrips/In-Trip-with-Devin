@@ -498,3 +498,54 @@ def test_atomic_save_rolls_back_phase_when_children_fail(
 
     phase = client.get("/console/trips/console-test/phases").json()["phases"][0]
     assert phase["title"] == "Original"
+
+
+def test_wrap_up_is_created_from_the_default_template_as_a_draft(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+
+    res = client.post("/console/trips/console-test/wrap-up", headers=headers)
+
+    assert res.status_code == 200
+    assert res.json()["is_visible"] is False
+    # Wrap-up phases are listed apart from the pre-trip phases.
+    assert client.get("/console/trips/console-test/phases", headers=headers).json()["phases"] == []
+    [phase] = client.get(
+        "/console/trips/console-test/phases?phase_type=post-trip", headers=headers
+    ).json()["phases"]
+    assert phase["title"] == "Trip Wrap-up"
+    assert [i["label"] for i in phase["checklist"]] == [
+        "Share your trip feedback",
+        "Listen to the trip playlist",
+        "Share your photos with friends",
+        "Post about your Brazil experience",
+        "Follow Parrot Trips on Instagram",
+    ]
+    assert [(link["label"], link["url"]) for link in phase["links"]] == [
+        ("Parrot Trips on Instagram", "https://www.instagram.com/parrottrips/"),
+    ]
+
+    again = client.post("/console/trips/console-test/wrap-up", headers=headers)
+    assert again.status_code == 409
+
+
+def test_console_phases_rejects_unknown_phase_type(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+
+    res = client.get("/console/trips/console-test/phases?phase_type=in-trip", headers=headers)
+
+    assert res.status_code == 422
+
+
+def test_wrap_up_section_is_listed_under_return(client, session_factory):
+    asyncio.run(_seed_admin_and_trip(session_factory))
+    headers = _auth(client, "+5511777000001")
+    client.post("/console/trips/console-test/wrap-up", headers=headers)
+
+    sections = client.get("/console/trips/console-test/sections", headers=headers).json()["sections"]
+
+    wrap_up = next(s for s in sections if s["key"] == "wrap-up")
+    assert wrap_up["group"] == "retorno"
+    assert wrap_up["label"] == "Trip Wrap-up"
+    assert wrap_up["count"] == 1

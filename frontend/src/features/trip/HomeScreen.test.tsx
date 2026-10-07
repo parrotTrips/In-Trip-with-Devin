@@ -23,7 +23,7 @@ function makePhase({
   title: string;
   sortOrder: number;
   icon?: string;
-  phaseType?: 'pre-trip' | 'in-trip';
+  phaseType?: 'pre-trip' | 'in-trip' | 'post-trip';
   startsAt?: string | null;
 }) {
   return {
@@ -288,6 +288,27 @@ describe('HomeScreen', () => {
     expect(within(vaccines).queryByTestId('phase-pending-badge')).not.toBeInTheDocument();
     const day = screen.getByText('Day 1').closest('button') as HTMLElement;
     expect(within(day).queryByTestId('phase-pending-badge')).not.toBeInTheDocument();
+  });
+
+  test('shows the Trip Wrap-up at the end of the journey with its own style', async () => {
+    setupHandlers({
+      tripMode: 'in-trip',
+      currentPhaseId: 'wrap-001',
+      completedPhaseIds: ['phase-001'],
+      phases: [
+        makePhase({ id: 'phase-001', title: 'Passport', sortOrder: 0 }),
+        makePhase({ id: 'day-001', title: 'Day 1', sortOrder: 1, phaseType: 'in-trip', startsAt: '2026-02-27T03:00:00Z' }),
+        makePhase({ id: 'wrap-001', title: 'Trip Wrap-up', sortOrder: 2, phaseType: 'post-trip', icon: 'heart' }),
+      ],
+    });
+
+    renderHome();
+
+    const wrapUp = (await screen.findByText('Trip Wrap-up')).closest('button') as HTMLElement;
+    expect(wrapUp).toHaveAttribute('data-phase-type', 'post-trip');
+    expect(wrapUp).toHaveClass('bg-violet-500');
+    expect(within(wrapUp).queryByTestId('phase-pending-badge')).not.toBeInTheDocument();
+    expect(within(wrapUp).getByText(/you are here/i)).toBeInTheDocument();
   });
 });
 

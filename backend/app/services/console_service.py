@@ -272,6 +272,50 @@ async def replace_checklist(session: AsyncSession, phase_id: str, items: list[di
     return {"count": len(items)}
 
 
+# Default "Trip Wrap-up" content; each trip edits it in the console before publishing.
+WRAP_UP_TEMPLATE = {
+    "title": "Trip Wrap-up",
+    "subtitle": "Thanks for traveling with us!",
+    "icon": "heart",
+    "short_description": "A few last things to keep the trip alive.",
+    "detailed_description": (
+        "We loved having you with us in Brazil! Before you go, tell us how it was, "
+        "relive the trip with the playlist, share your photos and help others discover Brazil."
+    ),
+}
+WRAP_UP_CHECKLIST = (
+    "Share your trip feedback",
+    "Listen to the trip playlist",
+    "Share your photos with friends",
+    "Post about your Brazil experience",
+    "Follow Parrot Trips on Instagram",
+)
+WRAP_UP_LINKS = (
+    ("Parrot Trips on Instagram", "https://www.instagram.com/parrottrips/"),
+)
+
+
+async def create_wrap_up_phase(session: AsyncSession, trip_uuid: str) -> dict:
+    """Create the trip's Wrap-up phase from the default template, as a draft."""
+    existing = await session.scalar(
+        text("""
+            SELECT count(*) FROM trip_phases
+            WHERE wetravel_trip_uuid = :trip_uuid AND phase_type = 'post-trip'
+        """),
+        {"trip_uuid": trip_uuid},
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="This trip already has a Trip Wrap-up")
+    created = await create_phase(session, trip_uuid, dict(WRAP_UP_TEMPLATE), phase_type="post-trip")
+    await replace_checklist(
+        session, created["id"], [{"label": label, "is_required": False} for label in WRAP_UP_CHECKLIST]
+    )
+    await replace_links(
+        session, created["id"], [{"label": label, "url": url} for label, url in WRAP_UP_LINKS]
+    )
+    return created
+
+
 async def replace_links(session: AsyncSession, phase_id: str, links: list[dict]) -> dict:
     """Replace every link of the phase; list position becomes sort_order."""
     await require_draft_phase(session, phase_id)

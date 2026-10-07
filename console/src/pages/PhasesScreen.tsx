@@ -2,12 +2,15 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import {
-  createPhase, deletePhase, getPhases, publishPhase, reorderPhases, unpublishPhase, type Phase,
+  createPhase, createWrapUp, deletePhase, getPhases, publishPhase, reorderPhases, unpublishPhase,
+  type EditablePhaseType, type Phase,
 } from '../api/console-api';
 import { moveUp } from '../lib/move-up';
 
-export default function PhasesScreen() {
+export default function PhasesScreen({ phaseType = 'pre-trip' }: { phaseType?: EditablePhaseType }) {
   const { tripUuid = '' } = useParams();
+  const isWrapUp = phaseType === 'post-trip';
+  const editorQuery = isWrapUp ? '?type=post-trip' : '';
   const [phases, setPhases] = useState<Phase[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -18,9 +21,9 @@ export default function PhasesScreen() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
 
   const reload = useCallback(async () => {
-    const data = await getPhases(tripUuid);
+    const data = await getPhases(tripUuid, phaseType);
     setPhases(data.phases ?? []);
-  }, [tripUuid]);
+  }, [tripUuid, phaseType]);
 
   useEffect(() => {
     reload().catch(err => setError((err as Error).message));
@@ -44,7 +47,7 @@ export default function PhasesScreen() {
     if (!newTitle.trim() || !newDescription.trim()) return;
     await act(() => createPhase(tripUuid, {
       title: newTitle.trim(), short_description: newDescription.trim(),
-    }));
+    }, phaseType));
     setNewTitle('');
     setNewDescription('');
     setCreating(false);
@@ -55,7 +58,13 @@ export default function PhasesScreen() {
   return (
     <div className="max-w-3xl mx-auto p-6">
       <Link to="/" className="text-sm underline">← Viagens</Link>
-      <h1 className="text-xl font-bold my-4">Fases</h1>
+      <h1 className="text-xl font-bold my-4">{isWrapUp ? 'Trip Wrap-up' : 'Fases'}</h1>
+      {isWrapUp && (
+        <p className="text-sm text-gray-600 mb-4">
+          Fase pós-viagem: aparece no fim da jornada e vira a etapa atual no último dia da viagem.
+          Ajuste textos e links (feedback, playlist, fotos) antes de publicar.
+        </p>
+      )}
       <p className="border border-amber-300 bg-amber-50 text-amber-900 rounded p-3 text-sm mb-4">
         Não importe esta viagem pela planilha depois de editá-la aqui. O import legado pode
         substituir fases, checklist e links.
@@ -75,7 +84,7 @@ export default function PhasesScreen() {
                 <span className="font-medium">{phase.title}</span>
               ) : (
                 <Link
-                  to={`/trips/${tripUuid}/phases/${phase.id}`}
+                  to={`/trips/${tripUuid}/fases/${phase.id}${editorQuery}`}
                   className="font-medium underline"
                 >
                   {phase.title}
@@ -124,6 +133,15 @@ export default function PhasesScreen() {
         ))}
       </ul>
 
+      {isWrapUp && phases.length === 0 && !creating && (
+        <button
+          className="bg-black text-white rounded px-3 py-2 mr-2 disabled:opacity-50"
+          disabled={busy}
+          onClick={() => void act(() => createWrapUp(tripUuid))}
+        >
+          Criar com modelo padrão
+        </button>
+      )}
       {!creating ? (
         <button className="border rounded px-3 py-2" onClick={() => setCreating(true)}>
           Nova fase
