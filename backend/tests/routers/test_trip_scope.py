@@ -232,7 +232,8 @@ def test_traveler_route_rejects_session_after_selected_trip_has_ended(
     asyncio.run(_end_selected_trip(1))
     assert seeded_client.get("/me/trip", headers=headers).status_code == 200
 
-    asyncio.run(_end_selected_trip(15))
+    # 16, not 15: CURRENT_DATE is UTC and can already be a day ahead of São Paulo.
+    asyncio.run(_end_selected_trip(16))
 
     response = seeded_client.get("/me/trip", headers=headers)
 
