@@ -16,6 +16,9 @@ export const NotificationContext = createContext<NotificationContextType>({
   refreshUnreadCount: async () => {},
 });
 
+// New announcements must bring the dot back without a reload.
+const REFRESH_INTERVAL_MS = 60_000;
+
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -24,12 +27,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const result = await getMyAnnouncements();
       setUnreadCount(result.unread_count);
     } catch {
-      setUnreadCount(0);
+      // Keep the last known count: a network blip must not hide unread messages.
     }
   }, []);
 
   useEffect(() => {
     refreshUnreadCount();
+    const refreshIfVisible = () => {
+      if (document.visibilityState !== 'hidden') void refreshUnreadCount();
+    };
+    const interval = window.setInterval(refreshIfVisible, REFRESH_INTERVAL_MS);
+    window.addEventListener('focus', refreshIfVisible);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshIfVisible);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
   }, [refreshUnreadCount]);
 
   const decrementUnreadCount = useCallback(() => {
