@@ -2,11 +2,13 @@
 
 import hashlib
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import JWTError
 from pydantic import BaseModel
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db_session
@@ -24,6 +26,10 @@ from app.db.models.user import User
 from app.services.qr_service import decode_traveler_qr_payload
 
 router = APIRouter(prefix="/me/staff", tags=["staff"])
+
+# A traveler's next check-in step (multi-scan activities) is only accepted this long
+# after the previous one, so a camera left on the same QR does not record two steps.
+MIN_SECONDS_BETWEEN_CHECKINS = 60
 
 
 class StaffCheckinScanRequest(BaseModel):
@@ -225,6 +231,49 @@ async def _resolve_activity_checkin_scan(
         "max_checkins": max_checkins,
         "existing_checkins": existing_checkins,
         "next_scan_number": len(existing_checkins) + 1,
+    }
+
+
+async def _already_checked_in_response(session: AsyncSession, scan: dict) -> dict:
+    last = scan["existing_checkins"][-1]
+    scanned_by_name = await session.scalar(
+        select(User.full_name).where(User.id == last.scanned_by_user_id)
+    )
+    return {
+        "status": "already_checked_in",
+        "checkin_id": str(last.id),
+        "trip_activity_id": str(last.trip_activity_id),
+        "trip_traveler_id": str(last.trip_traveler_id),
+        "checked_in_at": last.checked_in_at.isoformat(),
+        "scanned_by_user_id": str(last.scanned_by_user_id),
+        "scanned_by_name": scanned_by_name,
+        "scan_number": last.scan_number,
+        "max_checkins": scan["max_checkins"],
+        "traveler_name": scan["traveler_name"],
+    }
+
+
+def _seconds_until_next_step(scan: dict) -> int:
+    """Seconds left before the next step can be recorded; 0 when it can be now."""
+    if not scan["existing_checkins"]:
+        return 0
+    last_at = scan["existing_checkins"][-1].checked_in_at
+    if last_at.tzinfo is None:
+        last_at = last_at.replace(tzinfo=UTC)
+    elapsed = (datetime.now(UTC) - last_at).total_seconds()
+    return max(0, int(MIN_SECONDS_BETWEEN_CHECKINS - elapsed + 0.999))
+
+
+def _recently_checked_in_response(scan: dict, wait: int) -> dict:
+    last = scan["existing_checkins"][-1]
+    return {
+        "status": "recently_checked_in",
+        "trip_traveler_id": str(scan["trip_traveler_id"]),
+        "traveler_name": scan["traveler_name"],
+        "checked_in_at": last.checked_in_at.isoformat(),
+        "scan_number": last.scan_number,
+        "max_checkins": scan["max_checkins"],
+        "retry_after_seconds": wait,
     }
 
 
@@ -736,15 +785,33 @@ async def get_activity_travelers(
             {"trip_uuid": staff_trip_uuid},
         )
 
+    max_checkins = await session.scalar(
+        select(TripActivity.max_checkins).where(TripActivity.id == activity_id)
+    ) or 1
+    progress_rows = await session.execute(
+        select(
+            ActivityCheckin.trip_traveler_id,
+            func.count(ActivityCheckin.id),
+            func.max(ActivityCheckin.checked_in_at),
+        )
+        .where(ActivityCheckin.trip_activity_id == activity_id)
+        .group_by(ActivityCheckin.trip_traveler_id)
+    )
+    progress = {str(tt_id): (count, last) for tt_id, count, last in progress_rows}
+
     travelers = []
     for row in rows.mappings():
         qr_payload = create_traveler_qr_payload(
             str(row["traveler_id"]), staff_trip_uuid
         )
+        count, last = progress.get(str(row["traveler_id"]), (0, None))
         travelers.append({
             "id": str(row["traveler_id"]),
             "name": row["full_name"] or "Unknown",
             "qr_payload": qr_payload,
+            "checkin_count": count,
+            "max_checkins": max_checkins,
+            "last_checked_in_at": last.isoformat() if last else None,
         })
 
     return {"travelers": travelers}
@@ -770,26 +837,13 @@ async def preview_activity_checkin(
         staff_trip_uuid=staff_trip_uuid,
     )
 
-    existing_checkins = scan["existing_checkins"]
     next_scan_number = scan["next_scan_number"]
     max_checkins = scan["max_checkins"]
     if next_scan_number > max_checkins:
-        last = existing_checkins[-1]
-        scanned_by_name = await session.scalar(
-            select(User.full_name).where(User.id == last.scanned_by_user_id)
-        )
-        return {
-            "status": "already_checked_in",
-            "checkin_id": str(last.id),
-            "trip_activity_id": str(last.trip_activity_id),
-            "trip_traveler_id": str(last.trip_traveler_id),
-            "checked_in_at": last.checked_in_at.isoformat(),
-            "scanned_by_user_id": str(last.scanned_by_user_id),
-            "scanned_by_name": scanned_by_name,
-            "scan_number": last.scan_number,
-            "max_checkins": max_checkins,
-            "traveler_name": scan["traveler_name"],
-        }
+        return await _already_checked_in_response(session, scan)
+    wait = _seconds_until_next_step(scan)
+    if wait:
+        return _recently_checked_in_response(scan, wait)
 
     return {
         "status": "ready_to_check_in",
@@ -821,11 +875,10 @@ async def scan_activity_checkin(
         staff_trip_uuid=staff_trip_uuid,
     )
     trip_traveler_id = scan["trip_traveler_id"]
-    existing_checkins = scan["existing_checkins"]
     next_scan_number = scan["next_scan_number"]
     max_checkins = scan["max_checkins"]
 
-    if next_scan_number > max_checkins:
+    async def _duplicate(current_scan: dict) -> dict:
         await _record_scan_event(
             session,
             trip_activity_id=activity_id,
@@ -835,22 +888,13 @@ async def scan_activity_checkin(
             raw_payload=body.qr_payload,
         )
         await session.commit()
-        last = existing_checkins[-1]
-        scanned_by_name = await session.scalar(
-            select(User.full_name).where(User.id == last.scanned_by_user_id)
-        )
-        return {
-            "status": "already_checked_in",
-            "checkin_id": str(last.id),
-            "trip_activity_id": str(last.trip_activity_id),
-            "trip_traveler_id": str(last.trip_traveler_id),
-            "checked_in_at": last.checked_in_at.isoformat(),
-            "scanned_by_user_id": str(last.scanned_by_user_id),
-            "scanned_by_name": scanned_by_name,
-            "scan_number": last.scan_number,
-            "max_checkins": max_checkins,
-            "traveler_name": scan["traveler_name"],
-        }
+        return await _already_checked_in_response(session, current_scan)
+
+    if next_scan_number > max_checkins:
+        return await _duplicate(scan)
+    wait = _seconds_until_next_step(scan)
+    if wait:
+        return _recently_checked_in_response(scan, wait)
 
     new_checkin = ActivityCheckin(
         trip_activity_id=activity_id,
@@ -859,7 +903,19 @@ async def scan_activity_checkin(
         scan_number=next_scan_number,
     )
     session.add(new_checkin)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        # Another staff recorded this step between our read and insert.
+        await session.rollback()
+        fresh = await _resolve_activity_checkin_scan(
+            session,
+            activity_id=activity_id,
+            qr_payload=body.qr_payload,
+            staff_user_id=staff_user_id,
+            staff_trip_uuid=staff_trip_uuid,
+        )
+        return await _duplicate(fresh)
     await _record_scan_event(
         session,
         trip_activity_id=activity_id,

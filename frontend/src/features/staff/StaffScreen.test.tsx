@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { vi } from 'vitest';
@@ -135,6 +135,31 @@ function setUpStaffSwitcherSession() {
   );
 }
 
+function traveler(id: string, name: string, count: number, max: number, last: string | null = null) {
+  return { id, name, qr_payload: `qr-${id}`, checkin_count: count, max_checkins: max, last_checked_in_at: last };
+}
+
+function serveActivityTravelers(travelers: ReturnType<typeof traveler>[]) {
+  server.use(
+    http.get('http://localhost:8000/me/staff/activities/:activityId/travelers', () =>
+      HttpResponse.json({ travelers })
+    )
+  );
+}
+
+function renderStaff() {
+  return render(
+    <AuthProvider>
+      <StaffScreen onSwitchToTravelerView={() => {}} />
+    </AuthProvider>
+  );
+}
+
+async function openActivity(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByText('Airport Transfer'));
+  await screen.findByRole('heading', { name: 'Airport Transfer' });
+}
+
 describe('StaffScreen', () => {
   beforeEach(() => {
     qrSuccess = null;
@@ -193,193 +218,198 @@ describe('StaffScreen', () => {
         HttpResponse.json({ wetravel_trip_uuid: 'TEST-2026-FULL', contacts: [] })
       )
     );
+    serveActivityTravelers([traveler('t-ana', 'Ana Silva', 0, 1)]);
   });
 
-  test('shows current staff tasks inside expanded activity', async () => {
+  test('opens a dedicated page for the activity with its tasks and travelers', async () => {
     const user = userEvent.setup();
-    render(
-      <AuthProvider>
-        <StaffScreen onSwitchToTravelerView={() => {}} />
-      </AuthProvider>
-    );
+    renderStaff();
 
     await user.click(await screen.findByText('Day 1 — Arrival'));
-    await user.click(await screen.findByText('Airport Transfer'));
-
-    await waitFor(() => {
-      expect(screen.getByText('My tasks')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Coordenar van 1')).toBeInTheDocument();
-    expect(screen.getByText('Receber viajantes no aeroporto')).toBeInTheDocument();
-  });
-
-  test('shows activity check-in counter and scanner entry inside expanded activity', async () => {
-    const user = userEvent.setup();
-    render(
-      <AuthProvider>
-        <StaffScreen onSwitchToTravelerView={() => {}} />
-      </AuthProvider>
-    );
-
-    await user.click(await screen.findByText('Day 1 — Arrival'));
-
     expect(screen.getByText('0 / 12 scanned')).toBeInTheDocument();
+    await openActivity(user);
 
-    await user.click(screen.getByText('Airport Transfer'));
+    expect(screen.getByRole('heading', { name: 'Airport Transfer' })).toBeInTheDocument();
+    expect(screen.getByText('My tasks')).toBeInTheDocument();
+    expect(screen.getByText('Coordenar van 1')).toBeInTheDocument();
+    expect(await screen.findByText('Ana Silva')).toBeInTheDocument();
+    expect(scannerStart).not.toHaveBeenCalled();
 
-    expect(screen.getByRole('button', { name: /^scan$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /back to itinerary/i }));
+    expect(screen.queryByRole('heading', { name: 'Airport Transfer' })).not.toBeInTheDocument();
   });
 
-  test('opens camera scanner inside the activity and waits for staff confirmation before check-in', async () => {
+  test('shows each traveler once with status and progress, with filters and search', async () => {
     const user = userEvent.setup();
-    let scannedActivityId: string | null = null;
-    let scannedPayload: string | null = null;
-    let checkinPayload: string | null = null;
+    serveActivityTravelers([
+      traveler('t-ana', 'Ana Silva', 0, 2),
+      traveler('t-bruno', 'Bruno Costa', 1, 2, '2026-07-01T12:05:00Z'),
+      traveler('t-carla', 'Carla Dias', 2, 2, '2026-07-01T15:40:00Z'),
+    ]);
+    renderStaff();
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+    await openActivity(user);
 
+    const ana = (await screen.findByText('Ana Silva')).closest('li') as HTMLElement;
+    expect(ana).toHaveTextContent('Not arrived');
+    expect(ana).toHaveTextContent('0 of 2 check-ins');
+    const bruno = screen.getByText('Bruno Costa').closest('li') as HTMLElement;
+    expect(bruno).toHaveTextContent('In progress');
+    expect(bruno).toHaveTextContent('1 of 2 check-ins');
+    expect(bruno).toHaveTextContent('Next: check-in 2 of 2');
+    const carla = screen.getByText('Carla Dias').closest('li') as HTMLElement;
+    expect(carla).toHaveTextContent('Done');
+    expect(within(carla).getByRole('button', { name: /check in carla dias/i })).toBeDisabled();
+    expect(screen.getAllByText('Ana Silva')).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: /^done \(1\)$/i }));
+    expect(screen.queryByText('Ana Silva')).not.toBeInTheDocument();
+    expect(screen.getByText('Carla Dias')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^all \(3\)$/i }));
+    await user.type(screen.getByPlaceholderText(/search traveler/i), 'bru');
+    expect(screen.queryByText('Carla Dias')).not.toBeInTheDocument();
+    expect(screen.getByText('Bruno Costa')).toBeInTheDocument();
+  });
+
+  test('checks a traveler in by name without opening the camera', async () => {
+    const user = userEvent.setup();
+    let scannedPayload: string | null = null;
+    let travelersCalls = 0;
     server.use(
-      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/preview', async ({ params, request }) => {
-        scannedActivityId = String(params.activityId);
-        const body = await request.json() as { qr_payload: string };
-        scannedPayload = body.qr_payload;
+      http.get('http://localhost:8000/me/staff/activities/:activityId/travelers', () => {
+        travelersCalls += 1;
         return HttpResponse.json({
-          status: 'ready_to_check_in',
-          traveler_name: 'Ana Silva',
-          scan_number: 1,
-          max_checkins: 1,
+          travelers: [traveler('t-ana', 'Ana Silva', travelersCalls > 1 ? 1 : 0, 1)],
         });
       }),
-      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', async ({ params, request }) => {
-        expect(String(params.activityId)).toBe('activity-1');
-        const body = await request.json() as { qr_payload: string };
-        checkinPayload = body.qr_payload;
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/preview', () =>
+        HttpResponse.json({ status: 'ready_to_check_in', traveler_name: 'Ana Silva', scan_number: 1, max_checkins: 1 })
+      ),
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', async ({ request }) => {
+        scannedPayload = ((await request.json()) as { qr_payload: string }).qr_payload;
         return HttpResponse.json({ status: 'checked_in', traveler_name: 'Ana Silva', scan_number: 1, max_checkins: 1 });
       })
     );
-
-    render(
-      <AuthProvider>
-        <StaffScreen onSwitchToTravelerView={() => {}} />
-      </AuthProvider>
-    );
-
+    renderStaff();
     await user.click(await screen.findByText('Day 1 — Arrival'));
-    await user.click(screen.getByText('Airport Transfer'));
-    await user.click(screen.getByRole('button', { name: /^scan$/i }));
+    await openActivity(user);
 
-    const scannerHeading = await screen.findByText(/camera scanner/i);
-    expect(scannerHeading.compareDocumentPosition(screen.getByText(/step 1/i))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    await user.click(await screen.findByRole('button', { name: /check in ana silva/i }));
+    expect(scannedPayload).toBeNull();
+    await user.click(await screen.findByRole('button', { name: /confirm check-in/i }));
+
+    await waitFor(() => expect(scannedPayload).toBe('qr-t-ana'));
+    expect(await screen.findByText(/ana silva — check-in 1 of 1/i)).toBeInTheDocument();
     await waitFor(() => {
-      expect(scannerStart).toHaveBeenCalled();
+      const row = screen.getByText('Ana Silva', { selector: 'li p' }).closest('li') as HTMLElement;
+      expect(row).toHaveTextContent('Done');
     });
-
-    act(() => {
-      qrSuccess?.('qr-token-123');
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(/ana silva/i)).toBeInTheDocument();
-    });
-    expect(scannedActivityId).toBe('activity-1');
-    expect(scannedPayload).toBe('qr-token-123');
-    expect(checkinPayload).toBeNull();
-
-    await user.click(screen.getByRole('button', { name: /confirm check-in/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/scan 1 of 1/i)).toBeInTheDocument();
-      expect(checkinPayload).toBe('qr-token-123');
-    });
+    expect(scannerStart).not.toHaveBeenCalled();
   });
 
-  test('shows duplicate check-in message with scanner metadata', async () => {
+  test('scans with the camera only when asked and confirms before check-in', async () => {
     const user = userEvent.setup();
+    let previewCalls = 0;
+    let checkinPayload: string | null = null;
+    server.use(
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/preview', () => {
+        previewCalls += 1;
+        return HttpResponse.json({ status: 'ready_to_check_in', traveler_name: 'Ana Silva', scan_number: 1, max_checkins: 1 });
+      }),
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', async ({ request }) => {
+        checkinPayload = ((await request.json()) as { qr_payload: string }).qr_payload;
+        return HttpResponse.json({ status: 'checked_in', traveler_name: 'Ana Silva', scan_number: 1, max_checkins: 1 });
+      })
+    );
+    renderStaff();
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+    await openActivity(user);
 
+    await user.click(screen.getByRole('button', { name: /scan with camera/i }));
+    await waitFor(() => expect(scannerStart).toHaveBeenCalled());
+
+    act(() => { qrSuccess?.('qr-token-123'); });
+    await screen.findByRole('button', { name: /confirm check-in/i });
+    expect(checkinPayload).toBeNull();
+    await user.click(screen.getByRole('button', { name: /confirm check-in/i }));
+    await waitFor(() => expect(checkinPayload).toBe('qr-token-123'));
+    await screen.findByText(/check-in 1 of 1/i);
+
+    // The camera keeps seeing the same QR: it must not start a new check-in.
+    act(() => { qrSuccess?.('qr-token-123'); });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(previewCalls).toBe(1);
+  });
+
+  test('explains when the next check-in step is not available yet', async () => {
+    const user = userEvent.setup();
     server.use(
       http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/preview', () =>
         HttpResponse.json({
-          status: 'already_checked_in',
-          traveler_name: 'Ana Silva',
-          scanned_by_name: 'Marcelo Staff',
-          checked_in_at: '2026-07-01T14:30:00Z',
+          status: 'recently_checked_in', traveler_name: 'Ana Silva',
+          scan_number: 1, max_checkins: 2, retry_after_seconds: 42,
         })
       )
     );
-
-    render(
-      <AuthProvider>
-        <StaffScreen onSwitchToTravelerView={() => {}} />
-      </AuthProvider>
-    );
-
+    renderStaff();
     await user.click(await screen.findByText('Day 1 — Arrival'));
-    await user.click(screen.getByText('Airport Transfer'));
-    await user.click(screen.getByRole('button', { name: /^scan$/i }));
+    await openActivity(user);
 
-    await waitFor(() => {
-      expect(scannerStart).toHaveBeenCalled();
-    });
-    act(() => {
-      qrSuccess?.('qr-token-123');
-    });
+    await user.click(await screen.findByRole('button', { name: /check in ana silva/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/ana silva already completed all/i)).toBeInTheDocument();
-    });
-    expect(screen.getByText(/Marcelo Staff/)).toBeInTheDocument();
-    expect(screen.getByText('0 / 12 scanned')).toBeInTheDocument();
+    expect(await screen.findByText(/ana silva was just checked in/i)).toBeInTheDocument();
+    expect(screen.getByText(/next check-in available in 42 s/i)).toBeInTheDocument();
   });
 
-  test('clears previous scan result when a later scan fails', async () => {
+  test('shows who already checked the traveler in', async () => {
     const user = userEvent.setup();
-    let requestCount = 0;
+    server.use(
+      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/preview', () =>
+        HttpResponse.json({
+          status: 'already_checked_in', traveler_name: 'Ana Silva',
+          scanned_by_name: 'Marcelo Staff', checked_in_at: '2026-07-01T14:30:00Z', max_checkins: 1,
+        })
+      )
+    );
+    renderStaff();
+    await user.click(await screen.findByText('Day 1 — Arrival'));
+    await openActivity(user);
 
+    await user.click(await screen.findByRole('button', { name: /check in ana silva/i }));
+
+    expect(await screen.findByText(/ana silva already completed all/i)).toBeInTheDocument();
+    expect(screen.getByText(/Marcelo Staff/)).toBeInTheDocument();
+  });
+
+  test('clears the previous result when a later scan fails', async () => {
+    const user = userEvent.setup();
+    let previewCalls = 0;
     server.use(
       http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/preview', () => {
-        requestCount += 1;
-        if (requestCount === 1) {
-          return HttpResponse.json({
-            status: 'ready_to_check_in',
-            traveler_name: 'Ana Silva',
-            scan_number: 1,
-            max_checkins: 1,
-          });
-        }
-
-        return HttpResponse.json({ detail: 'Invalid QR payload' }, { status: 400 });
+        previewCalls += 1;
+        return previewCalls === 1
+          ? HttpResponse.json({ status: 'ready_to_check_in', traveler_name: 'Ana Silva', scan_number: 1, max_checkins: 1 })
+          : HttpResponse.json({ detail: 'Invalid QR payload' }, { status: 400 });
       }),
       http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', () =>
         HttpResponse.json({ status: 'checked_in', traveler_name: 'Ana Silva', scan_number: 1, max_checkins: 1 })
       )
     );
-
-    render(
-      <AuthProvider>
-        <StaffScreen onSwitchToTravelerView={() => {}} />
-      </AuthProvider>
-    );
-
+    renderStaff();
     await user.click(await screen.findByText('Day 1 — Arrival'));
-    await user.click(screen.getByText('Airport Transfer'));
-    await user.click(screen.getByRole('button', { name: /^scan$/i }));
+    await openActivity(user);
+    await user.click(screen.getByRole('button', { name: /scan with camera/i }));
+    await waitFor(() => expect(scannerStart).toHaveBeenCalled());
 
-    await waitFor(() => {
-      expect(scannerStart).toHaveBeenCalled();
-    });
-    act(() => {
-      qrSuccess?.('qr-token-123');
-    });
-    await screen.findByText(/ready for scan 1 of 1/i);
-    await user.click(screen.getByRole('button', { name: /confirm check-in/i }));
-    await screen.findByText(/scan 1 of 1/i);
+    act(() => { qrSuccess?.('qr-token-123'); });
+    await user.click(await screen.findByRole('button', { name: /confirm check-in/i }));
+    await screen.findByText(/check-in 1 of 1/i);
 
-    act(() => {
-      qrSuccess?.('bad-token');
-    });
+    act(() => { qrSuccess?.('bad-token'); });
 
-    await waitFor(() => {
-      expect(screen.getByText(/invalid qr payload/i)).toBeInTheDocument();
-    });
-    expect(screen.queryByText(/scan 1 of 1/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/invalid qr payload/i)).toBeInTheDocument();
+    expect(screen.queryByText(/check-in 1 of 1/i)).not.toBeInTheDocument();
   });
 
   test('lists where each traveler is in the journey with their last check-in', async () => {
@@ -440,57 +470,6 @@ describe('StaffScreen', () => {
     await screen.findByText('Day 1 — Arrival');
 
     expect(screen.queryByRole('button', { name: /qr scan/i })).not.toBeInTheDocument();
-  });
-
-  test('can select a traveler by name and confirm check-in', async () => {
-    const user = userEvent.setup();
-    let previewPayload: string | null = null;
-    let scannedPayload: string | null = null;
-
-    server.use(
-      http.get('http://localhost:8000/me/staff/activities/:activityId/travelers', () =>
-        HttpResponse.json({ travelers: [{ id: 'traveler-1', name: 'Ana Silva', qr_payload: 'manual-token-123' }] })
-      ),
-      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/preview', async ({ request }) => {
-        const body = await request.json() as { qr_payload: string };
-        previewPayload = body.qr_payload;
-        return HttpResponse.json({
-          status: 'ready_to_check_in',
-          traveler_name: 'Ana Silva',
-          scan_number: 1,
-          max_checkins: 1,
-        });
-      }),
-      http.post('http://localhost:8000/me/staff/activities/:activityId/checkins/scan', async ({ request }) => {
-        const body = await request.json() as { qr_payload: string };
-        scannedPayload = body.qr_payload;
-        return HttpResponse.json({ status: 'checked_in', traveler_name: 'Ana Silva', scan_number: 1, max_checkins: 1 });
-      })
-    );
-
-    render(
-      <AuthProvider>
-        <StaffScreen onSwitchToTravelerView={() => {}} />
-      </AuthProvider>
-    );
-
-    await user.click(await screen.findByText('Day 1 — Arrival'));
-    await user.click(screen.getByText('Airport Transfer'));
-    await user.click(screen.getByRole('button', { name: /^scan$/i }));
-    await user.click(await screen.findByRole('button', { name: /select by name/i }));
-    await user.click(await screen.findByRole('button', { name: /ana silva select/i }));
-
-    await waitFor(() => {
-      expect(previewPayload).toBe('manual-token-123');
-    });
-    expect(scannedPayload).toBeNull();
-
-    await user.click(screen.getByRole('button', { name: /confirm check-in/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/scan 1 of 1/i)).toBeInTheDocument();
-    });
-    expect(scannedPayload).toBe('manual-token-123');
   });
 
   test('offers Trocar de viagem in the staff header', async () => {

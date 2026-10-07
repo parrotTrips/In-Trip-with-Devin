@@ -26,7 +26,8 @@ export interface StaffActivity {
 }
 
 export interface ActivityScanResponse {
-  status: 'checked_in' | 'already_checked_in';
+  status: 'checked_in' | 'already_checked_in' | 'recently_checked_in';
+  retry_after_seconds?: number | null;
   traveler_name?: string | null;
   scanned_by_name?: string | null;
   checked_in_at?: string | null;
@@ -35,7 +36,9 @@ export interface ActivityScanResponse {
 }
 
 export interface ActivityScanPreviewResponse {
-  status: 'ready_to_check_in' | 'already_checked_in';
+  // recently_checked_in: the traveler's next step is blocked for retry_after_seconds.
+  status: 'ready_to_check_in' | 'already_checked_in' | 'recently_checked_in';
+  retry_after_seconds?: number | null;
   traveler_name?: string | null;
   scanned_by_name?: string | null;
   checked_in_at?: string | null;
@@ -142,6 +145,9 @@ export interface ActivityTraveler {
   id: string;
   name: string;
   qr_payload: string;
+  checkin_count: number;
+  max_checkins: number;
+  last_checked_in_at: string | null;
 }
 
 export async function getActivityTravelers(activityId: string) {

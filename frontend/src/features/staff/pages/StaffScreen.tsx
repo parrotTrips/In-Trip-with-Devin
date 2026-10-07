@@ -1,25 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
-import { Map, QrCode, Phone, LogOut, ChevronRight, Circle, Headphones, Eye, Bell, Send, Loader2, CheckCircle, MapPin, Pencil, Trash2, X, Check, ArrowRightLeft, Users, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Map, Phone, LogOut, ChevronRight, Circle, Headphones, Eye, Bell, Send, Loader2, CheckCircle, MapPin, Pencil, Trash2, X, Check, ArrowRightLeft, Users, Search } from 'lucide-react';
 import { useAuth } from '../../../app/providers/auth-context';
+import ActivityPage from './ActivityPage';
 import {
-  getActivityTravelers,
   getStaffAnnouncements,
   getStaffContacts,
   getStaffTravelers,
   getStaffTrip,
-  previewActivityTravelerScan,
-  scanActivityTraveler,
   sendAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
-  type ActivityTraveler,
   type StaffAnnouncement,
-  type ActivityScanResponse,
-  type ActivityScanPreviewResponse,
-  type CheckinDetail,
-  type CheckinStep,
-  type StaffActivity,
   type StaffContactGroup,
   type StaffTravelerLocation,
   type StaffDay,
@@ -51,291 +42,18 @@ function isTodayOrPast(startsAt: string | null): boolean {
 
 // ── Sub-screens ────────────────────────────────────────────────────────────────
 
-function ActivityScanPanel({
-  activity,
-  onCheckedIn,
-  onClose,
-}: {
-  activity: StaffActivity;
-  onCheckedIn: (activityId: string) => void;
-  onClose: () => void;
-}) {
-  const scannerElementId = useRef(`staff-activity-scanner-${activity.id}-${Math.random().toString(36).slice(2)}`);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const submittingRef = useRef(false);
-  const pendingPayloadRef = useRef<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<ActivityScanResponse | null>(null);
-  const [preview, setPreview] = useState<ActivityScanPreviewResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [showTravelerList, setShowTravelerList] = useState(false);
-  const [travelerList, setTravelerList] = useState<ActivityTraveler[]>([]);
-  const [loadingTravelers, setLoadingTravelers] = useState(false);
-
-  const previewScan = useCallback(async (payload: string) => {
-    const trimmedPayload = payload.trim();
-    if (!trimmedPayload) return;
-    if (submittingRef.current) return;
-    if (pendingPayloadRef.current) return;
-
-    submittingRef.current = true;
-    setSubmitting(true);
-    setError(null);
-    setResult(null);
-    setPreview(null);
-    try {
-      const response = await previewActivityTravelerScan(activity.id, trimmedPayload);
-      setPreview(response);
-      pendingPayloadRef.current = trimmedPayload;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to scan traveler');
-    } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
-    }
-  }, [activity.id]);
-
-  const clearPendingScan = useCallback(() => {
-    pendingPayloadRef.current = null;
-    setPreview(null);
-  }, []);
-
-  const confirmPendingScan = useCallback(async () => {
-    const payload = pendingPayloadRef.current;
-    if (!payload || submittingRef.current) return;
-
-    submittingRef.current = true;
-    setSubmitting(true);
-    setError(null);
-    setResult(null);
-    try {
-      const response = await scanActivityTraveler(activity.id, payload);
-      setResult(response);
-      if (response.status === 'checked_in') {
-        onCheckedIn(activity.id);
-      }
-      clearPendingScan();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to confirm check-in');
-    } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
-    }
-  }, [activity.id, clearPendingScan, onCheckedIn]);
-
-  useEffect(() => {
-    const scanner = new Html5Qrcode(scannerElementId.current);
-    scannerRef.current = scanner;
-    let disposed = false;
-
-    scanner
-      .start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 240, height: 240 } },
-        decodedText => {
-          void previewScan(decodedText);
-        },
-        () => {}
-      )
-      .then(() => {
-        if (!disposed) {
-          setCameraReady(true);
-        }
-      })
-      .catch(e => {
-        if (!disposed) {
-          setCameraError(e instanceof Error ? e.message : 'Camera unavailable. Select traveler by name instead.');
-          setShowTravelerList(true);
-        }
-      });
-
-    return () => {
-      disposed = true;
-      const activeScanner = scannerRef.current;
-      scannerRef.current = null;
-      setCameraReady(false);
-      if (!activeScanner) return;
-      activeScanner
-        .stop()
-        .catch(() => undefined)
-        .finally(() => {
-          activeScanner.clear();
-        });
-    };
-  }, [previewScan]);
-
-  const travelerName = result?.traveler_name ?? 'Traveler';
-  const previewTravelerName = preview?.traveler_name ?? 'Traveler';
-
-  return (
-    <div className="bg-white rounded-lg border border-emerald-100 p-3 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-gray-900">Scan Travelers</p>
-          <p className="text-xs text-gray-500">{activity.name}</p>
-        </div>
-        <button type="button" onClick={onClose} className="text-xs font-medium text-gray-400 hover:text-gray-600">
-          Close
-        </button>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-950 p-2">
-        <div id={scannerElementId.current} className="min-h-48 overflow-hidden rounded-md bg-black" />
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-gray-900">Camera scanner</p>
-          <p className="text-xs text-gray-500">
-            {submitting ? 'Processing scan...' : cameraReady ? 'Point the camera at a traveler QR code.' : 'Starting camera...'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={async () => {
-            const next = !showTravelerList;
-            setShowTravelerList(next);
-            if (next && travelerList.length === 0) {
-              setLoadingTravelers(true);
-              try {
-                const res = await getActivityTravelers(activity.id);
-                setTravelerList(res.travelers);
-              } catch { /* ignore */ } finally {
-                setLoadingTravelers(false);
-              }
-            }
-          }}
-          className="text-xs font-semibold text-emerald-700"
-        >
-          {showTravelerList ? 'Hide list' : 'Select by name'}
-        </button>
-      </div>
-
-      {cameraError && (
-        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
-          <p className="text-sm font-medium text-amber-800">{cameraError}</p>
-        </div>
-      )}
-
-      {showTravelerList && (
-        <div className="rounded-lg border border-gray-200 overflow-hidden">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-3 py-2 bg-gray-50 border-b border-gray-100">
-            Select traveler to check in
-          </p>
-          {loadingTravelers ? (
-            <div className="flex justify-center py-4">
-              <Loader2 size={18} className="animate-spin text-emerald-600" />
-            </div>
-          ) : (
-            travelerList.map(traveler => (
-              <button
-                key={traveler.id}
-                type="button"
-                disabled={submitting}
-                onClick={() => previewScan(traveler.qr_payload)}
-                className="w-full flex items-center justify-between px-3 py-2.5 text-left border-b border-gray-50 last:border-0 hover:bg-emerald-50 transition-colors disabled:opacity-50"
-              >
-                <span className="text-sm font-medium text-gray-800">{traveler.name}</span>
-                <span className="text-xs text-emerald-700 font-semibold">Select</span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-
-      {preview?.status === 'ready_to_check_in' && (
-        <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-3 space-y-3">
-          <div>
-            <p className="text-sm font-semibold text-emerald-900">{previewTravelerName}</p>
-            <p className="text-xs text-emerald-700">
-              Ready for scan {preview.scan_number} of {preview.max_checkins}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={confirmPendingScan}
-              disabled={submitting}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              {submitting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-              Confirm check-in
-            </button>
-            <button
-              type="button"
-              onClick={clearPendingScan}
-              disabled={submitting}
-              className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {preview?.status === 'already_checked_in' && (
-        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-3 space-y-3">
-          <div>
-            <p className="text-sm font-medium text-amber-800">
-              {preview.traveler_name || previewTravelerName} already completed all {preview.max_checkins} scan{(preview.max_checkins ?? 1) > 1 ? 's' : ''}.
-            </p>
-            {preview.scanned_by_name && (
-              <p className="text-xs text-amber-700">Last scan by {preview.scanned_by_name}</p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={clearPendingScan}
-            className="rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700"
-          >
-            Scan another
-          </button>
-        </div>
-      )}
-
-      {result?.status === 'checked_in' && (
-        <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
-          <p className="text-sm font-medium text-emerald-800">
-            {result.traveler_name || travelerName} — scan {result.scan_number} of {result.max_checkins}
-          </p>
-        </div>
-      )}
-
-      {result?.status === 'already_checked_in' && (
-        <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 space-y-1">
-          <p className="text-sm font-medium text-amber-800">
-            {result.traveler_name || travelerName} already completed all {result.max_checkins} scan{(result.max_checkins ?? 1) > 1 ? 's' : ''}.
-          </p>
-          {result.scanned_by_name && (
-            <p className="text-xs text-amber-700">Last scan by {result.scanned_by_name}</p>
-          )}
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2">
-          <p className="text-sm font-medium text-red-700">{error}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ItineraryTab({
   days,
   loading,
   error,
-  onActivityCheckedIn,
+  onOpenActivity,
 }: {
   days: StaffDay[];
   loading: boolean;
   error: string | null;
-  onActivityCheckedIn: (activityId: string) => void;
+  onOpenActivity: (activityId: string) => void;
 }) {
   const [openDay, setOpenDay] = useState<string | null>(null);
-  const [openActivity, setOpenActivity] = useState<string | null>(null);
-  const [scanActivityId, setScanActivityId] = useState<string | null>(null);
 
   // Auto-open today's day
   useEffect(() => {
@@ -400,131 +118,30 @@ function ItineraryTab({
                   <p className="px-4 py-3 text-sm text-gray-400 italic">No activities for this day.</p>
                 )}
                 {day.activities.map((act) => {
-                  const isActivityOpen = openActivity === act.id;
+                  const done = act.checkin_steps.find(st => st.step === act.max_checkins)?.count ?? 0;
                   return (
-                    <div key={act.id}>
-                      <button
-                        onClick={() => setOpenActivity(isActivityOpen ? null : act.id)}
-                        className="w-full flex items-start gap-3 px-4 py-3 text-left"
-                      >
-                        <Circle size={20} className="text-gray-300 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800">{act.name}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {formatTime(act.starts_at)}
-                            {act.duration_minutes ? ` · ${act.duration_minutes} min` : ''}
-                          </p>
-                          <p className="text-xs font-medium text-emerald-700 mt-1">
-                            {act.checkin_steps.length > 0
-                              ? act.checkin_steps.map(s => `Step ${s.step}: ${s.count}`).join(' · ')
-                              : `0 / ${act.traveler_count} scanned`}
-                          </p>
-                        </div>
-                        <ChevronRight size={16} className={`text-gray-300 mt-1 flex-shrink-0 transition-transform ${isActivityOpen ? 'rotate-90' : ''}`} />
-                      </button>
-
-                      {isActivityOpen && (
-                        <div className="px-4 pb-4 pt-1 bg-gray-50 space-y-2">
-                          {act.address && (
-                            <a
-                              href={`https://maps.google.com/?q=${encodeURIComponent(act.address)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 text-xs text-blue-600 font-medium"
-                            >
-                              <MapPin size={12} />
-                              {act.address}
-                            </a>
-                          )}
-                          {act.amount_brl && (
-                            <p className="text-xs text-emerald-600 font-medium">R$ {act.amount_brl.toFixed(2)}</p>
-                          )}
-                          <div className="rounded-lg bg-white border border-gray-100 overflow-hidden">
-                            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-50">
-                              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                                Attendance · {act.max_checkins} scan{act.max_checkins > 1 ? 's' : ''} per traveler
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setScanActivityId(act.id)}
-                                className="flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white"
-                              >
-                                <QrCode size={13} />
-                                Scan
-                              </button>
-                            </div>
-
-                            {scanActivityId === act.id && (
-                              <ActivityScanPanel
-                                activity={act}
-                                onCheckedIn={onActivityCheckedIn}
-                                onClose={() => setScanActivityId(null)}
-                              />
-                            )}
-
-                            {/* Steps with present travelers */}
-                            {Array.from({ length: act.max_checkins }, (_, i) => i + 1).map(step => {
-                              const stepData = act.checkin_steps.find((s: CheckinStep) => s.step === step);
-                              const count = stepData?.count ?? 0;
-                              return (
-                                <div key={step} className="px-3 py-2 border-b border-gray-50">
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-xs font-semibold text-emerald-700">
-                                      ✅ Step {step} — {count} / {act.traveler_count} checked in
-                                    </span>
-                                  </div>
-                                  {stepData && stepData.details.map((d: CheckinDetail, i: number) => (
-                                    <div key={i} className="flex items-center justify-between py-0.5">
-                                      <span className="text-xs text-gray-700">{d.name}</span>
-                                      {d.checked_in_at && (
-                                        <span className="text-xs text-gray-400">
-                                          {new Date(d.checked_in_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                                        </span>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })}
-
-                            {/* Absent travelers */}
-                            {act.absent_travelers.length > 0 && (
-                              <div className="px-3 py-2">
-                                <p className="text-xs font-semibold text-red-500 mb-1.5">
-                                  ⏳ Not yet arrived — {act.absent_travelers.length}
-                                </p>
-                                {act.absent_travelers.map((name: string, i: number) => (
-                                  <p key={i} className="text-xs text-gray-500 py-0.5">{name}</p>
-                                ))}
-                              </div>
-                            )}
-
-                            {act.absent_travelers.length === 0 && act.checkin_steps.length > 0 && (
-                              <div className="px-3 py-2">
-                                <p className="text-xs font-semibold text-emerald-600">🎉 Everyone is here!</p>
-                              </div>
-                            )}
-                          </div>
-                          {act.staff_tasks.length > 0 && (
-                            <div className="bg-white rounded-lg border border-emerald-100 overflow-hidden">
-                              <div className="px-3 py-2 bg-emerald-50 border-b border-emerald-100">
-                                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">My tasks</p>
-                              </div>
-                              <div className="divide-y divide-gray-100">
-                                {act.staff_tasks.map((task) => (
-                                  <div key={task.id} className="px-3 py-2">
-                                    <p className="text-sm font-medium text-gray-800">{task.title}</p>
-                                    {task.description && (
-                                      <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      key={act.id}
+                      onClick={() => onOpenActivity(act.id)}
+                      className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50"
+                    >
+                      <Circle size={20} className="text-gray-300 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{act.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {formatTime(act.starts_at)}
+                          {act.duration_minutes ? ` · ${act.duration_minutes} min` : ''}
+                        </p>
+                        <p className="text-xs font-medium text-emerald-700 mt-1">
+                          {act.checkin_steps.length > 0
+                            ? act.max_checkins > 1
+                              ? act.checkin_steps.map(st => `Step ${st.step}: ${st.count}`).join(' · ')
+                              : `${done} / ${act.traveler_count} scanned`
+                            : `0 / ${act.traveler_count} scanned`}
+                        </p>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-300 mt-1 flex-shrink-0" />
+                    </button>
                   );
                 })}
               </div>
@@ -884,9 +501,14 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [contactsError, setContactsError] = useState<string | null>(null);
 
-  const handleActivityCheckedIn = (_activityId: string) => {
+  const [openActivityId, setOpenActivityId] = useState<string | null>(null);
+
+  const handleActivityCheckedIn = () => {
     getStaffTrip().then(setTrip).catch(() => {});
   };
+
+  const openDay = trip?.days.find(d => d.activities.some(a => a.id === openActivityId));
+  const openActivity = openDay?.activities.find(a => a.id === openActivityId);
 
   useEffect(() => {
     getStaffTrip()
@@ -936,9 +558,17 @@ export default function StaffScreen({ onSwitchToTravelerView }: Props) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {activeTab === 'itinerary' && (
-          <ItineraryTab days={trip?.days ?? []} loading={loading} error={error} onActivityCheckedIn={handleActivityCheckedIn} />
-        )}
+        {activeTab === 'itinerary' && (openActivity && openDay ? (
+          <ActivityPage
+            key={openActivity.id}
+            activity={openActivity}
+            dayTitle={openDay.title}
+            onBack={() => setOpenActivityId(null)}
+            onCheckedIn={handleActivityCheckedIn}
+          />
+        ) : (
+          <ItineraryTab days={trip?.days ?? []} loading={loading} error={error} onOpenActivity={setOpenActivityId} />
+        ))}
         {activeTab === 'travelers' && <TravelersTab />}
         {activeTab === 'contacts' && <ContactsTab groups={contactGroups} loading={contactsLoading} error={contactsError} />}
         {activeTab === 'announce' && <AnnounceTab currentUserId={user?.userId ?? ''} />}

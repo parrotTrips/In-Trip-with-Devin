@@ -1010,3 +1010,94 @@ def test_scan_activity_checkin_duplicate_creates_audit_event(
             return [row[0] for row in rows.all()]
 
     assert asyncio.run(_load_event_statuses()) == ["checked_in", "already_checked_in"]
+
+
+async def _set_max_checkins(session_factory, activity_id: str, value: int):
+    async with session_factory() as session:
+        await session.execute(
+            text("UPDATE trip_activities SET max_checkins = :v WHERE id = CAST(:id AS uuid)"),
+            {"v": value, "id": activity_id},
+        )
+        await session.commit()
+
+
+async def _age_checkins(session_factory, activity_id: str, seconds: int):
+    async with session_factory() as session:
+        await session.execute(
+            text(
+                "UPDATE activity_checkins SET checked_in_at = checked_in_at - make_interval(secs => :s)"
+                " WHERE trip_activity_id = CAST(:id AS uuid)"
+            ),
+            {"s": seconds, "id": activity_id},
+        )
+        await session.commit()
+
+
+def test_activity_travelers_include_checkin_progress(seeded_client, session_factory):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory, seed_checkin=True))
+    asyncio.run(_set_max_checkins(session_factory, seed["activity_id"], 2))
+    headers = _auth(seeded_client, "+5511888000001")
+
+    response = seeded_client.get(
+        f"/me/staff/activities/{seed['activity_id']}/travelers", headers=headers
+    )
+
+    assert response.status_code == 200
+    by_id = {t["id"]: t for t in response.json()["travelers"]}
+    first = by_id[seed["trip_traveler_id"]]
+    assert first["checkin_count"] == 1
+    assert first["max_checkins"] == 2
+    assert first["last_checked_in_at"]
+    second = by_id[seed["second_trip_traveler_id"]]
+    assert second["checkin_count"] == 0
+    assert second["last_checked_in_at"] is None
+
+
+def test_next_checkin_step_waits_a_minute_after_the_previous_one(seeded_client, session_factory):
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory))
+    asyncio.run(_set_max_checkins(session_factory, seed["activity_id"], 2))
+    headers = _auth(seeded_client, "+5511888000001")
+    url = f"/me/staff/activities/{seed['activity_id']}/checkins"
+
+    first = seeded_client.post(f"{url}/scan", headers=headers, json={"qr_payload": seed["qr_payload"]})
+    assert first.json()["scan_number"] == 1
+
+    preview = seeded_client.post(f"{url}/preview", headers=headers, json={"qr_payload": seed["qr_payload"]})
+    again = seeded_client.post(f"{url}/scan", headers=headers, json={"qr_payload": seed["qr_payload"]})
+    assert preview.json()["status"] == "recently_checked_in"
+    assert again.json()["status"] == "recently_checked_in"
+    assert again.json()["retry_after_seconds"] > 0
+
+    asyncio.run(_age_checkins(session_factory, seed["activity_id"], 120))
+    later = seeded_client.post(f"{url}/scan", headers=headers, json={"qr_payload": seed["qr_payload"]})
+    assert later.json()["status"] == "checked_in"
+    assert later.json()["scan_number"] == 2
+
+
+def test_simultaneous_scans_do_not_fail(seeded_client, session_factory, monkeypatch):
+    """Two staff scanning the same QR at once: the loser gets already_checked_in, not a 500."""
+    import app.routers.staff as staff_router
+
+    seed = asyncio.run(_seed_staff_trip_with_tasks(session_factory, seed_checkin=True))
+    headers = _auth(seeded_client, "+5511888000001")
+    original = staff_router._resolve_activity_checkin_scan
+    calls = {"n": 0}
+
+    async def stale_first_read(session, **kwargs):
+        result = await original(session, **kwargs)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # Simulate a read taken just before the other staff's insert landed.
+            return {**result, "existing_checkins": [], "next_scan_number": 1}
+        return result
+
+    monkeypatch.setattr(staff_router, "_resolve_activity_checkin_scan", stale_first_read)
+
+    response = seeded_client.post(
+        f"/me/staff/activities/{seed['activity_id']}/checkins/scan",
+        headers=headers,
+        json={"qr_payload": seed["qr_payload"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "already_checked_in"
