@@ -28,7 +28,7 @@ SAO_PAULO_TZ = ZoneInfo("America/Sao_Paulo")
 
 def resolve_trip_mode(
     stored_mode: str,
-    start_date: _date | None,
+    start_date: _date | str | None,
     now: _datetime,
     timezone: ZoneInfo = SAO_PAULO_TZ,
 ) -> str:
@@ -37,6 +37,9 @@ def resolve_trip_mode(
     A manual "Start Trip" can still switch it earlier; the stored mode wins then.
     """
     if stored_mode != "pre-trip" or start_date is None:
+        return stored_mode
+    start_date = _as_date(start_date)
+    if start_date is None:
         return stored_mode
     if now.tzinfo is None:
         now = now.replace(tzinfo=UTC)

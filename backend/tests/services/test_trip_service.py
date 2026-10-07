@@ -156,6 +156,17 @@ def test_trip_mode_switches_to_in_trip_on_start_date_in_sao_paulo():
     assert resolve_trip_mode("pre-trip", start, datetime(2026, 10, 10, 3, 0, tzinfo=UTC)) == "in-trip"
 
 
+def test_trip_mode_accepts_text_start_date_returned_by_production_database():
+    assert (
+        resolve_trip_mode(
+            "pre-trip",
+            "2026-10-10",
+            datetime(2026, 10, 10, 3, 0, tzinfo=UTC),
+        )
+        == "in-trip"
+    )
+
+
 def test_trip_mode_keeps_manual_in_trip_before_start_date():
     assert resolve_trip_mode("in-trip", date(2026, 12, 1), datetime(2026, 10, 1, tzinfo=UTC)) == "in-trip"
 
