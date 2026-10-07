@@ -175,6 +175,12 @@ describe('HomeScreen', () => {
     expect(screen.queryAllByText(/•/)).toHaveLength(1);
   });
 
+  test('gives access to the FAQ from the journey', async () => {
+    renderHome();
+
+    expect(await screen.findByRole('link', { name: /faq/i })).toHaveAttribute('href', '/information?section=faq');
+  });
+
   test('keeps the journey summary sticky below the app header', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>

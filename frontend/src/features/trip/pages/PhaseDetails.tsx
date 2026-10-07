@@ -19,6 +19,7 @@ import {
   updatePhaseCompletion,
   type TripPhaseDetail,
 } from '../services/trip-api';
+import FaqLink from '../../../shared/components/FaqLink';
 
 interface ChecklistState {
   id: string;
@@ -271,6 +272,7 @@ export default function PhaseDetails() {
             </div>
           </div>
         )}
+        <FaqLink from="phase" />
       </div>
     </div>
   );

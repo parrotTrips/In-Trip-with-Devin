@@ -97,6 +97,13 @@ describe('PhaseDetails', () => {
     expect(screen.getByText('Check visa requirements')).toBeInTheDocument();
   });
 
+  test('links to the FAQ at the end of the phase', async () => {
+    renderPhase();
+
+    expect(await screen.findByRole('link', { name: /questions\? see the faq/i }))
+      .toHaveAttribute('href', '/information?section=faq');
+  });
+
   test('treats the phase as completed once every required checklist item is done', async () => {
     checklistProgress = {};
     renderPhase();

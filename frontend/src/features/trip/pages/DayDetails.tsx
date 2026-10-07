@@ -18,6 +18,7 @@ import {
   type TripPhaseDetail,
 } from '../services/trip-api';
 import { formatDayDate } from '../format-day-date';
+import FaqLink from '../../../shared/components/FaqLink';
 
 function ActivityCard({ activity, index }: { activity: Activity; index: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -220,6 +221,7 @@ export default function DayDetails() {
             <ActivityCard key={activity.id} activity={activity} index={index} />
           ))}
         </div>
+        <FaqLink from="day" />
       </div>
 
     </div>

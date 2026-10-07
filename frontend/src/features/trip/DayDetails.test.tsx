@@ -113,6 +113,23 @@ describe('DayDetails', () => {
     expect(await screen.findByText('Fri • Feb 27')).toBeInTheDocument();
   });
 
+  test('links to the FAQ at the end of the day', async () => {
+    render(
+      <MemoryRouter initialEntries={[`/day/${DAY_ID}`]}>
+        <AuthProvider>
+          <TripProvider>
+            <Routes>
+              <Route path="/day/:dayId" element={<DayDetails />} />
+            </Routes>
+          </TripProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole('link', { name: /questions\? see the faq/i }))
+      .toHaveAttribute('href', '/information?section=faq');
+  });
+
   test('shows a Google Maps link for activities with an address', async () => {
     render(
       <MemoryRouter initialEntries={[`/day/${DAY_ID}`]}>

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTripContext } from '../../../app/providers/trip-context';
 import { useAuth } from '../../../app/providers/auth-context';
 import { useStaffView } from '../../../app/providers/staff-view-context';
@@ -8,6 +8,7 @@ import { formatDayDate } from '../format-day-date';
 import ParrotLogoIcon from '../../../shared/components/ParrotLogoIcon';
 import ProgressBar from '../../../shared/components/ProgressBar';
 import AppHeader from '../../../shared/components/AppHeader';
+import { FAQ_PATH } from '../../../shared/components/FaqLink';
 import {
   FileText,
   Syringe,
@@ -24,6 +25,7 @@ import {
   Plane,
   Sailboat,
   Heart,
+  HelpCircle,
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -179,14 +181,23 @@ export default function HomeScreen() {
             <div>
               {displayDates && <p className="text-emerald-100 text-sm mt-1">{displayDates}</p>}
             </div>
-            {onSwitchToStaffView && (
-              <button
-                onClick={onSwitchToStaffView}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold text-white transition-colors shrink-0 ml-3 mt-1"
+            <div className="flex items-center gap-2 shrink-0 ml-3 mt-1">
+              <Link
+                to={FAQ_PATH}
+                className="inline-flex items-center gap-1 rounded-full bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
               >
-                Staff view
-              </button>
-            )}
+                <HelpCircle size={14} />
+                FAQ
+              </Link>
+              {onSwitchToStaffView && (
+                <button
+                  onClick={onSwitchToStaffView}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white/20 hover:bg-white/30 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+                >
+                  Staff view
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="relative z-10 mt-1">

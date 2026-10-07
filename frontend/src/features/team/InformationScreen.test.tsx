@@ -22,9 +22,9 @@ function tripInfoFor(tripUuid: string): TripInfo {
   };
 }
 
-function renderInformationScreen(tripUuid: string) {
+function renderInformationScreen(tripUuid: string, path = '/information') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <TripContext.Provider
         value={{
           tripInfo: tripInfoFor(tripUuid),
@@ -94,6 +94,23 @@ describe('InformationScreen', () => {
     expect(savedPayload).toEqual({ feedback: 'The app made the trip easier.' });
     expect(await screen.findByText(/feedback sent/i)).toBeInTheDocument();
     expect(feedbackField).toHaveValue('');
+  });
+
+  test('opens the FAQ section when linked from the journey', async () => {
+    server.use(
+      http.get('http://localhost:8000/me/faq', () => HttpResponse.json({
+        faq: [{ id: 'f1', question: 'Do I need a visa?', answer: 'Check the visa phase.', sort_order: 0 }],
+      }))
+    );
+    const scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+
+    renderInformationScreen('OTHER-TRIP', '/information?section=faq');
+
+    expect(await screen.findByText('Do I need a visa?')).toBeInTheDocument();
+    expect(screen.queryByText('No team members yet')).not.toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalled();
+    Reflect.deleteProperty(window.HTMLElement.prototype, 'scrollIntoView');
   });
 
   test('links local recommendations directly to the dedicated recommendations page', async () => {

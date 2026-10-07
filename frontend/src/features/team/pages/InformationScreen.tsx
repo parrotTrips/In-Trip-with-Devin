@@ -1,6 +1,6 @@
 import { ExternalLink, Loader2, Phone, ChevronDown, ChevronUp } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import posthog from 'posthog-js';
 import {
   getMyTeam,
@@ -17,15 +17,21 @@ import AppHeader from '../../../shared/components/AppHeader';
 
 // ── CollapsibleSection (same pattern as ProfileScreen) ─────────────────────────
 
-function CollapsibleSection({ title, emoji, children }: { title: string; emoji: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function CollapsibleSection({ title, emoji, children, defaultOpen = false, sectionRef }: {
+  title: string;
+  emoji: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  sectionRef?: React.Ref<HTMLDivElement>;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   const toggle = () => {
     const next = !open;
     setOpen(next);
     if (next) posthog.capture('secao_informacao_aberta', { secao: title });
   };
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div ref={sectionRef} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden scroll-mt-20">
       <button
         onClick={toggle}
         className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
@@ -133,6 +139,14 @@ export default function InformationScreen() {
   const [feedbackSaved, setFeedbackSaved] = useState(false);
   const [feedbackError, setFeedbackError] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Links from the journey (?section=faq) open the FAQ and scroll to it.
+  const [searchParams] = useSearchParams();
+  const openFaq = searchParams.get('section') === 'faq';
+  const faqRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!loading && openFaq) faqRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [loading, openFaq]);
 
   useEffect(() => {
     Promise.all([
@@ -200,7 +214,7 @@ export default function InformationScreen() {
             <ExternalLink size={18} className="text-gray-400" />
           </Link>
 
-          <CollapsibleSection title="FAQ" emoji="❓">
+          <CollapsibleSection title="FAQ" emoji="❓" defaultOpen={openFaq} sectionRef={faqRef}>
             {faq.length === 0
               ? <Empty label="No FAQ yet" />
               : faq.map(item => <FaqRow key={item.id} item={item} />)}
