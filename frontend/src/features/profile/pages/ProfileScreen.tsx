@@ -9,7 +9,7 @@ import { useAuth } from '../../../app/providers/auth-context';
 import { useTripContext } from '../../../app/providers/trip-context';
 import { useAvatar } from '../../../app/providers/avatar-context';
 import { getProfile, updateProfile, type ProfileData } from '../services/profile-api';
-import { getMyQrCode, type TravelerQrCode } from '../../trip/services/trip-api';
+import { getMyCancellationPolicy, getMyQrCode, type CancellationPolicyItem, type TravelerQrCode } from '../../trip/services/trip-api';
 
 interface SectionProps {
   title: string;
@@ -284,6 +284,7 @@ const PROFILE_SECTION_IDS = new Set([
   'pre-departure',
   'packages',
   'service-agreement',
+  'cancellation-policy',
 ]);
 
 const PRE_DEPARTURE_REMOVED_FIELDS = new Set([
@@ -315,6 +316,45 @@ const PRE_DEPARTURE_REQUIRED_LABELS: Record<string, string> = {
   roommate_gender_preference: 'Roommate Gender Preference',
   emergency_contact: 'Emergency Contact',
 };
+
+function CancellationPolicyContent() {
+  const [items, setItems] = useState<CancellationPolicyItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getMyCancellationPolicy()
+      .then(response => setItems(response.cancellation_policy))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-4">
+        <Loader2 className="animate-spin text-emerald-600" size={20} />
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-gray-400 py-4 text-center">
+        Cancellation policy will also be available here soon, but for now it is available on the trek page or the service agreement document you agreed and signed
+      </p>
+    );
+  }
+
+  return (
+    <div className="pt-1">
+      {items.map(item => (
+        <div key={item.id} className="py-3 border-b border-gray-50 last:border-0">
+          <p className="text-sm font-semibold text-gray-800">{item.title}</p>
+          <p className="text-sm text-gray-600 leading-relaxed mt-1">{item.body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function getLinkedProfileSection(search: string) {
   const section = new URLSearchParams(search).get('section');
@@ -1233,8 +1273,8 @@ export default function ProfileScreen() {
           </div>
         </CollapsibleSection>
 
-        {/* ── Section 2: Packages (non-editable basic package + Add-ons) ── */}
-        <CollapsibleSection title="Packages" icon={<ShoppingCart size={18} />} emoji="🛒" sectionId="packages" defaultOpen={linkedSection === 'packages'}>
+        {/* ── Section 2: Package Details & Actions (non-editable basic package + Add-ons) ── */}
+        <CollapsibleSection title="Package Details & Actions" icon={<ShoppingCart size={18} />} emoji="🛒" sectionId="packages" defaultOpen={linkedSection === 'packages'}>
           <div className="pt-3 space-y-4">
             <div>
               <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-2">Your Package</p>
@@ -1308,6 +1348,10 @@ export default function ProfileScreen() {
               </div>
             )}
           </div>
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Cancellation & Transfer Policy" icon={<FileText size={18} />} emoji="📄" sectionId="cancellation-policy" defaultOpen={linkedSection === 'cancellation-policy'}>
+          <CancellationPolicyContent />
         </CollapsibleSection>
       </div>
 
