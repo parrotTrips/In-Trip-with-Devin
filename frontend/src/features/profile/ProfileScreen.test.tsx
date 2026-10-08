@@ -110,6 +110,29 @@ function setUpSwitcherAppHandlers() {
   );
 }
 
+function renderProfileForPolicy(policy: { id: string; title: string; body: string; sort_order: number }[]) {
+  localStorage.setItem(
+    'parrot_user',
+    JSON.stringify({ userId: 1, phone: '+15550000001', name: 'Alice', token: 'tok', role: 'traveler', tripId: 'trip-001', activeTrip: null, canSwitchTrips: false })
+  );
+  server.use(
+    http.get('http://localhost:8000/profile/1', () =>
+      HttpResponse.json({ user_id: 1, phone: '+15550000001', name: 'Alice', profile: { preferred_name: 'Alice' }, roommate: null })
+    ),
+    http.get('http://localhost:8000/me/qr-code', () =>
+      HttpResponse.json({ trip_uuid: 'test-trip-001', trip_traveler_id: 'trip-traveler-001', qr_payload: 'x' })
+    ),
+    http.get('http://localhost:8000/me/cancellation-policy', () => HttpResponse.json({ cancellation_policy: policy }))
+  );
+  render(
+    <MemoryRouter>
+      <AuthProvider>
+        <ProfileScreen />
+      </AuthProvider>
+    </MemoryRouter>
+  );
+}
+
 describe('ProfileScreen', () => {
   test('loads and saves the profile data', async () => {
     let savedPayload: Record<string, unknown> | null = null;
@@ -158,7 +181,7 @@ describe('ProfileScreen', () => {
 
     await screen.findByText('My Profile');
     await userEvent.click(screen.getByRole('button', { name: /registration details/i }));
-    const packagesButton = screen.getByRole('button', { name: /packages/i });
+    const packagesButton = screen.getByRole('button', { name: /package details & actions/i });
     expect(packagesButton).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /service agreement/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /esim/i })).not.toBeInTheDocument();
@@ -210,6 +233,27 @@ describe('ProfileScreen', () => {
     expect(savedPayload).not.toHaveProperty('plus_one_yn');
     expect(savedPayload).not.toHaveProperty('plus_one_name');
     expect(savedPayload).not.toHaveProperty('plus_one_email');
+  });
+
+  test('shows the cancellation policy fallback as the final profile section', async () => {
+    renderProfileForPolicy([]);
+    await screen.findByText('My Profile');
+
+    const sectionTitles = screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent);
+    expect(sectionTitles[sectionTitles.length - 1]).toBe('Cancellation & Transfer Policy');
+
+    await userEvent.click(screen.getByRole('button', { name: /cancellation & transfer policy/i }));
+    expect(await screen.findByText(/Cancellation policy will also be available here soon/i)).toBeInTheDocument();
+  });
+
+  test('loads the active trip cancellation policy when its profile section opens', async () => {
+    renderProfileForPolicy([
+      { id: 'policy-1', title: 'Internal test cancellation flow', body: 'Use Transfer or Cancel your Package to validate the workflow.', sort_order: 1 },
+    ]);
+
+    await userEvent.click(await screen.findByRole('button', { name: /cancellation & transfer policy/i }));
+    expect(await screen.findByText('Internal test cancellation flow')).toBeInTheDocument();
+    expect(screen.getByText(/Transfer or Cancel your Package/i)).toBeInTheDocument();
   });
 
   test('shows the saved date of birth and health info when returning to the profile', async () => {
