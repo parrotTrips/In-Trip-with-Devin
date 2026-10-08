@@ -9,7 +9,7 @@ from sqlalchemy import text
 from app.db.models.progress import TravelerChecklistProgress, TravelerPhaseProgress
 from app.db.models.trip import TripPhase, TripPhaseChecklistItem, TripTraveler
 from app.db.models.user import User
-from app.services.trip_service import get_trip_phases, get_trip_travelers
+from app.services.trip_service import get_trip_phases, get_trip_travelers, get_traveler_locations
 
 
 async def _seed(session_factory, *, start_date=date(2099, 1, 1)):
@@ -87,6 +87,19 @@ def test_phase_completed_out_of_order_by_button_or_checklist(session_factory):
         assert phases["trip_mode"] == "pre-trip"
         # Phase 1 is still pending, so the traveler stays there.
         assert travelers["travelers"][0]["current_phase_id"] == ids[0]
+
+    asyncio.run(run())
+
+
+def test_staff_sees_pending_pre_trip_before_departure(session_factory):
+    async def run():
+        seeded = await _seed(session_factory)
+        async with session_factory() as session:
+            result = await get_traveler_locations(seeded["trip_uuid"], session)
+
+        assert result["trip_mode"] == "pre-trip"
+        [traveler] = result["travelers"]
+        assert traveler["pending_pre_trip"] == 3
 
     asyncio.run(run())
 

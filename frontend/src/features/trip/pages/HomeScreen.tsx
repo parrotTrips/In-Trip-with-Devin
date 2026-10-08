@@ -236,8 +236,8 @@ export default function HomeScreen() {
               const isPast = !isTripDay
                 ? completedPhaseSet.has(phase.id)
                 : isInTrip && phaseProgressIdx >= 0 && phaseProgressIdx < userCompletedCount;
-              const isPending = isInTrip && isPreTrip && !isPast;
               const isCurrent = phase.id === currentUserPhaseId;
+              const isPending = isPreTrip && isCurrent && !isPast;
               const dayDate = formatDayDate(phase.starts_at);
               const travelersHere = travelers.filter(t => t.current_phase_id === phase.id);
 

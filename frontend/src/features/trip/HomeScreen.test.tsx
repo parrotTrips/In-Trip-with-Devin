@@ -273,15 +273,15 @@ describe('HomeScreen', () => {
     expect(screen.getAllByTestId('phase-completed-badge')).toHaveLength(1);
   });
 
-  test('shows unfinished pre-trip phases as pending during the trip', async () => {
+  test('shows pending only on the current incomplete pre-trip phase', async () => {
     setupHandlers({
-      tripMode: 'in-trip',
-      currentPhaseId: 'day-001',
-      completedPhaseIds: ['phase-002'],
+      tripMode: 'pre-trip',
+      currentPhaseId: 'phase-001',
+      completedPhaseIds: ['phase-003'],
       phases: [
         makePhase({ id: 'phase-001', title: 'Passport', sortOrder: 0 }),
         makePhase({ id: 'phase-002', title: 'Vaccines', sortOrder: 1 }),
-        makePhase({ id: 'day-001', title: 'Day 1', sortOrder: 2, phaseType: 'in-trip', startsAt: '2026-02-27T03:00:00Z' }),
+        makePhase({ id: 'phase-003', title: 'Packing', sortOrder: 2 }),
       ],
     });
 
@@ -290,10 +290,10 @@ describe('HomeScreen', () => {
     const passport = (await screen.findByText('Passport')).closest('button') as HTMLElement;
     expect(within(passport).getByTestId('phase-pending-badge')).toHaveTextContent(/pending/i);
     const vaccines = screen.getByText('Vaccines').closest('button') as HTMLElement;
-    expect(within(vaccines).getByTestId('phase-completed-badge')).toBeInTheDocument();
     expect(within(vaccines).queryByTestId('phase-pending-badge')).not.toBeInTheDocument();
-    const day = screen.getByText('Day 1').closest('button') as HTMLElement;
-    expect(within(day).queryByTestId('phase-pending-badge')).not.toBeInTheDocument();
+    const packing = screen.getByText('Packing').closest('button') as HTMLElement;
+    expect(within(packing).getByTestId('phase-completed-badge')).toBeInTheDocument();
+    expect(within(packing).queryByTestId('phase-pending-badge')).not.toBeInTheDocument();
   });
 
   test('shows the Trip Wrap-up at the end of the journey with its own style', async () => {

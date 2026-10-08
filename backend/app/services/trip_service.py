@@ -515,10 +515,7 @@ async def get_traveler_locations(trip_uuid: str, session: AsyncSession) -> dict:
                 "subtitle": phase["subtitle"],
                 "phase_type": phase["phase_type"],
             } if phase else None,
-            "pending_pre_trip": (
-                len(pre_trip_ids - t["completed_phase_ids"])
-                if positions["trip_mode"] == "in-trip" else 0
-            ),
+            "pending_pre_trip": len(pre_trip_ids - t["completed_phase_ids"]),
             "last_checkin": last_checkins.get(t["trip_traveler_id"]),
         })
     travelers.sort(key=lambda t: (t["name"] or "").lower())
